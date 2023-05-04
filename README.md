@@ -20,6 +20,11 @@
 
 <br />
 
+**Work in Progress**: This project is currently under development. The code and
+documentation may not be fully complete or polished.
+
+<br />
+
 `osintgpt` is a Python package for leveraging OpenAI's GPT models to analyze text data and perform tasks such as calculating text embeddings, searching for similar documents, and more. It is designed for use in open-source intelligence (OSINT) applications and research.
 
 <hr />
