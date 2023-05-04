@@ -20,7 +20,7 @@
 
 <br />
 
-`osint-gpt` is a Python package for leveraging OpenAI's GPT models to analyze text data and perform tasks such as calculating text embeddings, searching for similar documents, and more. It is designed for use in open-source intelligence (OSINT) applications and research.
+`osintgpt` is a Python package for leveraging OpenAI's GPT models to analyze text data and perform tasks such as calculating text embeddings, searching for similar documents, and more. It is designed for use in open-source intelligence (OSINT) applications and research.
 
 <hr />
 <br />
@@ -33,96 +33,3 @@ The "osint-gpt" tool is provided for research purposes and intended to assist us
 
 <hr />
 <br />
-
-## **Requirements**
-
-
-
-<hr />
-<br />
-
-## **Installation**
-
-You can install the `osint-gpt` package using pip:
-
-```bash
-pip install osint-gpt
-```
-
-
-<br />
-<hr />
-<br />
-
-## **Quick Start**
-
-<br />
-
-
-Setup your environment variables: Create a `.env` file with your OpenAI API key and GPT model name:
-
-```
-OPENAI_API_KEY=your_openai_api_key
-OPENAI_GPT_MODEL=model_name
-```
-
-<hr />
-<br />
-
-### **`Embeddings`**
-
-<br />
-
-1. Import the package and create an `OpenAIEmbeddingGenerator` instance:
-
-```python
-from osintgpt.embedding import OpenAIEmbeddingGenerator
-
-args = {
-    'env_file_path': './config/.env'
-}
-
-embedding_generator = OpenAIEmbeddingGenerator(**args)
-```
-
-2. Load your text data:
-
-```python
-data = ["Text 1", "Text 2", "Text 3"]
-embedding_generator.load_strings(data)
-```
-
-3. Calculate embeddings:
-
-```python
-embeddings = embedding_generator.embeddings
-```
-
-
-<hr />
-<br />
-
-### **`Vector store`**
-
-<br />
-
-1. **Qdrant**
-
-[Qdrant](https://qdrant.tech/) is a high-performant vector search database written in Rust.
-
-<hr />
-<br />
-
-
-## **Features**
-
-- Easy loading of text data
-- Text embeddings calculation
-- Embeddings generation for new text
-
-
-<hr />
-<br />
-
-
-

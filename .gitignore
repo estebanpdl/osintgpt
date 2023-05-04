@@ -33,3 +33,6 @@ share/python-wheels/
 .installed.cfg
 *.egg
 MANIFEST
+
+# README BETA
+README-BETA.md
