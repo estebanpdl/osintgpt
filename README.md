@@ -29,7 +29,7 @@
 
 ## **Disclaimer**
 
-The "osint-gpt" tool is provided for research purposes and intended to assist users in analyzing data from open-source intelligence (OSINT) tools more efficiently. It relies on third-party services, such as the OpenAI API, various database engines, and other resources that may have associated costs. By using this tool, you acknowledge that you are responsible for understanding and managing any costs related to these services. The creators and maintainers of "osint-gpt" are not liable for any expenses incurred or any misuse of the tool. Please use this tool responsibly and in compliance with all applicable laws and regulations.
+The `osintgpt` tool is provided for research purposes and intended to assist users in analyzing data from open-source intelligence (OSINT) tools more efficiently. It relies on third-party services, such as the OpenAI API, various database engines, and other resources that may have associated costs. By using this tool, you acknowledge that you are responsible for understanding and managing any costs related to these services. The creators and maintainers of "osint-gpt" are not liable for any expenses incurred or any misuse of the tool. Please use this tool responsibly and in compliance with all applicable laws and regulations.
 
 <hr />
 <br />
