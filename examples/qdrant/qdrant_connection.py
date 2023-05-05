@@ -12,13 +12,11 @@ Testing Qdrant -> connection
 '''
 print (text)
 
-# test class
-env_file_path = '.env'
-
+# qdrant config -> env file path
+env_file_path = '../../config/.env'
 qdrant = Qdrant(env_file_path)
 client = qdrant.get_client()
 print (client)
-
 
 # End
 text = f'''

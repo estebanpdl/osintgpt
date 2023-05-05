@@ -15,13 +15,12 @@ Testing Qdrant -> count vectors
 '''
 print (text)
 
-# test class
-env_file_path = '.env'
-
+# qdrant config -> env file path
+env_file_path = '../../config/.env'
 qdrant = Qdrant(env_file_path)
 
+# count vectors
 collection_name = 'narratives'
-
 try:
     count = qdrant.count_vectors(collection_name=collection_name)
     print (count)

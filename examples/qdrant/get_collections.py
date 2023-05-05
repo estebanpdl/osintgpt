@@ -12,13 +12,11 @@ Testing Qdrant -> get collections
 '''
 print (text)
 
-# test class
-env_file_path = '.env'
-
+# qdrant config -> env file path
+env_file_path = '../../config/.env'
 qdrant = Qdrant(env_file_path)
 collections = qdrant.get_collections()
 print (collections)
-
 
 # End
 text = f'''

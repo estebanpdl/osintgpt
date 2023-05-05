@@ -15,13 +15,12 @@ Testing Qdrant -> get vectors
 '''
 print (text)
 
-# test class
-env_file_path = '.env'
-
+# qdrant config -> env file path
+env_file_path = '../../config/.env'
 qdrant = Qdrant(env_file_path)
 
+# get vectors
 collection_name = 'narratives'
-
 try:
     vectors = qdrant.get_vectors(collection_name=collection_name)
     print (vectors)

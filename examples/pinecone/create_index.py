@@ -12,12 +12,10 @@ Testing Pinecone -> create_index
 '''
 print (text)
 
-# test class
-env_file_path = '.env'
-
+# pinecone config -> env file path
+env_file_path = '../../config/.env'
 pinecone = Pinecone(env_file_path)
 client = pinecone.get_client()
-
 
 # create index
 index_name = 'testindex'
@@ -25,7 +23,6 @@ dimension = 768
 metric = 'cosine'
 pinecone.create_index(index_name, dimension, metric)
 print ('Index created!')
-
 
 # End
 text = f'''
