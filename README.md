@@ -7,6 +7,7 @@
 <img src="images/osintgpt.png" alt="osintgpt osint gpt" width="33%" height="33%" />
 
 <br />
+<br />
 
 [![GitHub forks](https://img.shields.io/github/forks/estebanpdl/osintgpt.svg?style=social&label=Fork&maxAge=2592000)](https://GitHub.com/estebanpdl/osintgpt/network/)
 [![GitHub stars](https://badgen.net/github/stars/estebanpdl/osintgpt)](https://GitHub.com/estebanpdl/osintgpt/stargazers/)
