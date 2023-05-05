@@ -4,7 +4,7 @@
 
 <br />
 
-![OSINTGPT Image](images/osintgpt.png)
+<img src="images/osintgpt.png" alt="osintgpt osint gpt" width="33%" height="33%" />
 
 <br />
 
