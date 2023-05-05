@@ -19,6 +19,9 @@ from qdrant_client.http import models as rest
 # type hints
 from typing import List, Optional
 
+# import exceptions
+from osintgpt.exceptions.errors import MissingEnvironmentVariableError
+
 # Qdrant class
 class Qdrant(object):
     '''
