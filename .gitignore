@@ -36,3 +36,6 @@ MANIFEST
 
 # README BETA
 README-BETA.md
+
+# .env file
+*.env
