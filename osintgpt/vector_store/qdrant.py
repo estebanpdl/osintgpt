@@ -11,10 +11,14 @@
 # ===============================================================
 
 # import modules <Qdrant>
+import os
 import qdrant_client
 
 # import submodules <Qdrant>
 from qdrant_client.http import models as rest
+
+# import submodules
+from dotenv import load_dotenv
 
 # type hints
 from typing import List, Optional
@@ -44,15 +48,60 @@ class Qdrant(object):
     github.com/qdrant/qdrant-client/blob/master/qdrant_client/qdrant_client.py
     '''
     # constructor
-    def __init__(self, **kwargs):
+    def __init__(self, env_file_path: str):
         '''
         Constructor
 
         args:
             **kwargs: keyword arguments for QdrantClient
         '''
-        
-        self.qdrant = qdrant_client.QdrantClient(**kwargs)
+        # load environment variables
+        load_dotenv(dotenv_path=env_file_path)
+
+        # set environment variables
+        self.set_required_variables()
+
+    # set required environment variables
+    def set_required_variables(self):
+        '''
+        set required environment variables
+
+        This method sets for the required environment variables for connecting
+        to a Qdrant server.
+
+        returns:
+            use_remote: use remote
+            use_local: use local
+        '''
+        # set required environment variables
+        use_remote = os.getenv('QDRANT_API_KEY') and os.getenv('QDRANT_URL')
+        use_local = os.getenv('QDRANT_PORT') and os.getenv('QDRANT_HOST')
+
+        if not (use_remote or use_local):
+            raise MissingEnvironmentVariableError(
+                'QDRANT_API_KEY or QDRANT_URL or QDRANT_HOST or QDRANT_PORT'
+            )
+
+        # set environment variables
+        if use_remote:
+            self.api_key = os.getenv('QDRANT_API_KEY')
+            self.url = os.getenv('QDRANT_URL')
+
+            # connect
+            self.qdrant = qdrant_client.QdrantClient(
+                url=self.url,
+                api_key=self.api_key,
+                https=True
+            )
+        else:
+            self.host = os.getenv('QDRANT_HOST')
+            self.port = int(os.getenv('QDRANT_PORT'))
+
+            # connect
+            self.qdrant = qdrant_client.QdrantClient(
+                host=self.host,
+                port=self.port
+            )
     
     # get client
     def get_client(self):
