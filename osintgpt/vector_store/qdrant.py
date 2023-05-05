@@ -3,6 +3,7 @@
 # ===============================================================
 # osintgpt
 #
+# Author: @estebanpdl
 #
 # File: qdrant.py
 # Description: Qdrant API. This file contains the Qdrant class

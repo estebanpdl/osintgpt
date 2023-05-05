@@ -23,6 +23,9 @@ from dotenv import load_dotenv
 # type hints
 from typing import List, Optional
 
+# import exceptions
+from osintgpt.exceptions.errors import MissingEnvironmentVariableError
+
 # OpenAIEmbeddingGenerator class
 class OpenAIEmbeddingGenerator(object):
     '''
@@ -218,18 +221,3 @@ class OpenAIEmbeddingGenerator(object):
             data[col] = data[col].apply(literal_eval)
         
         return data
-
-
-'''
-Error handling
-
-'''
-
-# Missing Environment Variable Error
-class MissingEnvironmentVariableError(Exception):
-    '''
-    Missing environment variable error
-
-    This error is raised when an environment variable is not set.
-    '''
-    pass

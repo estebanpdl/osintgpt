@@ -3,17 +3,25 @@
 # ===============================================================
 # osintgpt
 #
+# Author: @estebanpdl
 #
-# File: qdrant.py
-# Description: Qdrant API. This file contains the Qdrant class
-#   method for managing the Qdrant API connection.
+# File: pinecone_client.py
+# Description: Pinecone API. This file contains the Pinecone class
+#   method for managing the Pinecone API connection.
 # ===============================================================
 
 # import modules <Pinecone>
+import os
 import pinecone
 
 # type hints
 from typing import List, Optional
+
+# import submodules
+from dotenv import load_dotenv
+
+# import exceptions
+from osintgpt.exceptions.errors import MissingEnvironmentVariableError
 
 # Pinecone class
 class Pinecone(object):
@@ -25,16 +33,23 @@ class Pinecone(object):
     embeddings and associated documents within a Pinecone index.
     '''
     # constructor
-    def __init__(self, **kwargs):
+    def __init__(self, env_file_path: str):
         '''
         Constructor
-
-        args:
-            **kwargs: keyword arguments for Pinecone
-                api_key: API key
-                environment: environment > find next to API key in console
         '''
-        pinecone.init(**kwargs)
+        # load environment variables
+        load_dotenv(dotenv_path=env_file_path)
+
+        # set environment variables
+        self.api_key = os.getenv('PINECONE_API_KEY')
+        if not self.api_key:
+            raise MissingEnvironmentVariableError('PINECONE_API_KEY')
+        
+        self.environment = os.getenv('PINECONE_ENVIRONMENT')
+        if not self.environment:
+            raise MissingEnvironmentVariableError('PINECONE_ENVIRONMENT')
+
+        pinecone.init(api_key=self.api_key, environment=self.environment)
         self.pinecone = pinecone
     
     # get client
@@ -114,4 +129,3 @@ class Pinecone(object):
             vectors=zip(self._build_ids_list(vectors), vectors),
             namespace=vector_name
         )
-

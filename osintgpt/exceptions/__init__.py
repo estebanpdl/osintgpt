@@ -1,0 +1,1 @@
+# osintgpt custom exceptions
