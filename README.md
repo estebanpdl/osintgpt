@@ -1,9 +1,8 @@
 <div align="center">
 
 # **OSINT GPT**
-<br />
 
----
+<br />
 
 ![OSINTGPT Image](images/osintgpt.png)
 
