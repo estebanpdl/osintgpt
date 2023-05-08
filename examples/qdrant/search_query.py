@@ -33,7 +33,7 @@ embedding_generator = OpenAIEmbeddingGenerator(env_file_path)
 Generate_embeddings
 '''
 # query text
-query = 'Sheldon creates a new theory of dark matter.'
+query = 'Dark matter and quantum physics'
 embedding = embedding_generator.generate_embedding(query)
 
 print ('')

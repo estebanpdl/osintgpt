@@ -33,12 +33,6 @@ class OpenAIEmbeddingGenerator(object):
 
     This class contains the methods for managing the GPT API connection, including
     embeddings and vector stores.
-
-    Example:
-        .. code-block:: python
-
-            from osintgpt import OpenAIEmbeddingGenerator
-        
     '''
     # constructor
     def __init__(self, env_file_path: str):
@@ -51,11 +45,11 @@ class OpenAIEmbeddingGenerator(object):
         # set environment variables
         self.OPENAI_API_KEY = os.getenv('OPENAI_API_KEY', '')
         if not self.OPENAI_API_KEY:
-            raise MissingEnvironmentVariableError('OPENAI_API_KEY is not set')
+            raise MissingEnvironmentVariableError('OPENAI_API_KEY')
 
         self.OPENAI_GPT_MODEL = os.getenv('OPENAI_GPT_MODEL', '')
         if not self.OPENAI_GPT_MODEL:
-            raise MissingEnvironmentVariableError('OPENAI_GPT_MODEL is not set')
+            raise MissingEnvironmentVariableError('OPENAI_GPT_MODEL')
 
     # get openai api key
     def get_openai_api_key(self):
