@@ -23,8 +23,11 @@ from dotenv import load_dotenv
 # import exceptions
 from osintgpt.exceptions.errors import MissingEnvironmentVariableError
 
+# import base class
+from .base import BaseVectorEngine
+
 # Pinecone class
-class Pinecone(object):
+class Pinecone(BaseVectorEngine):
     '''
     Pinecone class
 

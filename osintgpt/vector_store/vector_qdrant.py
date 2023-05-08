@@ -26,8 +26,11 @@ from typing import List, Optional
 # import exceptions
 from osintgpt.exceptions.errors import MissingEnvironmentVariableError
 
+# import base class
+from .base import BaseVectorEngine
+
 # Qdrant class
-class Qdrant(object):
+class Qdrant(BaseVectorEngine):
     '''
     Qdrant class
 
@@ -304,24 +307,34 @@ class Qdrant(object):
         self.qdrant.delete_collection(collection_name=collection_name)
     
     # search query
-    def search_query(self, embedded_query: List, collection_name: str,
-        vector_name: str = 'main', top_k: int = 10):
+    def search_query(self, embedded_query: List[float], top_k: int = 10, **kwargs):
         '''
         Search query in collection
 
         args:
             embedded_query: embedded query
                 type: list
-            collection_name: collection name
-                type: str
-            vector_name: name
-                type: str
             top_k: top k
                 type: int
+
+            kwargs:
+                collection_name: collection name
+                    type: str
+                vector_name: name
+                    type: str
         
         returns:
             result: result
         '''
+        # collection name
+        collection_name = kwargs.get('collection_name', None)
+        if collection_name is None:
+            raise ValueError('collection_name must be specified')
+        
+        # vector name
+        vector_name = kwargs.get('vector_name', 'main')
+
+        # query results
         query_results = self.qdrant.search(
             collection_name=collection_name,
             query_vector=(

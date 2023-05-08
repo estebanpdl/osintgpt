@@ -1,3 +1,6 @@
+# base class
+from .base import BaseVectorEngine
+
 # import class methods
-from .qdrant import Qdrant
-from .pinecone_client import Pinecone
+from .vector_qdrant import Qdrant
+from .vector_pinecone import Pinecone
