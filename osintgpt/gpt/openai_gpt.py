@@ -191,10 +191,10 @@ class OpenAIGPT(object):
         strings, relatednesses = zip(*strings_and_relatednesses)
         return strings[:top_k], relatednesses[:top_k]
     
-    # get completation response id
-    def _get_completation_response_id(self, response):
+    # get completion response id
+    def _get_completion_response_id(self, response):
         '''
-        Get completation response id
+        Get completion response id
 
         Args:
             response (dict): Response
@@ -204,10 +204,10 @@ class OpenAIGPT(object):
         '''
         return response['id']
 
-    # get completation response usage
-    def _get_completation_response_usage(self, response):
+    # get completion response usage
+    def _get_completion_response_usage(self, response):
         '''
-        Get completation response usage
+        Get completion response usage
 
         Args:
             response (dict): Response
@@ -216,9 +216,55 @@ class OpenAIGPT(object):
             usage (dict): Response usage
         '''
         return response['usage']
+    
+    # count tokens < GPT model >
+    def count_tokens(self, prompt: str):
+        '''
+        Count tokens
+
+        It counts the number of tokens in the data.
+
+        Returns:
+            num_tokens (int): Number of tokens
+        '''
+        # get model
+        model = self.OPENAI_GPT_MODEL
+        encoding = tiktoken.encoding_for_model(model)
+
+        # count tokens
+        tokens = encoding.encode(prompt)
+        num_tokens = len(tokens)
+
+        return num_tokens
+
+    # calculate completion response usage cost
+    def estimated_prompt_cost(self, prompt: str):
+        '''
+        It calculates the estimated cost of the prompt based on the number of
+        tokens.
+        
+        Costs are based on the OpenAI gpt-3.5-turbo or gpt-4 models.
+
+        Returns:
+            estimated_cost (float): Estimated cost
+        '''
+        model = self.OPENAI_GPT_MODEL
+
+        # get number of tokens
+        num_tokens = self.count_tokens(prompt)
+
+        # dict based on model costs
+        model_costs = {
+            'gpt-3.5-turbo': 0.002,
+            'gpt-4': 0.03
+        }
+
+        # calculate estimated cost
+        estimated_cost = (num_tokens / 1000) * model_costs[model]
+        return estimated_cost
 
     # get GPT model completion
-    def get_model_completation(self, prompt: str, temperature: float = 0):
+    def get_model_completion(self, prompt: str, temperature: float = 0):
         '''
         Get GPT model completion
 
@@ -237,8 +283,8 @@ class OpenAIGPT(object):
         )
 
         # display main values
-        print('Response id: ', self._get_completation_response_id(response))
-        for key, value in self._get_completation_response_usage(response).items():
+        print('Response id: ', self._get_completion_response_id(response))
+        for key, value in self._get_completion_response_usage(response).items():
             print(f'{key}: {value}')
         
         return response['choices'][0].message['content']
