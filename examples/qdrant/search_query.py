@@ -33,7 +33,7 @@ embedding_generator = OpenAIEmbeddingGenerator(env_file_path)
 Generate_embeddings
 '''
 # query text
-query = 'Dark matter and quantum physics'
+query = 'Sheldon explores a new theory on quantum physics'
 embedding = embedding_generator.generate_embedding(query)
 
 print ('')
@@ -54,13 +54,22 @@ collection_name = 'big_bang_theory'
 results = qdrant.search_query(
     embedded_query=embedding,
     collection_name=collection_name,
-    top_k=5
+    top_k=10
 )
 
 # print results
-for i, res in enumerate(results):
-    print(f'{i + 1}. {res.payload["text_data"]} (Score: {round(res.score, 3)})')
-
+using_score = False
+if using_score:
+    for i, res in enumerate(results):
+        print(f'{i + 1}. {res.payload["text_data"]} (Score: {round(res.score, 3)})')
+else:
+    content = ''
+    for i, res in enumerate(results):
+        # add text data to content and give it a new line
+        content += f'{res.payload["text_data"]}\n'
+    
+    # display content
+    print (content)
 
 # End
 text = f'''

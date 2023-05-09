@@ -134,13 +134,16 @@ class OpenAIGPT(object):
         
         return pd.DataFrame(self._embeddings, columns=columns)
 
-    # load search top k results
-    def _load_search_results(self, query: str, vector_engine: BaseVectorEngine,
-        top_k: int = 10):
+    # load search top k results from vector
+    def search_results_from_vector(self, query: str, vector_engine: BaseVectorEngine,
+        top_k: int = 10, **kwargs):
         '''
         '''
         if not isinstance(vector_engine, BaseVectorEngine):
-            supported_vector_engines = [Pinecone, Qdrant]
+            supported_vector_engines = [
+                Pinecone,
+                Qdrant
+            ]
             supported_vector_engine_names = ', '.join(
                 [engine.__name__ for engine in supported_vector_engines]
             )
@@ -151,10 +154,21 @@ class OpenAIGPT(object):
             message = f'{msg_a}. {msg_b} {supported_vector_engine_names}.'
             raise ValueError(message)
         
-        return True
+        # OpenAIEmbeddingGenerator instance
+        embedding_generator = OpenAIEmbeddingGenerator(self.env_file_path)
+        query_embedding = embedding_generator.generate_embedding(query)
+
+        # search results
+        search_results = vector_engine.search_query(
+            query_embedding,
+            top_k=top_k,
+            **kwargs
+        )
+        
+        return search_results
     
-    # search -> strings_ranked_by_relatedness
-    def strings_ranked_by_relatedness(self, query: str, df: pd.DataFrame,
+    # load search top k results from dataframe
+    def search_results_from_dataframe(self, query: str, df: pd.DataFrame,
         relatedness_fn=lambda x, y: 1 - spatial.distance.cosine(x, y),
         top_k: int = 10, embeddings_target_column: str = 'embeddings',
         text_target_column: str = 'text'):
@@ -165,7 +179,7 @@ class OpenAIGPT(object):
         embedding_generator = OpenAIEmbeddingGenerator(self.env_file_path)
         query_embedding = embedding_generator.generate_embedding(query)
         
-        strings_and_relatednesses =[
+        strings_and_relatednesses = [
             (
                 row[text_target_column],
                 relatedness_fn(query_embedding, row[embeddings_target_column])
@@ -177,4 +191,54 @@ class OpenAIGPT(object):
         strings, relatednesses = zip(*strings_and_relatednesses)
         return strings[:top_k], relatednesses[:top_k]
     
-    
+    # get completation response id
+    def _get_completation_response_id(self, response):
+        '''
+        Get completation response id
+
+        Args:
+            response (dict): Response
+        
+        Returns:
+            id (str): Response id
+        '''
+        return response['id']
+
+    # get completation response usage
+    def _get_completation_response_usage(self, response):
+        '''
+        Get completation response usage
+
+        Args:
+            response (dict): Response
+        
+        Returns:
+            usage (dict): Response usage
+        '''
+        return response['usage']
+
+    # get GPT model completion
+    def get_model_completation(self, prompt: str, temperature: float = 0):
+        '''
+        Get GPT model completion
+
+        Args:
+            prompt (str): Prompt
+        
+        Returns:
+            completion (str): Completion
+        '''
+        openai.api_key = self.OPENAI_API_KEY
+        messages = [{'role': 'user', 'content': prompt}]
+        response = openai.ChatCompletion.create(
+            model=self.OPENAI_GPT_MODEL,
+            messages=messages,
+            temperature=temperature,
+        )
+
+        # display main values
+        print('Response id: ', self._get_completation_response_id(response))
+        for key, value in self._get_completation_response_usage(response).items():
+            print(f'{key}: {value}')
+        
+        return response['choices'][0].message['content']

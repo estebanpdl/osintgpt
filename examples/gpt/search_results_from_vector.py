@@ -11,7 +11,7 @@ from osintgpt.vector_store import Qdrant
 text = f'''
 Init program at {time.ctime()}
 
-Testing -> OpenAIGPT
+Testing -> OpenAIGPT -> search results from vector
 '''
 print (text)
 
@@ -28,26 +28,20 @@ gpt = OpenAIGPT(env_file_path)
 Qdrant connection
 '''
 qdrant = Qdrant(env_file_path)
+query = 'Sheldon explores a new theory on quantum physics'
+collection_name = 'big_bang_theory'
 
-
-# load embeddings from csv file
-path = '../data/embeddings.csv'
-df = gpt.load_embeddings_from_csv(
-    file_path=path,
-    columns=['embeddings'],
-    encoding='utf-8',
-    sep=',',
-    low_memory=False
+response = gpt.search_results_from_vector(
+    query, qdrant, top_k=10, collection_name=collection_name
 )
 
+content = ''
+for i, res in enumerate(response):
+    # add string to content and give it a new line
+    content += f'{res.payload["text_data"]}\n'
 
-strings, relatednesses = gpt.strings_ranked_by_relatedness(
-    'Sheldon buys a new comic book', df, text_target_column='text_data'
-)
-
-for string, relatedness in zip(strings, relatednesses):
-    print(string, relatedness)
-
+# print content
+print (content)
 
 # End
 text = f'''

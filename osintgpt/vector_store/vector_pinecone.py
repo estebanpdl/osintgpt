@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 
-# ===============================================================
+# =================================================================
 # osintgpt
 #
 # Author: @estebanpdl
@@ -8,7 +8,7 @@
 # File: pinecone_client.py
 # Description: Pinecone API. This file contains the Pinecone class
 #   method for managing the Pinecone API connection.
-# ===============================================================
+# =================================================================
 
 # import modules <Pinecone>
 import os
