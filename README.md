@@ -10,7 +10,7 @@
 <br />
 
 [![GitHub forks](https://img.shields.io/github/forks/estebanpdl/osintgpt.svg?style=social&label=Fork&maxAge=2592000)](https://GitHub.com/estebanpdl/osintgpt/network/)
-[![GitHub stars](https://badgen.net/github/stars/estebanpdl/osintgpt)](https://GitHub.com/estebanpdl/osintgpt/stargazers/)
+[![GitHub stars](https://img.shields.io/github/stars/estebanpdl/osintgpt?style=social)](https://github.com/estebanpdl/osintgpt/stargazers)
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://github.com/estebanpdl/osintgpt/blob/main/LICENCE)
 [![Open Source](https://badges.frapsoft.com/os/v1/open-source.svg?v=103)](https://twitter.com/estebanpdl)
 [![Made-with-python](https://img.shields.io/badge/Made%20with-Python-1f425f.svg)](https://www.python.org/)

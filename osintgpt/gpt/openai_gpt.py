@@ -22,18 +22,17 @@ from scipy import spatial
 from ast import literal_eval
 from dotenv import load_dotenv
 
-
 # type hints
 from typing import List, Optional
 
-# import exceptions
-from osintgpt.exceptions.errors import MissingEnvironmentVariableError
-
-# import vector store
+# import osintgpt vector stores
 from osintgpt.vector_store import BaseVectorEngine, Pinecone, Qdrant
 
 # import osintgpt openai embeddings
 from osintgpt.embedding import OpenAIEmbeddingGenerator
+
+# import exceptions
+from osintgpt.exceptions.errors import MissingEnvironmentVariableError
 
 # OpenAIGPT class
 class OpenAIGPT(object):
@@ -177,3 +176,5 @@ class OpenAIGPT(object):
         strings_and_relatednesses.sort(key=lambda x: x[1], reverse=True)
         strings, relatednesses = zip(*strings_and_relatednesses)
         return strings[:top_k], relatednesses[:top_k]
+    
+    
