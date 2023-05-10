@@ -29,10 +29,13 @@ from typing import List, Optional
 from osintgpt.vector_store import BaseVectorEngine, Pinecone, Qdrant
 
 # import osintgpt openai embeddings
-from osintgpt.embedding import OpenAIEmbeddingGenerator
+from osintgpt.embeddings import OpenAIEmbeddingGenerator
 
 # import exceptions
 from osintgpt.exceptions.errors import MissingEnvironmentVariableError
+
+# import database manager
+from osintgpt.databases import SQLDatabaseManager
 
 # OpenAIGPT class
 class OpenAIGPT(object):
@@ -57,7 +60,7 @@ class OpenAIGPT(object):
         if not self.OPENAI_GPT_MODEL:
             raise MissingEnvironmentVariableError('OPENAI_GPT_MODEL')
         
-    # set openai api key
+    # get openai api key
     def get_openai_api_key(self):
         '''
         Get OpenAI API key
@@ -104,6 +107,8 @@ class OpenAIGPT(object):
         self._embeddings = {
             col: data[col].tolist() for col in columns
         }
+
+        return dataframe
 
     # get embeddings
     def get_embeddings(self, column: str):
@@ -217,6 +222,23 @@ class OpenAIGPT(object):
         '''
         return response['usage']
     
+    # get completion response role & message
+    def _get_completion_response_role_and_message(self, response):
+        '''
+        Get completion response role & message
+
+        Args:
+            response (dict): Response
+        
+        Returns:
+            role (str): Response role
+            message (str): Response message
+        '''
+        role = response['choices'][0]['message']['role']
+        message = response['choices'][0]['message']['content']
+
+        return role, message
+    
     # count tokens < GPT model >
     def count_tokens(self, prompt: str):
         '''
@@ -264,27 +286,84 @@ class OpenAIGPT(object):
         return estimated_cost
 
     # get GPT model completion
-    def get_model_completion(self, prompt: str, temperature: float = 0):
+    def get_model_completion(self, prompt: str, temperature: float = 0,
+        verbose: bool = True):
         '''
         Get GPT model completion
 
         Args:
             prompt (str): Prompt
+            temperature (float): Temperature (default: 0)
+            verbose (bool): Verbose mode (default: True)
         
         Returns:
             completion (str): Completion
         '''
+        # set api key
+        if not self.OPENAI_API_KEY:
+            raise ValueError('No OpenAI API key provided. Please provide one.')
+
         openai.api_key = self.OPENAI_API_KEY
+
+        # get model
+        if not self.OPENAI_GPT_MODEL:
+            raise ValueError('No OpenAI GPT model provided. Please provide one.')
+
+        model = self.OPENAI_GPT_MODEL
+
+        # get completion
         messages = [{'role': 'user', 'content': prompt}]
         response = openai.ChatCompletion.create(
-            model=self.OPENAI_GPT_MODEL,
+            model=model,
             messages=messages,
             temperature=temperature,
         )
 
         # display main values
-        print('Response id: ', self._get_completion_response_id(response))
-        for key, value in self._get_completion_response_usage(response).items():
-            print(f'{key}: {value}')
+        if verbose:
+            print('Response id: ', self._get_completion_response_id(response))
+            for key, value in self._get_completion_response_usage(response).items():
+                print(f'{key}: {value}')
         
         return response['choices'][0].message['content']
+    
+    # interactive completion
+    def interactive_completion(self, prompt: str, temperature: float = 0):
+        '''
+        Interactive completion
+
+        Args:
+            prompt (str): Prompt
+            temperature (float): Temperature (default: 0)
+        '''
+        # set api key
+        if not self.OPENAI_API_KEY:
+            raise ValueError('No OpenAI API key provided. Please provide one.')
+        
+        openai.api_key = self.OPENAI_API_KEY
+
+        # get model
+        if not self.OPENAI_GPT_MODEL:
+            raise ValueError('No OpenAI GPT model provided. Please provide one.')
+
+        model = self.OPENAI_GPT_MODEL
+
+        # interactive chat mode
+        print ('Interactive chat mode with GPT. Type "exit" to quit.')
+        while True:
+            user_input = input('You: ')
+            if user_input == 'exit':
+                print ('Exiting interactive chat mode...')
+                print ('')
+                break
+            
+            # 
+            
+            # get completion
+            gpt_response = self.get_model_completion(
+                user_input,
+                temperature=temperature,
+                verbose=False
+            )
+
+            print (f'{model}: ', gpt_response)

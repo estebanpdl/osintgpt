@@ -9,7 +9,7 @@ import pandas as pd
 
 # import osintgpt modules
 from osintgpt.vector_store import Qdrant
-from osintgpt.embedding import OpenAIEmbeddingGenerator
+from osintgpt.embeddings import OpenAIEmbeddingGenerator
 
 # Init
 text = f'''

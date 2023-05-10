@@ -11,7 +11,7 @@ import time
 import pandas as pd
 
 # import osintgpt modules
-from osintgpt.embedding import OpenAIEmbeddingGenerator
+from osintgpt.embeddings import OpenAIEmbeddingGenerator
 
 # Init
 text = f'''
