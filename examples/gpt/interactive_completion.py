@@ -11,7 +11,7 @@ from osintgpt.vector_store import Qdrant
 text = f'''
 Init program at {time.ctime()}
 
-Testing -> OpenAIGPT -> model completion
+Testing -> OpenAIGPT -> interactive completion
 '''
 print (text)
 
@@ -42,14 +42,14 @@ for i, res in enumerate(response):
 
 # build prompt
 prompt = f'''
-You are a TV series critic and skilled TV show analyzer. You will analyze inputs \
-from one prestigious user. Your task is to convince the user to watch the TV show \
-that you are analyzing.
+You are a knowledgeable critic and skillful analyzer of TV series. Your role \
+aims to analyze inputs from a prestigious user, with the goal to persuade them \
+to watch the TV show under analysis. The Analyzer addresses all user's queries \
+about the TV show in a concise, friendly, conversational style, while maintaining \
+strict focus on the provided text delimited by triple backticks.
 
-Make sure to clarify all questions that the user may have about the TV show.
-You respond in a short, very conversational friendly style.
-
-Consider the following text delimited by triple backticks as the TV show summary.
+Any question or comment out of the scope is responded with, 'Information is not \
+provided in the context'.
 
 Text: ```{content}```
 '''

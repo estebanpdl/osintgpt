@@ -286,6 +286,22 @@ class OpenAIGPT(object):
         estimated_cost = (num_tokens / 1000) * model_costs[model]
         return estimated_cost
     
+    # insert system prompt into sql database
+    def insert_system_prompt_into_sql_database(self, prompt: str):
+        '''
+        Insert system prompt into sql database
+
+        Args:
+            prompt (str): Prompt
+        '''
+        # SQL database manager instance
+        sql_manager = SQLDatabaseManager(self.env_file_path)
+
+        # insert prompt into sql table > chat_gpt_conversations
+        sql_manager.insert_data_to_chat_gpt_conversations(
+            'system-init', 'system', prompt
+        )
+    
     # insert user prompt into sql database
     def insert_user_prompt_into_sql_database(self, response: dict, prompt: str):
         '''
@@ -301,7 +317,7 @@ class OpenAIGPT(object):
         # SQL database manager instance
         sql_manager = SQLDatabaseManager(self.env_file_path)
 
-        # insert prompt into sql table > chat_gpt_prompts
+        # insert prompt into sql table > chat_gpt_conversations
         sql_manager.insert_data_to_chat_gpt_conversations(
             chat_id, 'user', prompt
         )
@@ -385,7 +401,8 @@ class OpenAIGPT(object):
         return response['choices'][0].message['content']
     
     # interactive completion: role system
-    def interactive_completion(self, prompt: str, temperature: float = 0):
+    def interactive_completion(self, prompt: str, messages: Optional[List] = None,
+        temperature: float = 0):
         '''
         Interactive completion
 
@@ -406,7 +423,15 @@ class OpenAIGPT(object):
         model = self.OPENAI_GPT_MODEL
 
         # build messages
-        messages = [{'role': 'system', 'content': prompt}]
+        if messages is None:
+            messages = [
+                {'role': 'system', 'content': prompt}
+            ]
+
+            # insert system prompt into sql database
+            self.insert_system_prompt_into_sql_database(prompt)
+        else:
+            messages = messages
 
         # interactive chat mode
         print ('Interactive chat mode with GPT. Type "exit" to quit.')
@@ -414,8 +439,8 @@ class OpenAIGPT(object):
         while True:
             user_input = input('You: ')
             if user_input == 'exit':
-                print ('Exiting interactive chat mode...')
                 print ('')
+                print ('Exiting interactive chat mode...')
                 break
             
             # accumulate messages
