@@ -74,6 +74,17 @@ class SQLDatabaseManager(object):
         
         # return connection
         return conn
+
+    # get connection'
+    def get_connection(self):
+        '''
+        get connection
+
+        Returns:
+            conn (sqlite3.Connection): database connection
+        '''
+        # return connection
+        return self.conn
     
     # create main chat gpt index table
     def _create_chat_gpt_index_table(self):
@@ -88,7 +99,7 @@ class SQLDatabaseManager(object):
             cursor.execute(
                 '''
                 CREATE TABLE IF NOT EXISTS chat_gpt_index (
-                    chat_id text NOT NULL PRIMARY KEY,
+                    id text NOT NULL PRIMARY KEY,
                     created_at VARCHAR (20) NOT NULL
                 );
                 '''
@@ -113,7 +124,7 @@ class SQLDatabaseManager(object):
             cursor.execute(
                 '''
                 CREATE TABLE IF NOT EXISTS chat_gpt_conversations (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    id text PRIMARY KEY,
                     chat_id text NOT NULL,
                     role text NOT NULL,
                     message text NOT NULL
@@ -128,12 +139,12 @@ class SQLDatabaseManager(object):
             print (f"The error '{e}' occurred")
     
     # insert chat gpt data
-    def insert_data_to_chat_gpt_index(self, chat_id: str, created_at: str):
+    def insert_data_to_chat_gpt_index(self, id: str, created_at: str):
         '''
         insert data to chat gpt index table
 
         Args:
-            chat_id (str): chat id
+            id (str): conversation id
             created_at (str): created at
         '''
         # set cursor
@@ -143,10 +154,10 @@ class SQLDatabaseManager(object):
         try:
             cursor.execute(
                 '''
-                INSERT INTO chat_gpt_index (chat_id, created_at)
+                INSERT INTO chat_gpt_index (id, created_at)
                 VALUES (?, ?)
                 ''',
-                (chat_id, created_at)
+                (id, created_at)
             )
 
             # commit changes
@@ -157,12 +168,13 @@ class SQLDatabaseManager(object):
             self.conn.rollback()
     
     # insert chat gpt conversations
-    def insert_data_to_chat_gpt_conversations(self, chat_id: str, role: str,
-        message: str):
+    def insert_data_to_chat_gpt_conversations(self, id: str, chat_id: str,
+        role: str, message: str):
         '''
         insert data to chat gpt conversations table
 
         Args:
+            id (str): conversation id
             chat_id (str): chat id
             role (str): role
             message (str): message
@@ -174,10 +186,10 @@ class SQLDatabaseManager(object):
         try:
             cursor.execute(
                 '''
-                INSERT INTO chat_gpt_conversations (chat_id, role, message)
-                VALUES (?, ?, ?)
+                INSERT INTO chat_gpt_conversations (id, chat_id, role, message)
+                VALUES (?, ?, ?, ?)
                 ''',
-                (chat_id, role, message)
+                (id, chat_id, role, message)
             )
 
             # commit changes

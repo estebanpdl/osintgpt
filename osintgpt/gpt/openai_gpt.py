@@ -38,6 +38,9 @@ from osintgpt.exceptions.errors import MissingEnvironmentVariableError
 # import database manager
 from osintgpt.databases import SQLDatabaseManager
 
+# import utils
+from osintgpt.utils import create_unique_id
+
 # OpenAIGPT class
 class OpenAIGPT(object):
     '''
@@ -60,6 +63,9 @@ class OpenAIGPT(object):
         self.OPENAI_GPT_MODEL = os.getenv('OPENAI_GPT_MODEL', '')
         if not self.OPENAI_GPT_MODEL:
             raise MissingEnvironmentVariableError('OPENAI_GPT_MODEL')
+        
+        # set SQL unique id
+        self.SQL_UNIQUE_ID = self._generate_unique_id()
         
     # get openai api key
     def get_openai_api_key(self):
@@ -197,49 +203,6 @@ class OpenAIGPT(object):
         strings, relatednesses = zip(*strings_and_relatednesses)
         return strings[:top_k], relatednesses[:top_k]
     
-    # get completion response id
-    def _get_completion_response_id(self, response):
-        '''
-        Get completion response id
-
-        Args:
-            response (dict): Response
-        
-        Returns:
-            id (str): Response id
-        '''
-        return response['id']
-
-    # get completion response usage
-    def _get_completion_response_usage(self, response):
-        '''
-        Get completion response usage
-
-        Args:
-            response (dict): Response
-        
-        Returns:
-            usage (dict): Response usage
-        '''
-        return response['usage']
-    
-    # get completion response role & message
-    def _get_completion_response_role_and_message(self, response):
-        '''
-        Get completion response role & message
-
-        Args:
-            response (dict): Response
-        
-        Returns:
-            role (str): Response role
-            message (str): Response message
-        '''
-        role = response['choices'][0]['message']['role']
-        message = response['choices'][0]['message']['content']
-
-        return role, message
-    
     # count tokens < GPT model >
     def count_tokens(self, prompt: str):
         '''
@@ -286,6 +249,77 @@ class OpenAIGPT(object):
         estimated_cost = (num_tokens / 1000) * model_costs[model]
         return estimated_cost
     
+    # get completion response id
+    def _get_completion_response_id(self, response):
+        '''
+        Get completion response id
+
+        Args:
+            response (dict): Response
+        
+        Returns:
+            id (str): Response id
+        '''
+        return response['id']
+
+    # get completion response usage
+    def _get_completion_response_usage(self, response):
+        '''
+        Get completion response usage
+
+        Args:
+            response (dict): Response
+        
+        Returns:
+            usage (dict): Response usage
+        '''
+        return response['usage']
+    
+    # get completion response role & message
+    def _get_completion_response_role_and_message(self, response):
+        '''
+        Get completion response role & message
+
+        Args:
+            response (dict): Response
+        
+        Returns:
+            role (str): Response role
+            message (str): Response message
+        '''
+        role = response['choices'][0]['message']['role']
+        message = response['choices'][0]['message']['content']
+
+        return role, message
+    
+    # generate unique id
+    def _generate_unique_id(self):
+        '''
+        Generate unique id for sql database
+        
+        Returns:
+            id (str): Unique id
+        '''
+        # SQL database manager instance
+        sql_manager = SQLDatabaseManager(self.env_file_path)
+
+        # get connection
+        conn = sql_manager.get_connection()
+
+        # get cursor
+        cursor = conn.cursor()
+
+        # get all ids from table > chat_gpt_index
+        cursor.execute('SELECT id FROM chat_gpt_index')
+        ids = cursor.fetchall()
+
+        # convert ids to list
+        ids = [id[0] for id in ids]
+
+        # create unique id
+        unique_id = create_unique_id(ids)
+        return unique_id
+    
     # insert system prompt into sql database
     def insert_system_prompt_into_sql_database(self, prompt: str):
         '''
@@ -299,7 +333,7 @@ class OpenAIGPT(object):
 
         # insert prompt into sql table > chat_gpt_conversations
         sql_manager.insert_data_to_chat_gpt_conversations(
-            'system-init', 'system', prompt
+            self.SQL_UNIQUE_ID, 'system-init', 'system', prompt
         )
     
     # insert user prompt into sql database
@@ -319,7 +353,7 @@ class OpenAIGPT(object):
 
         # insert prompt into sql table > chat_gpt_conversations
         sql_manager.insert_data_to_chat_gpt_conversations(
-            chat_id, 'user', prompt
+            self.SQL_UNIQUE_ID, chat_id, 'user', prompt
         )
     
     # insert completion response into sql database
@@ -343,10 +377,18 @@ class OpenAIGPT(object):
         sql_manager = SQLDatabaseManager(self.env_file_path)
 
         # insert response into sql table > chat_gpt_index
-        sql_manager.insert_data_to_chat_gpt_index(chat_id, created_at)
+        sql_manager.insert_data_to_chat_gpt_index(
+            self.SQL_UNIQUE_ID,
+            created_at
+        )
 
         # insert response into sql table > chat_gpt_conversations
-        sql_manager.insert_data_to_chat_gpt_conversations(chat_id, role, message)
+        sql_manager.insert_data_to_chat_gpt_conversations(
+            self.SQL_UNIQUE_ID,
+            chat_id,
+            role,
+            message
+        )
 
     # get GPT model completion
     def get_model_completion(self, prompt: str, messages: Optional[List] = None,
