@@ -81,11 +81,11 @@ class SQLDatabaseManager(object):
         create table
         '''
         # set cursor
-        c = self.conn.cursor()
+        cursor = self.conn.cursor()
 
         # try to create table
         try:
-            cur.execute(
+            cursor.execute(
                 '''
                 CREATE TABLE IF NOT EXISTS chat_gpt_index (
                     chat_id text NOT NULL PRIMARY KEY,
@@ -93,6 +93,10 @@ class SQLDatabaseManager(object):
                 );
                 '''
             )
+
+            # commit changes
+            self.conn.commit()
+        
         except Error as e:
             print (f"The error '{e}' occurred")
     
@@ -102,11 +106,11 @@ class SQLDatabaseManager(object):
         create chat gpt conversations table
         '''
         # set cursor
-        c = self.conn.cursor()
+        cursor = self.conn.cursor()
 
         # try to create table
         try:
-            cur.execute(
+            cursor.execute(
                 '''
                 CREATE TABLE IF NOT EXISTS chat_gpt_conversations (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -116,6 +120,10 @@ class SQLDatabaseManager(object):
                 );
                 '''
             )
+
+            # commit changes
+            self.conn.commit()
+        
         except Error as e:
             print (f"The error '{e}' occurred")
     
@@ -129,22 +137,24 @@ class SQLDatabaseManager(object):
             created_at (str): created at
         '''
         # set cursor
-        c = self.conn.cursor()
+        cursor = self.conn.cursor()
 
         # try to insert data
         try:
-            c.execute(
+            cursor.execute(
                 '''
                 INSERT INTO chat_gpt_index (chat_id, created_at)
                 VALUES (?, ?)
                 ''',
                 (chat_id, created_at)
             )
+
+            # commit changes
+            self.conn.commit()
+        
         except Error as e:
             print (f"The error '{e}' occurred")
-
-        # commit changes
-        self.conn.commit()
+            self.conn.rollback()
     
     # insert chat gpt conversations
     def insert_data_to_chat_gpt_conversations(self, chat_id: str, role: str,
@@ -158,19 +168,21 @@ class SQLDatabaseManager(object):
             message (str): message
         '''
         # set cursor
-        c = self.conn.cursor()
+        cursor = self.conn.cursor()
 
         # try to insert data
         try:
-            c.execute(
+            cursor.execute(
                 '''
                 INSERT INTO chat_gpt_conversations (chat_id, role, message)
                 VALUES (?, ?, ?)
                 ''',
                 (chat_id, role, message)
             )
+
+            # commit changes
+            self.conn.commit()
+        
         except Error as e:
             print (f"The error '{e}' occurred")
-
-        # commit changes
-        self.conn.commit()
+            self.conn.rollback()

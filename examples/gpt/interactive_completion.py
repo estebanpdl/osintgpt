@@ -32,7 +32,7 @@ query = 'Sheldon explores a new theory on quantum physics'
 collection_name = 'big_bang_theory'
 
 response = gpt.search_results_from_vector(
-    query, qdrant, top_k=10, collection_name=collection_name
+    query, qdrant, top_k=25, collection_name=collection_name
 )
 
 content = ''
@@ -42,22 +42,22 @@ for i, res in enumerate(response):
 
 # build prompt
 prompt = f'''
-Summarize the text delimited by triple backticks in one paragraph.
-Determine five topics that are being discussed in the same text.
+You are a TV series critic and skilled TV show analyzer. You will analyze inputs \
+from one prestigious user. Your task is to convince the user to watch the TV show \
+that you are analyzing.
+
+Make sure to clarify all questions that the user may have about the TV show.
+You respond in a short, very conversational friendly style.
+
+Consider the following text delimited by triple backticks as the TV show summary.
 
 Text: ```{content}```
-
-Follow the next format:
-
-1. Paragraph.
-2. Topics separated by comma.
 '''
 
-# model completion
-result = gpt.get_model_completion(prompt)
+# interactive completion: role system
+print ('interactive completion: role system.')
 print ('')
-print ('Model completion:')
-print (result)
+gpt.interactive_completion(prompt)
 
 # End
 text = f'''

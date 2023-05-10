@@ -15,6 +15,7 @@
 import os
 import openai
 import tiktoken
+import datetime
 import pandas as pd
 
 # import submodules
@@ -284,10 +285,56 @@ class OpenAIGPT(object):
         # calculate estimated cost
         estimated_cost = (num_tokens / 1000) * model_costs[model]
         return estimated_cost
+    
+    # insert user prompt into sql database
+    def insert_user_prompt_into_sql_database(self, response: dict, prompt: str):
+        '''
+        Insert user prompt into sql database
+
+        Args:
+            response (dict): Response
+            prompt (str): Prompt
+        '''
+        # get response id
+        chat_id = self._get_completion_response_id(response)
+
+        # SQL database manager instance
+        sql_manager = SQLDatabaseManager(self.env_file_path)
+
+        # insert prompt into sql table > chat_gpt_prompts
+        sql_manager.insert_data_to_chat_gpt_conversations(
+            chat_id, 'user', prompt
+        )
+    
+    # insert completion response into sql database
+    def insert_completion_response_into_sql_database(self, response: dict):
+        '''
+        Insert completion response into sql database
+
+        Args:
+            response (dict): Response
+        '''
+        # get response id
+        chat_id = self._get_completion_response_id(response)
+        role, message = self._get_completion_response_role_and_message(response)
+        
+        # convert timestamp to %Y-%m-%d %H:%M:%S format
+        created_at = datetime.datetime.fromtimestamp(
+            response['created']
+        ).strftime('%Y-%m-%d %H:%M:%S')
+
+        # SQL database manager instance
+        sql_manager = SQLDatabaseManager(self.env_file_path)
+
+        # insert response into sql table > chat_gpt_index
+        sql_manager.insert_data_to_chat_gpt_index(chat_id, created_at)
+
+        # insert response into sql table > chat_gpt_conversations
+        sql_manager.insert_data_to_chat_gpt_conversations(chat_id, role, message)
 
     # get GPT model completion
-    def get_model_completion(self, prompt: str, temperature: float = 0,
-        verbose: bool = True):
+    def get_model_completion(self, prompt: str, messages: Optional[List] = None,
+        temperature: float = 0, verbose: bool = True):
         '''
         Get GPT model completion
 
@@ -295,6 +342,7 @@ class OpenAIGPT(object):
             prompt (str): Prompt
             temperature (float): Temperature (default: 0)
             verbose (bool): Verbose mode (default: True)
+            messages (Optional[List]): Messages (default: None)
         
         Returns:
             completion (str): Completion
@@ -312,12 +360,21 @@ class OpenAIGPT(object):
         model = self.OPENAI_GPT_MODEL
 
         # get completion
-        messages = [{'role': 'user', 'content': prompt}]
+        messages = [
+            {'role': 'user', 'content': prompt}
+        ] if messages is None else messages
+
         response = openai.ChatCompletion.create(
             model=model,
             messages=messages,
-            temperature=temperature,
+            temperature=temperature
         )
+
+        # insert user prompt into sql database
+        self.insert_user_prompt_into_sql_database(response, prompt)
+
+        # insert response into sql database
+        self.insert_completion_response_into_sql_database(response)
 
         # display main values
         if verbose:
@@ -327,7 +384,7 @@ class OpenAIGPT(object):
         
         return response['choices'][0].message['content']
     
-    # interactive completion
+    # interactive completion: role system
     def interactive_completion(self, prompt: str, temperature: float = 0):
         '''
         Interactive completion
@@ -348,8 +405,12 @@ class OpenAIGPT(object):
 
         model = self.OPENAI_GPT_MODEL
 
+        # build messages
+        messages = [{'role': 'system', 'content': prompt}]
+
         # interactive chat mode
         print ('Interactive chat mode with GPT. Type "exit" to quit.')
+        print ('')
         while True:
             user_input = input('You: ')
             if user_input == 'exit':
@@ -357,13 +418,20 @@ class OpenAIGPT(object):
                 print ('')
                 break
             
-            # 
+            # accumulate messages
+            msg = {'role': 'user', 'content': user_input}
+            messages.append(msg)
             
             # get completion
             gpt_response = self.get_model_completion(
                 user_input,
+                messages=messages,
                 temperature=temperature,
                 verbose=False
             )
+
+            # accumulate messages
+            msg = {'role': 'assistant', 'content': gpt_response}
+            messages.append(msg)
 
             print (f'{model}: ', gpt_response)
