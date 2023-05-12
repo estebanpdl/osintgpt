@@ -66,6 +66,7 @@ class OpenAIGPT(object):
         
         # set SQL unique id
         self.SQL_UNIQUE_ID = self._generate_unique_id()
+        self.SQL_UNIQUE_ID_INSERTED = False
         
     # get openai api key
     def get_openai_api_key(self):
@@ -377,10 +378,14 @@ class OpenAIGPT(object):
         sql_manager = SQLDatabaseManager(self.env_file_path)
 
         # insert response into sql table > chat_gpt_index
-        sql_manager.insert_data_to_chat_gpt_index(
-            self.SQL_UNIQUE_ID,
-            created_at
-        )
+        if not self.SQL_UNIQUE_ID_INSERTED:
+            sql_manager.insert_data_to_chat_gpt_index(
+                self.SQL_UNIQUE_ID,
+                created_at
+            )
+
+            # set SQL_UNIQUE_ID_INSERTED to True
+            self.SQL_UNIQUE_ID_INSERTED = True
 
         # insert response into sql table > chat_gpt_conversations
         sql_manager.insert_data_to_chat_gpt_conversations(
@@ -450,6 +455,7 @@ class OpenAIGPT(object):
 
         Args:
             prompt (str): Prompt
+            messages (Optional[List]): Messages (default: None)
             temperature (float): Temperature (default: 0)
         '''
         # set api key

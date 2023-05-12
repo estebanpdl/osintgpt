@@ -124,10 +124,12 @@ class SQLDatabaseManager(object):
             cursor.execute(
                 '''
                 CREATE TABLE IF NOT EXISTS chat_gpt_conversations (
-                    id text PRIMARY KEY,
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    ref_id text NOT NULL,
                     chat_id text NOT NULL,
                     role text NOT NULL,
-                    message text NOT NULL
+                    message text NOT NULL,
+                    FOREIGN KEY(ref_id) REFERENCES chat_gpt_index(id)
                 );
                 '''
             )
@@ -168,13 +170,13 @@ class SQLDatabaseManager(object):
             self.conn.rollback()
     
     # insert chat gpt conversations
-    def insert_data_to_chat_gpt_conversations(self, id: str, chat_id: str,
+    def insert_data_to_chat_gpt_conversations(self, ref_id: str, chat_id: str,
         role: str, message: str):
         '''
         insert data to chat gpt conversations table
 
         Args:
-            id (str): conversation id
+            ref_id (str): conversation id
             chat_id (str): chat id
             role (str): role
             message (str): message
@@ -186,10 +188,10 @@ class SQLDatabaseManager(object):
         try:
             cursor.execute(
                 '''
-                INSERT INTO chat_gpt_conversations (id, chat_id, role, message)
+                INSERT INTO chat_gpt_conversations (ref_id, chat_id, role, message)
                 VALUES (?, ?, ?, ?)
                 ''',
-                (id, chat_id, role, message)
+                (ref_id, chat_id, role, message)
             )
 
             # commit changes
