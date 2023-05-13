@@ -10,7 +10,7 @@ from osintgpt.gpt import OpenAIGPT
 text = f'''
 Init program at {time.ctime()}
 
-Testing -> OpenAIGPT -> search results from dataframe
+Example -> OpenAIGPT -> search results from dataframe
 '''
 print (text)
 

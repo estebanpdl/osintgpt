@@ -21,7 +21,7 @@ from qdrant_client.http.exceptions import UnexpectedResponse
 text = f'''
 Init program at {time.ctime()}
 
-Testing Qdrant -> get vectors
+Example Qdrant -> get vectors
 '''
 print (text)
 

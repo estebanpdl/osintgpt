@@ -17,7 +17,7 @@ from osintgpt.embeddings import OpenAIEmbeddingGenerator
 text = f'''
 Init program at {time.ctime()}
 
-Testing OpenAIEmbeddingGenerator -> count tokens and calculate estimated cost
+Example -> OpenAIEmbeddingGenerator -> count tokens and calculate estimated cost
 Estimated cost based on model: text-embedding-ada-002
 '''
 print (text)

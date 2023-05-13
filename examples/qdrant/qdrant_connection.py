@@ -17,7 +17,7 @@ from osintgpt.vector_store import Qdrant
 text = f'''
 Init program at {time.ctime()}
 
-Testing Qdrant -> connection
+Example Qdrant -> connection
 '''
 print (text)
 

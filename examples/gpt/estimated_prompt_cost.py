@@ -11,7 +11,7 @@ from osintgpt.vector_store import Qdrant
 text = f'''
 Init program at {time.ctime()}
 
-Testing -> OpenAIGPT -> Estimated Prompt Cost
+Example -> OpenAIGPT -> Estimated Prompt Cost
 '''
 print (text)
 

@@ -15,7 +15,7 @@ from osintgpt.embeddings import OpenAIEmbeddingGenerator
 text = f'''
 Init program at {time.ctime()}
 
-Testing -> search query
+Example -> search query
 '''
 print (text)
 

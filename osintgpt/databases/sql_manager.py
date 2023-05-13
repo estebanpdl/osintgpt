@@ -17,6 +17,7 @@ import sqlite3
 
 # import submodules
 from sqlite3 import Error
+from dotenv import load_dotenv
 
 # type hints
 from typing import List, Optional
@@ -37,8 +38,11 @@ class SQLDatabaseManager(object):
         '''
         constructor
         '''
+        # load environment variables
+        load_dotenv(dotenv_path=env_file_path)
+
         # set database file path
-        self.db_file = os.getenv('SQL_DB_FILE_PATH')
+        self.db_file = os.getenv('SQL_DB_FILE_PATH', '')
         if not self.db_file:
             raise MissingEnvironmentVariableError('SQL_DB_FILE_PATH')
         
@@ -200,3 +204,46 @@ class SQLDatabaseManager(object):
         except Error as e:
             print (f"The error '{e}' occurred")
             self.conn.rollback()
+    
+    # load messages from chat gpt conversations table
+    def load_messages_from_chat_gpt_conversations(self, ref_id: str):
+        '''
+        load messages from chat gpt conversations table
+
+        Args:
+            ref_id (str): conversation id
+        
+        Returns:
+            messages (List[str]): messages
+        '''
+        # set cursor
+        cursor = self.conn.cursor()
+
+        # set messages
+        messages = []
+
+        # try to load messages
+        try:
+            cursor.execute(
+                '''
+                SELECT message FROM chat_gpt_conversations
+                WHERE ref_id = ?
+                ''',
+                (ref_id,)
+            )
+
+            # fetch messages
+            messages = cursor.fetchall()
+
+            # commit changes
+            self.conn.commit()
+
+            # return messages
+            return messages
+
+        except Error as e:
+            print (f"The error '{e}' occurred")
+            self.conn.rollback()
+        
+        # return messages
+        return messages

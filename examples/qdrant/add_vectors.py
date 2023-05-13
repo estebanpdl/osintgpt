@@ -15,7 +15,7 @@ from osintgpt.embeddings import OpenAIEmbeddingGenerator
 text = f'''
 Init program at {time.ctime()}
 
-Testing -> add vectors to Qdrant collection
+Example -> add vectors to Qdrant collection
 '''
 print (text)
 

@@ -17,7 +17,7 @@ from osintgpt.vector_store import Qdrant
 text = f'''
 Init program at {time.ctime()}
 
-Testing Qdrant -> get collections
+Example Qdrant -> get collections
 '''
 print (text)
 

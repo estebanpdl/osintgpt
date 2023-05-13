@@ -18,7 +18,7 @@ from osintgpt.vector_store import Pinecone
 text = f'''
 Init program at {time.ctime()}
 
-Testing Pinecone -> create_index
+Example -> Pinecone create_index
 '''
 print (text)
 

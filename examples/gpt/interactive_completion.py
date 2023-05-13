@@ -11,7 +11,7 @@ from osintgpt.vector_store import Qdrant
 text = f'''
 Init program at {time.ctime()}
 
-Testing -> OpenAIGPT -> interactive completion
+Example -> OpenAIGPT -> interactive completion
 '''
 print (text)
 

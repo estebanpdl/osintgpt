@@ -16,7 +16,7 @@ from qdrant_client.http.exceptions import UnexpectedResponse
 text = f'''
 Init program at {time.ctime()}
 
-Testing Qdrant -> delete collection
+Example Qdrant -> delete collection
 '''
 print (text)
 
