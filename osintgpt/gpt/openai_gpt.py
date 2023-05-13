@@ -24,7 +24,7 @@ from ast import literal_eval
 from dotenv import load_dotenv
 
 # type hints
-from typing import List, Optional
+from typing import Union, Optional, List, Dict
 
 # import osintgpt vector stores
 from osintgpt.vector_store import BaseVectorEngine, Pinecone, Qdrant
@@ -396,17 +396,18 @@ class OpenAIGPT(object):
         )
 
     # get GPT model completion
-    def get_model_completion(self, prompt: str, messages: Optional[List] = None,
-        temperature: float = 0, verbose: bool = True):
+    def get_model_completion(self, prompt: str,
+        messages: Optional[Union[List, Dict]] = None, temperature: float = 0,
+        verbose: bool = True):
         '''
         Get GPT model completion
 
         Args:
             prompt (str): Prompt
+            messages (list or dict): Messages (default: None)
             temperature (float): Temperature (default: 0)
             verbose (bool): Verbose mode (default: True)
-            messages (Optional[List]): Messages (default: None)
-        
+            
         Returns:
             completion (str): Completion
         '''
@@ -422,11 +423,31 @@ class OpenAIGPT(object):
 
         model = self.OPENAI_GPT_MODEL
 
-        # get completion
-        messages = [
-            {'role': 'user', 'content': prompt}
-        ] if messages is None else messages
+        # build messages
+        if messages is None:
+            messages = [
+                {'role': 'user', 'content': prompt}
+            ]
+        else:
+            if type(messages) == dict:
+                '''
+                Since messages are provided, we assume that the SQL_UNIQUE_ID
+                has already been inserted into the database.
 
+                Pass ref_id to SQL_UNIQUE_ID.
+                Set SQL_UNIQUE_ID_INSERTED to True.
+                '''
+                self.SQL_UNIQUE_ID = messages['ref_id']
+                self.SQL_UNIQUE_ID_INSERTED = True
+
+                # build messages
+                messages = messages['messages'] + [
+                    {'role': 'user', 'content': prompt}
+                ]
+            else:
+                pass
+
+        # get completion response
         response = openai.ChatCompletion.create(
             model=model,
             messages=messages,
@@ -448,16 +469,21 @@ class OpenAIGPT(object):
         return response['choices'][0].message['content']
     
     # interactive completion: role system
-    def interactive_completion(self, prompt: str, messages: Optional[List] = None,
-        temperature: float = 0):
+    def interactive_completion(self, prompt: Optional[str] = None,
+        messages: Optional[Dict] = None, temperature: float = 0,
+        verbose: bool = False):
         '''
         Interactive completion
 
         Args:
-            prompt (str): Prompt
-            messages (Optional[List]): Messages (default: None)
+            prompt (Optional[str]): Prompt (default: None)
+            messages (Optional[Dict]): Messages (default: None)
             temperature (float): Temperature (default: 0)
         '''
+        # Check that at least one of prompt or messages is provided
+        if prompt is None and messages is None:
+            raise ValueError('Either prompt or messages must be provided.')
+        
         # set api key
         if not self.OPENAI_API_KEY:
             raise ValueError('No OpenAI API key provided. Please provide one.')
@@ -479,7 +505,19 @@ class OpenAIGPT(object):
             # insert system prompt into sql database
             self.insert_system_prompt_into_sql_database(prompt)
         else:
-            messages = messages
+
+            '''
+            Since messages are provided, we assume that the SQL_UNIQUE_ID
+            has already been inserted into the database.
+
+            Pass ref_id to SQL_UNIQUE_ID.
+            Set SQL_UNIQUE_ID_INSERTED to True.
+            '''
+            self.SQL_UNIQUE_ID = messages['ref_id']
+            self.SQL_UNIQUE_ID_INSERTED = True
+
+            # build messages
+            messages = messages['messages']
 
         # interactive chat mode
         print ('Interactive chat mode with GPT. Type "exit" to quit.')
@@ -500,7 +538,7 @@ class OpenAIGPT(object):
                 user_input,
                 messages=messages,
                 temperature=temperature,
-                verbose=False
+                verbose=verbose
             )
 
             # accumulate messages

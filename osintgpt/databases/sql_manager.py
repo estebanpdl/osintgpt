@@ -214,7 +214,18 @@ class SQLDatabaseManager(object):
             ref_id (str): conversation id
         
         Returns:
-            messages (List[str]): messages
+            obj (dict): messages object
+
+            example:
+            obj = {
+                'ref_id': ref_id,
+                'messages': [
+                    {
+                        'role': role,
+                        'content': message
+                    }
+                ]
+            }
         '''
         # set cursor
         cursor = self.conn.cursor()
@@ -226,7 +237,7 @@ class SQLDatabaseManager(object):
         try:
             cursor.execute(
                 '''
-                SELECT message FROM chat_gpt_conversations
+                SELECT role, message FROM chat_gpt_conversations
                 WHERE ref_id = ?
                 ''',
                 (ref_id,)
@@ -235,15 +246,30 @@ class SQLDatabaseManager(object):
             # fetch messages
             messages = cursor.fetchall()
 
+            # convert messages to dict -> {role: role, content: message}
+            messages = [
+                {
+                    'role': message[0], 'content': message[1]
+                } for message in messages
+            ]
+
             # commit changes
             self.conn.commit()
 
             # return messages
-            return messages
+            obj = {
+                'ref_id': ref_id,
+                'messages': messages
+            }
+            return obj
 
         except Error as e:
             print (f"The error '{e}' occurred")
             self.conn.rollback()
         
         # return messages
-        return messages
+        obj = {
+            'ref_id': ref_id,
+            'messages': messages
+        }
+        return obj

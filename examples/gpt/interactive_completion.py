@@ -32,7 +32,7 @@ query = 'Sheldon explores a new theory on quantum physics'
 collection_name = 'big_bang_theory'
 
 response = gpt.search_results_from_vector(
-    query, qdrant, top_k=25, collection_name=collection_name
+    query, qdrant, top_k=5, collection_name=collection_name
 )
 
 content = ''
