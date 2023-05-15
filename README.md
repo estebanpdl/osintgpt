@@ -4,6 +4,10 @@
 
 <br />
 
+`osintgpt` is a Python package for leveraging OpenAI's GPT models to analyze text data and perform tasks such as calculating text embeddings, searching for similar documents, and more. It is designed for use in open-source intelligence (OSINT) applications and research.
+
+<br />
+
 <img src="images/osintgpt.png" alt="osintgpt osint gpt" width="33%" height="33%" />
 
 <br />
@@ -16,26 +20,24 @@
 [![Made-with-python](https://img.shields.io/badge/Made%20with-Python-1f425f.svg)](https://www.python.org/)
 [![Twitter estebanpdl](https://badgen.net/badge/icon/twitter?icon=twitter&label)](https://twitter.com/estebanpdl)
 
----
-
 </div>
-
-<br />
-<br />
-
-**Work in Progress**: This project is currently under development. The code and
-documentation may not be fully complete or polished.
-
----
-
-<br />
-<br />
-
-`osintgpt` is a Python package for leveraging OpenAI's GPT models to analyze text data and perform tasks such as calculating text embeddings, searching for similar documents, and more. It is designed for use in open-source intelligence (OSINT) applications and research.
 
 <hr />
 <br />
 
+## **Features**
+
+The `osintgpt` Python package is designed to streamline the process of analyzing text data by leveraging OpenAI's GPT models. Here are some of the key features:
+
+- **Text Analysis**: Utilize OpenAI's GPT models to analyze text data, including calculating text embeddings and searching for similar documents.
+- **Interactive Mode**: The package includes an interactive mode that allows users to communicate directly with the GPT model. The user can input a prompt and receive a response from the model, facilitating a more dynamic interaction.
+- **Database Management**: The package integrates with SQLite database, enabling easy storage and retrieval of conversation data. The SQLDatabaseManager class creates tables, handles data insertion, and manages transactions.
+
+Please note that the development of `osintgpt` is still in progress, and some features may still be refined or expanded.
+
+<br />
+<hr />
+<br />
 
 
 ## **Disclaimer**
