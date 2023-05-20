@@ -224,7 +224,7 @@ class Qdrant(BaseVectorEngine):
     
     # add vectors
     def add_vectors(self, collection_name: str, vectors: List,
-        vector_name: str = 'main', payload: Optional[List] = None):
+        vector_name: str = 'main', payload: Optional[List[dict]] = None):
         '''
         Add vectors
 

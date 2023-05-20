@@ -21,7 +21,7 @@ setup(
     packages=find_packages(),
     classifiers=[
         'Development Status :: 3 - Alpha',
-        'Programming Language :: Python :: 3',
+        'Programming Language :: Python',
         'Programming Language :: Python :: 3.6'
         'Programming Language :: Python :: 3.7'
         'Programming Language :: Python :: 3.8'
@@ -29,7 +29,9 @@ setup(
         'Programming Language :: Python :: 3.10',
         'Programming Language :: Python :: 3.11',
         'Operating System :: OS Independent',
-        'Intended Audience :: OSINT, Science/Research, Journalism, Developers'
+        'Intended Audience :: OSINT, Science/Research, Journalism, Developers',
+        'Topic :: Scientific/Engineering :: Artificial Intelligence',
+        'Topic :: Security :: Cryptography :: OSINT'
     ],
     python_requires='>=3.11.2',
     install_requires=[]

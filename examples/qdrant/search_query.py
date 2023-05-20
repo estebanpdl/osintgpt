@@ -33,11 +33,11 @@ embedding_generator = OpenAIEmbeddingGenerator(env_file_path)
 Generate_embeddings
 '''
 # query text
-query = 'Sheldon explores a new theory on quantum physics'
+query = 'Howard and Sheldon comic book store'
 embedding = embedding_generator.generate_embedding(query)
 
-print ('')
 print (query)
+print ('')
 print ('Finding similar text in collection based on query...')
 print ('')
 print ('')
