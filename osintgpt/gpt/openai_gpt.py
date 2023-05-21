@@ -49,7 +49,14 @@ class OpenAIGPT(object):
     # constructor
     def __init__(self, env_file_path: str):
         '''
-        Constructor
+        Initializes the instance of the class.
+
+        Args:
+            env_file_path (str): Path to the file containing environment variables.
+        
+        Raises:
+            MissingEnvironmentVariableError: If either 'OPENAI_API_KEY' or \
+                'OPENAI_GPT_MODEL' is not found in the environment variables.
         '''
         # load environment variables
         self.env_file_path = env_file_path
@@ -74,7 +81,7 @@ class OpenAIGPT(object):
         Get OpenAI API key
 
         Returns:
-            OPENAI_API_KEY (str): OpenAI API key
+            str: OpenAI API key
         '''
         return self.OPENAI_API_KEY
     
@@ -86,8 +93,11 @@ class OpenAIGPT(object):
 
         Args:
             file_path (str): File path
-            columns (list): List of columns specifying the embeddings
+            columns (List): List of columns specifying the embeddings
             **kwargs: Keyword arguments for pandas.read_csv
+        
+        Returns:
+            pd.DataFrame: Pandas dataframe
         '''
         data = pd.read_csv(file_path, **kwargs)
         for col in columns:
@@ -107,7 +117,10 @@ class OpenAIGPT(object):
 
         Args:
             dataframe (pd.DataFrame): Pandas dataframe
-            columns (list): List of columns specifying the embeddings
+            columns (List): List of columns specifying the embeddings
+        
+        Returns:
+            pd.DataFrame: Pandas dataframe
         '''
         for col in columns:
             dataframe[col] = dataframe[col].apply(literal_eval)
@@ -137,10 +150,10 @@ class OpenAIGPT(object):
         Get embeddings dataframe
 
         Args:
-            columns (list): List of columns specifying the embeddings
+            columns (List): List of columns specifying the embeddings
 
         Returns:
-            dataframe (pd.DataFrame): Pandas dataframe
+            pd.DataFrame: Pandas dataframe
         '''
         if not hasattr(self, '_embeddings'):
             raise AttributeError('No embeddings loaded. Please load embeddings.')
@@ -151,6 +164,16 @@ class OpenAIGPT(object):
     def search_results_from_vector(self, query: str, vector_engine: BaseVectorEngine,
         top_k: int = 10, **kwargs):
         '''
+        Search top k results from vector
+
+        Args:
+            query (str): Query
+            vector_engine (BaseVectorEngine): Vector engine
+            top_k (int): Top k results
+            **kwargs: Keyword arguments for vector engine search query
+
+        Returns:
+            search_results (List): List of search results
         '''
         if not isinstance(vector_engine, BaseVectorEngine):
             supported_vector_engines = [
@@ -179,14 +202,36 @@ class OpenAIGPT(object):
         
         return search_results
     
+    # relatedness function
+    def _relatedness_fn(self, x, y):
+        '''
+        Relatedness function
+
+        Args:
+            x (List[float]): List of embeddings
+            y (List[float]): List of embeddings
+        
+        Returns:
+            float: Relatedness. 1.0 is most similar, 0.0 is least similar.
+        '''
+        return 1 - spatial.distance.cosine(x, y)
+    
     # load search top k results from dataframe
     def search_results_from_dataframe(self, query: str, df: pd.DataFrame,
-        relatedness_fn=lambda x, y: 1 - spatial.distance.cosine(x, y),
         top_k: int = 10, embeddings_target_column: str = 'embeddings',
         text_target_column: str = 'text'):
         '''
-        Returns a list of strings and relatednesses, sorted from most related
-        to least.
+        Search top k results from dataframe
+        
+        Args:
+            query (str): Query
+            df (pd.DataFrame): Pandas dataframe
+            top_k (int): Top k results
+            embeddings_target_column (str): Embeddings target column
+            text_target_column (str): Text target column
+        
+        Returns:
+            List[Tuple[str, float]]: List of tuples containing the string and score.
         '''
         embedding_generator = OpenAIEmbeddingGenerator(self.env_file_path)
         query_embedding = embedding_generator.generate_embedding(query)
@@ -194,24 +239,25 @@ class OpenAIGPT(object):
         strings_and_relatednesses = [
             (
                 row[text_target_column],
-                relatedness_fn(query_embedding, row[embeddings_target_column])
+                self._relatedness_fn(query_embedding, row[embeddings_target_column])
             )
             for _, row in df.iterrows()
         ]
 
         strings_and_relatednesses.sort(key=lambda x: x[1], reverse=True)
-        strings, relatednesses = zip(*strings_and_relatednesses)
-        return strings[:top_k], relatednesses[:top_k]
+        return strings_and_relatednesses[:top_k]
     
     # count tokens < GPT model >
     def count_tokens(self, prompt: str):
         '''
         Count tokens
-
         It counts the number of tokens in the data.
 
+        Args:
+            prompt (str): The input prompt for the GPT model.
+
         Returns:
-            num_tokens (int): Number of tokens
+            int: Number of tokens
         '''
         # get model
         model = self.OPENAI_GPT_MODEL
@@ -231,8 +277,11 @@ class OpenAIGPT(object):
         
         Costs are based on the OpenAI gpt-3.5-turbo or gpt-4 models.
 
+        Args:
+            prompt (str): The input prompt for the GPT model.
+
         Returns:
-            estimated_cost (float): Estimated cost
+            float: GPT Model estimated cost
         '''
         model = self.OPENAI_GPT_MODEL
 
@@ -250,42 +299,42 @@ class OpenAIGPT(object):
         return estimated_cost
     
     # get completion response id
-    def _get_completion_response_id(self, response):
+    def _get_completion_response_id(self, response: Dict):
         '''
         Get completion response id
 
         Args:
-            response (dict): Response
+            response (dict): GPT Model response
         
         Returns:
-            id (str): Response id
+            str: GPT Model response id
         '''
         return response['id']
 
     # get completion response usage
-    def _get_completion_response_usage(self, response):
+    def _get_completion_response_usage(self, response: Dict):
         '''
         Get completion response usage
 
         Args:
-            response (dict): Response
+            response (dict): GPT Model response
         
         Returns:
-            usage (dict): Response usage
+            dict: GPT Model response usage
         '''
         return response['usage']
     
     # get completion response role & message
-    def _get_completion_response_role_and_message(self, response):
+    def _get_completion_response_role_and_message(self, response: Dict):
         '''
         Get completion response role & message
 
         Args:
-            response (dict): Response
+            response (dict): GPT Model response
         
         Returns:
-            role (str): Response role
-            message (str): Response message
+            Tuple[str, str]: A tuple where the first element is the response role
+            and the second element is the response message.
         '''
         role = response['choices'][0]['message']['role']
         message = response['choices'][0]['message']['content']
@@ -298,7 +347,7 @@ class OpenAIGPT(object):
         Generate unique id for sql database
         
         Returns:
-            id (str): Unique id
+            str: SQL unique id
         '''
         # SQL database manager instance
         sql_manager = SQLDatabaseManager(self.env_file_path)
@@ -326,7 +375,10 @@ class OpenAIGPT(object):
         Insert system prompt into sql database
 
         Args:
-            prompt (str): Prompt
+            prompt (str): The input prompt for the GPT model.
+
+        Returns:
+            None
         '''
         # SQL database manager instance
         sql_manager = SQLDatabaseManager(self.env_file_path)
@@ -337,13 +389,16 @@ class OpenAIGPT(object):
         )
     
     # insert user prompt into sql database
-    def insert_user_prompt_into_sql_database(self, response: dict, prompt: str):
+    def insert_user_prompt_into_sql_database(self, response: Dict, prompt: str):
         '''
         Insert user prompt into sql database
 
         Args:
-            response (dict): Response
-            prompt (str): Prompt
+            response (Dict): GPT Model response
+            prompt (str): The input prompt for the GPT model.
+        
+        Returns:
+            None
         '''
         # get response id
         chat_id = self._get_completion_response_id(response)
@@ -357,12 +412,15 @@ class OpenAIGPT(object):
         )
     
     # insert completion response into sql database
-    def insert_completion_response_into_sql_database(self, response: dict):
+    def insert_completion_response_into_sql_database(self, response: Dict):
         '''
         Insert completion response into sql database
 
         Args:
-            response (dict): Response
+            response (Dict): GPT Model response
+        
+        Returns:
+            None
         '''
         # get response id
         chat_id = self._get_completion_response_id(response)
@@ -402,13 +460,18 @@ class OpenAIGPT(object):
         Get GPT model completion
 
         Args:
-            prompt (str): Prompt
-            messages (list or dict): Messages (default: None)
-            temperature (float): Temperature (default: 0)
-            verbose (bool): Verbose mode (default: True)
+            prompt (str): The input prompt for the GPT model.
+            messages (Union[List, Dict], optional): A list or dictionary of \
+                messages. If it's a list, it should be a list of message objects. \
+                If it's a dictionary, it should contain 'ref_id' and 'messages'.
+            temperature (float, optional): Controls the randomness of the model's \
+                output. The higher the value, the more random the output will be. \
+                If not provided, the output will be deterministic.
+            verbose (bool, optional): If set to True, additional details about the \
+                request and response will be printed.
             
         Returns:
-            completion (str): Completion
+            str: GPT response. Content completuion of the response.
         '''
         # set api key
         if not self.OPENAI_API_KEY:
@@ -472,12 +535,20 @@ class OpenAIGPT(object):
         messages: Optional[Dict] = None, temperature: float = 0,
         verbose: bool = False):
         '''
-        Interactive completion
+        Interactive completion. Interact with the GPT model using the command line.
 
         Args:
-            prompt (Optional[str]): Prompt (default: None)
-            messages (Optional[Dict]): Messages (default: None)
-            temperature (float): Temperature (default: 0)
+            prompt (str, optional): The input prompt for the GPT model.
+            messages (List[Dict], optional):A list of message objects. Each object \
+                should be a dictionary containing 'role' and 'content'.
+            temperature (float, optional): Controls the randomness of the model's \
+                output. The higher the value, the more random the output will be. \
+                If not provided, the output will be deterministic.
+            verbose (bool, optional): If set to True, additional details about the \
+                request and response will be printed.
+        
+        Returns:
+            None
         '''
         # Check that at least one of prompt or messages is provided
         if prompt is None and messages is None:

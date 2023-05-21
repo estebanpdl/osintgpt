@@ -32,19 +32,20 @@ df = gpt.load_embeddings_from_csv(
     low_memory=False
 )
 
-# search results from dataframe
-strings, relatednesses = gpt.search_results_from_dataframe(
-    'Sheldon explores a new theory on quantum physics', df, text_target_column='text_data', top_k=10
+query = 'Sheldon explores a new theory on quantum physics'
+results = gpt.search_results_from_dataframe(
+    query,
+    df,
+    text_target_column='text_data',
+    top_k=2
 )
 
-content = ''
-for string, relatedness in zip(strings, relatednesses):
+print (f'Query: {query}')
+print ('')
+print ('')
+for string, score in results:
     # add string to content and give it a new line
-    content += string + '\n'
-
-# print content
-print (content)
-
+    print (f'{string}\nScore: {score}')
 
 # End
 text = f'''
