@@ -247,6 +247,45 @@ class OpenAIGPT(object):
         strings_and_relatednesses.sort(key=lambda x: x[1], reverse=True)
         return strings_and_relatednesses[:top_k]
     
+    # recursive search
+    def recursive_search(self, query: str, vector_engine: Optional[BaseVectorEngine],
+        df: Optional[pd.DataFrame], depth: int = 50, score_threshold: float = 0.85,
+        **kwargs):
+        '''
+        Recursive search
+
+        This function recursively searches for the most similar results. It first
+        retrieves the most similar results to the provided query. Then, it uses the
+        top result as the new query and retrieves the most similar results again.
+        This process is repeated until the specified depth is reached or until the
+        similarity score drops below the defined score threshold.
+
+        Args:
+            query (str): The initial query for the search process.
+            vector_engine (Optional[BaseVectorEngine]): An instance of the vector \
+                engine used to retrieve similar results. If None, method assumes \
+                that a dataframe is provided.
+            df (Optional[pd.DataFrame]): A dataframe to be used for searching. If \
+                None, method assumes that a vector engine is provided.
+            depth (int): Depth. The number of times the search process is repeated \
+                recursively.
+            score_threshold (float): The minimum similarity score. If the \
+                similarity score of results drops below this threshold, the \
+                recursive search will stop.
+            **kwargs: Additional keyword arguments for vector engine search query \
+                or dataframe search query.
+        
+        Returns:
+            List[Dict]: A list of dictionaries each containing the result string \
+                and its similarity score.
+        '''
+        # check if vector engine or dataframe is provided
+        if vector_engine is None and df is None:
+            raise ValueError('Either vector engine or dataframe must be provided.')
+        
+        pass
+
+    
     # count tokens < GPT model >
     def count_tokens(self, prompt: str):
         '''
