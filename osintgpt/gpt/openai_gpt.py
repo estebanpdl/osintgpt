@@ -27,7 +27,7 @@ from dotenv import load_dotenv
 from typing import Union, Optional, List, Dict
 
 # import osintgpt vector stores
-from osintgpt.vector_store import BaseVectorEngine, Pinecone, Qdrant
+from osintgpt.vector_store import BaseVectorEngine, Qdrant
 
 # import osintgpt openai embeddings
 from osintgpt.embeddings import OpenAIEmbeddingGenerator
@@ -154,7 +154,6 @@ class OpenAIGPT(object):
         '''
         if not isinstance(vector_engine, BaseVectorEngine):
             supported_vector_engines = [
-                Pinecone,
                 Qdrant
             ]
             supported_vector_engine_names = ', '.join(

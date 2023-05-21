@@ -22,17 +22,23 @@ setup(
     classifiers=[
         'Development Status :: 3 - Alpha',
         'Programming Language :: Python',
-        'Programming Language :: Python :: 3.6'
-        'Programming Language :: Python :: 3.7'
-        'Programming Language :: Python :: 3.8'
-        'Programming Language :: Python :: 3.9'
+        'Programming Language :: Python :: 3.7',
+        'Programming Language :: Python :: 3.8',
+        'Programming Language :: Python :: 3.9',
         'Programming Language :: Python :: 3.10',
         'Programming Language :: Python :: 3.11',
         'Operating System :: OS Independent',
-        'Intended Audience :: OSINT, Science/Research, Journalism, Developers',
+        'Intended Audience :: Science/Research',
+        'Intended Audience :: Education',
+        'Intended Audience :: Information Technology',
+        'Intended Audience :: Developers',
         'Topic :: Scientific/Engineering :: Artificial Intelligence',
-        'Topic :: Security :: Cryptography :: OSINT'
+        'Topic :: Scientific/Engineering :: Information Analysis',
+        'Topic :: Text Processing',
+        'Topic :: Text Processing :: General',
+        'Topic :: Text Processing :: Indexing',
+        'Topic :: Utilities'
     ],
-    python_requires='>=3.11.2',
+    python_requires='>=3.7',
     install_requires=[]
 )

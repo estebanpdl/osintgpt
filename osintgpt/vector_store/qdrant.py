@@ -258,7 +258,7 @@ class Qdrant(BaseVectorEngine):
     
     # update vector collection
     def update_vector_collection(self, collection_name: str, vectors: List,
-        vector_name: str = 'main', payload: Optional[List] = None):
+        vector_name: str = 'main', payload: Optional[List[dict]] = None):
         '''
         Update vector collection
 
@@ -270,7 +270,7 @@ class Qdrant(BaseVectorEngine):
             vector_name: name
                 type: str
             payload: payload. Should be the same length as vectors and same order.
-                type: list
+                type: List[dict]
         '''
         # validate payload length
         self._validate_payload_length(payload, vectors)
