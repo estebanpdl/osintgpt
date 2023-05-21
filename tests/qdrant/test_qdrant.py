@@ -16,7 +16,68 @@ import pytest
 from unittest.mock import Mock
 
 # import Qdrant
+from qdrant_client.http import models as rest
 from osintgpt.vector_store.qdrant import Qdrant
+
+
+def test_get_collections(mocker):
+    # Mock qdrant_client.QdrantClient
+    mock_qdrant_client = mocker.patch(
+        'qdrant_client.QdrantClient',
+        autospec=True
+    )
+
+    # Mock environment variables
+    mocker.patch('os.getenv', side_effect=lambda x: 'dummy_value')
+
+    # Create Qdrant instance with a mocked QdrantClient
+    qdrant = Qdrant(env_file_path='/path/to/your/env/file')
+
+    # The mocked method
+    mock_qdrant_client.return_value.get_collections.return_value = [
+        'test_collection1',
+        'test_collection2'
+    ]
+
+    collections = qdrant.get_collections()
+
+    # Verify get_collections method was called on qdrant client
+    mock_qdrant_client.return_value.get_collections.assert_called_once()
+
+    # Assert that the collections returned by the method match the expected value
+    assert collections == ['test_collection1', 'test_collection2']
+
+def test_create_collection(mocker):
+    # Mock qdrant_client.QdrantClient
+    mock_qdrant_client = mocker.patch(
+        'qdrant_client.QdrantClient',
+        autospec=True
+    )
+
+    # Mock environment variables
+    mocker.patch('os.getenv', side_effect=lambda x: 'dummy_value')
+
+    # Create Qdrant instance with a mocked QdrantClient
+    qdrant = Qdrant(env_file_path='/path/to/your/env/file')
+
+    # Define the arguments for create_collection
+    collection_name = 'test_collection'
+    vector_size = 128
+    vector_name = 'main'
+
+    # Call create_collection
+    qdrant.create_collection(collection_name, vector_size, vector_name)
+
+    # Check that recreate_collection was called with the correct arguments
+    mock_qdrant_client.return_value.recreate_collection.assert_called_with(
+        collection_name=collection_name,
+        vectors_config={
+            vector_name: rest.VectorParams(
+                distance=rest.Distance.COSINE,
+                size=vector_size
+            )
+        }
+    )
 
 # test add vectors
 def test_add_vectors(mocker):
@@ -29,7 +90,11 @@ def test_add_vectors(mocker):
     # Mock environment variables
     mocker.patch('os.getenv', side_effect=lambda x: 'dummy_value')
 
-    # Create Qdrant instance with a mocked QdrantClient
+    # Create Qdrant instance with a mocked QdrantClien
+    
+    
+    
+    
     qdrant = Qdrant(env_file_path='/path/to/your/env/file')
 
     # The mocked method
@@ -87,3 +152,45 @@ def test_update_vector_collection(mocker):
             {'id': 3, 'vector': {'test_vector': [0.7, 0.8]}, 'payload': {'id': 4}}
         ]
     )
+
+
+def test_search_query(mocker):
+    # Mock qdrant_client.QdrantClient
+    mock_qdrant_client = mocker.patch(
+        'qdrant_client.QdrantClient',
+        autospec=True
+    )
+
+    # Mock environment variables
+    mocker.patch('os.getenv', side_effect=lambda x: 'dummy_value')
+
+    # Create Qdrant instance with a mocked QdrantClient
+    qdrant = Qdrant(env_file_path='/path/to/your/env/file')
+
+    # The mocked method
+    query_result = ['dummy_result']
+    mock_qdrant_client.return_value.search.return_value = query_result
+
+    # Define the arguments for search_query
+    embedded_query = [0.1, 0.2, 0.3]
+    top_k = 5
+    collection_name = 'test_collection'
+    vector_name = 'main'
+
+    # Call search_query
+    result = qdrant.search_query(
+        embedded_query,
+        top_k,
+        collection_name=collection_name,
+        vector_name=vector_name
+    )
+
+    # Check that search was called with the correct arguments
+    mock_qdrant_client.return_value.search.assert_called_with(
+        collection_name=collection_name,
+        query_vector=(vector_name, embedded_query),
+        limit=top_k
+    )
+
+    # Assert the search_query result
+    assert result == query_result, 'The result does not match the expected result'

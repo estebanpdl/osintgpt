@@ -36,8 +36,7 @@ Generate_embeddings
 query = 'Howard and Sheldon comic book store'
 embedding = embedding_generator.generate_embedding(query)
 
-print (query)
-print ('')
+print (f'Query: {query}')
 print ('Finding similar text in collection based on query...')
 print ('')
 print ('')
@@ -54,7 +53,7 @@ collection_name = 'big_bang_theory'
 results = qdrant.search_query(
     embedded_query=embedding,
     collection_name=collection_name,
-    top_k=10
+    top_k=2
 )
 
 # print results
