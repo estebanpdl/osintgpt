@@ -52,9 +52,23 @@ Please note that the development of `osintgpt` is still in progress, and some fe
 
 ## 💾 **Vector store**
 
-### `Qdrant`
+<h2>Qdrant</h2>
 
+The `Qdrant` class is an interface to Qdrant, a high-performance vector similarity search engine. It provides a variety of methods for connecting and interacting with a Qdrant server, such as creating, updating, and deleting collections, and managing vector embeddings along with their associated payloads.
 
+<h3>Main Features:</h3>
+
+- **Connection Management**: The class allows you to establish and manage connections to a Qdrant server. The server can be accessed remotely or locally.
+- **Collection Management**: You can create, update, and delete collections in Qdrant. Each collection can contain multiple vectors.
+- **Vector and Payload Management**: The class provides methods to add, update, and search for vector embeddings in collections. Each vector can optionally have an associated payload. The payload represents data associated with the vector, such as metadata or additional features.
+- **High Efficiency**: With the ability to efficiently store and search embeddings, Qdrant can support high-dimensional data and large-scale databases.
+
+<h3>Setting Up Qdrant:</h3>
+
+To use the Qdrant class, you will need access to a Qdrant server, either remotely or locally:
+
+- **Remote Server**: Register for a remote server on [Qdrant Cloud](https://cloud.qdrant.io/).
+- **Local Server**: Set up a local server following the instructions on the [Qdrant Quick Start guide](https://qdrant.tech/documentation/quick_start/).
 
 
 <hr />
