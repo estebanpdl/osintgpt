@@ -27,11 +27,13 @@
 
 ## **Installation**
 
-You can install the `osint-gpt` package using pip:
+You can install the `osintgpt` package using pip:
 
 ```bash
 pip install osintgpt
 ```
+
+PyPI: [osintgpt](https://pypi.org/project/osintgpt/)
 
 <hr />
 <br />
