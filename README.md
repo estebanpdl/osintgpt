@@ -25,7 +25,18 @@
 <hr />
 <br />
 
-## **Features**
+## **Installation**
+
+You can install the `osint-gpt` package using pip:
+
+```bash
+pip install osintgpt
+```
+
+<hr />
+<br />
+
+## 🚀 **Features**
 
 The `osintgpt` Python package is designed to streamline the process of analyzing text data by leveraging OpenAI's GPT models. Here are some of the key features:
 
@@ -35,7 +46,17 @@ The `osintgpt` Python package is designed to streamline the process of analyzing
 
 Please note that the development of `osintgpt` is still in progress, and some features may still be refined or expanded.
 
+<hr />
 <br />
+
+
+## 💾 **Vector store**
+
+### `Qdrant`
+
+
+
+
 <hr />
 <br />
 
