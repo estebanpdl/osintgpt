@@ -8,7 +8,7 @@
 
 <br />
 
-<img src="images/osintgpt.png" alt="osintgpt osint gpt" width="33%" height="33%" />
+<img src="https://raw.githubusercontent.com/estebanpdl/osintgpt/main/images/osintgpt.png" alt="osintgpt osint gpt" width="33%" height="33%" />
 
 <br />
 <br />

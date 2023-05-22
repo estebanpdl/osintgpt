@@ -283,6 +283,20 @@ class OpenAIGPT(object):
         if vector_engine is None and df is None:
             raise ValueError('Either vector engine or dataframe must be provided.')
         
+        # if vector engine is provided
+        if vector_engine is not None:
+
+            while depth > 0:
+                # search results
+                search_results = self.search_results_from_vector(
+                    query,
+                    vector_engine,
+                    top_k=5,
+                    **kwargs
+                )
+
+                depth -= 1
+        
         pass
 
     
