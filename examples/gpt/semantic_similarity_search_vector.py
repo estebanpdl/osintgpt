@@ -11,7 +11,7 @@ from osintgpt.vector_store import Qdrant
 text = f'''
 Init program at {time.ctime()}
 
-Example -> OpenAIGPT -> search results from vector
+Example -> OpenAIGPT -> Semantic similarity search: Vector
 '''
 print (text)
 
@@ -23,7 +23,6 @@ OpenAIGPT connection
 '''
 gpt = OpenAIGPT(env_file_path)
 
-
 '''
 Qdrant connection
 '''
@@ -31,23 +30,18 @@ qdrant = Qdrant(env_file_path)
 query = 'Sheldon explores a new theory on quantum physics'
 collection_name = 'big_bang_theory'
 
-# search results from vector
-response = gpt.search_results_from_vector(
-    vector_engine=qdrant,
+# recursive search
+response = gpt.semantic_similarity_search(
     query=query,
-    top_k=2,
+    vector_engine=qdrant,
+    payload_ref_text_key='text_data',
+    score_threshold=0.85,
+    score_based_on_initial_query=True,
     collection_name=collection_name
 )
 
-# get results
-results = response['results']
-
-# print results
-for res in results:
-    # add string to content and give it a new line
-    content = res.payload['text_data']
-    score = res.score
-    print (f'> {content} -> {score}')
+# display results
+print (response)
 
 
 # End

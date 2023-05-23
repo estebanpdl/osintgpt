@@ -10,7 +10,7 @@ from osintgpt.gpt import OpenAIGPT
 text = f'''
 Init program at {time.ctime()}
 
-Example -> OpenAIGPT -> search results from dataframe
+Example -> OpenAIGPT -> Semantic similarity search: Dataframe
 '''
 print (text)
 
@@ -33,20 +33,19 @@ df = gpt.load_embeddings_from_csv(
 )
 
 query = 'Sheldon explores a new theory on quantum physics'
-response = gpt.search_results_from_dataframe(
-    df,
+
+# recursive search
+response = gpt.semantic_similarity_search(
     query=query,
-    text_target_column='text_data',
-    top_k=2
+    df=df,
+    payload_ref_text_key='text_data',
+    score_threshold=0.80,
+    top_k=10,
+    score_based_on_initial_query=True
 )
 
-# get results
-results = response['results']
-
-print (f'Query: {query}')
-for embeddings, string, score in results:
-    # add string to content and give it a new line
-    print (f'> {string} -> Score: {score}')
+# display results
+print (response)
 
 
 # End
