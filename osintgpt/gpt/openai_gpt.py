@@ -145,12 +145,9 @@ class OpenAIGPT(object):
         return self._embeddings[column]
 
     # get embeddings dataframe
-    def get_embeddings_dataframe(self, columns: List):
+    def get_embeddings_dataframe(self):
         '''
         Get embeddings dataframe
-
-        Args:
-            columns (List): List of columns specifying the embeddings
 
         Returns:
             pd.DataFrame: Pandas dataframe
@@ -158,7 +155,7 @@ class OpenAIGPT(object):
         if not hasattr(self, '_embeddings'):
             raise AttributeError('No embeddings loaded. Please load embeddings.')
         
-        return pd.DataFrame(self._embeddings, columns=columns)
+        return pd.DataFrame(self._embeddings)
 
     # load search top k results from vector
     def search_results_from_vector(self, vector_engine: BaseVectorEngine,

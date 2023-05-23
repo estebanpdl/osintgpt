@@ -32,13 +32,25 @@ query = 'Sheldon explores a new theory on quantum physics'
 collection_name = 'big_bang_theory'
 
 response = gpt.search_results_from_vector(
-    query, qdrant, top_k=5, collection_name=collection_name
+    vector_engine=qdrant,
+    query=query,
+    top_k=5,
+    collection_name=collection_name
 )
 
+# content
 content = ''
-for i, res in enumerate(response):
+
+# get results
+results = response['results']
+
+# print results
+for res in results:
     # add string to content and give it a new line
-    content += f'{res.payload["text_data"]}\n'
+    text = res.payload['text_data']
+    score = res.score
+    print (f'> {text} -> {score}')
+    content += f'{text}\n'
 
 # build prompt
 prompt = f'''

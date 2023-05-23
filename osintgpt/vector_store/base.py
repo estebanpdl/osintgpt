@@ -6,7 +6,7 @@
 # Author: @estebanpdl
 #
 # File: base.py
-# Description: `BaseVectorEngine`` is an abstract base class that serves as a common
+# Description: `BaseVectorEngine` is an abstract base class that serves as a common
 #   interface for different vector search engine implementations.
 # =================================================================================
 

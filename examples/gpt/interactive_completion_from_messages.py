@@ -29,7 +29,7 @@ SQLDatabaseManager connection
 sql_manager = SQLDatabaseManager(env_file_path)
 
 # load messages from table
-ref_id = '6bf3f96122c94170ad0d90fa5358ccbd' # change this value to a valid ref_id
+ref_id = '514dfef035f04c13a9d6459d42f9765b' # change this value to a valid ref_id
 messages = sql_manager.load_messages_from_chat_gpt_conversations(
     ref_id=ref_id
 )

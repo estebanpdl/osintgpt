@@ -32,13 +32,29 @@ query = 'Sheldon explores a new theory on quantum physics'
 collection_name = 'big_bang_theory'
 
 response = gpt.search_results_from_vector(
-    query, qdrant, top_k=5, collection_name=collection_name
+    vector_engine=qdrant,
+    query=query,
+    top_k=5,
+    collection_name=collection_name
 )
 
+# content
 content = ''
-for i, res in enumerate(response):
+
+# get results
+results = response['results']
+
+# print results
+for res in results:
     # add string to content and give it a new line
-    content += f'{res.payload["text_data"]}\n'
+    text = res.payload['text_data']
+    score = res.score
+    print (f'> {text} -> {score}')
+    content += f'{text}\n'
+
+# display new lines
+print ('')
+print ('')
 
 # build prompt
 prompt = f'''
@@ -47,16 +63,19 @@ Determine five topics that are being discussed in the same text.
 
 Text: ```{content}```
 
-Follow the next format:
+Follow this format:
 
-1. Paragraph.
-2. Topics separated by comma.
+1. Paragraph as Title.
+Paragraph as Content.
+
+2. Topics as Title:
+Topics separated by comma.
 '''
 
 # model completion
 result = gpt.get_model_completion(prompt)
 print ('')
-print ('Model completion:')
+print ('Model completion:\n')
 print (result)
 
 # End

@@ -29,7 +29,7 @@ SQLDatabaseManager connection
 sql_manager = SQLDatabaseManager(env_file_path)
 
 # load messages from table
-ref_id = '6bf3f96122c94170ad0d90fa5358ccbd' # change this value to a valid ref_id
+ref_id = '0067159e9d394a62bcc90c00530c07de' # change this value to a valid ref_id
 messages = sql_manager.load_messages_from_chat_gpt_conversations(
     ref_id=ref_id
 )
@@ -51,7 +51,7 @@ messages = {
 
 # build prompt
 prompt = f'''
-Based on the topics highlighted, please add a character name linked to each topic.
+Based on the topics highlighted, choose three, and create a five-word haiku.
 '''
 
 # model completion
