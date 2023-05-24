@@ -4,14 +4,14 @@
 import time
 
 # import osintgpt modules
-from osintgpt.gpt import OpenAIGPT
+from osintgpt.llms import OpenAIGPT
 from osintgpt.vector_store import Qdrant
 
 # Init
 text = f'''
 Init program at {time.ctime()}
 
-Example -> OpenAIGPT -> interactive completion
+Example -> OpenAIGPT -> Estimated Prompt Cost
 '''
 print (text)
 
@@ -34,42 +34,40 @@ collection_name = 'big_bang_theory'
 response = gpt.search_results_from_vector(
     vector_engine=qdrant,
     query=query,
-    top_k=5,
+    top_k=50,
     collection_name=collection_name
 )
 
-# content
-content = ''
-
 # get results
 results = response['results']
+
+# content
+content = ''
 
 # print results
 for res in results:
     # add string to content and give it a new line
     text = res.payload['text_data']
-    score = res.score
-    print (f'> {text} -> {score}')
     content += f'{text}\n'
 
 # build prompt
 prompt = f'''
-You are a knowledgeable critic and skillful analyzer of TV series. Your role \
-aims to analyze inputs from a prestigious user, with the goal to persuade them \
-to watch the TV show under analysis. The Analyzer addresses all user's queries \
-about the TV show in a concise, friendly, conversational style, while maintaining \
-strict focus on the provided text delimited by triple backticks.
-
-Any question or comment out of the scope is responded with, 'Information is not \
-provided in the context'.
+Summarize the text delimited by triple backticks in one paragraph.
+Determine five topics that are being discussed in the same text
 
 Text: ```{content}```
 '''
 
-# interactive completion: role system
-print ('interactive completion: role system.')
+tokens = gpt.count_tokens(prompt)
+cost = gpt.estimated_prompt_cost(prompt)
+
+# display results
+print (f'Prompt tokens: {tokens}')
+print (f'Prompt cost: {cost}')
 print ('')
-gpt.interactive_completion(prompt)
+
+# disclaimer
+print ('The estimated prompt cost will be higher when using model completion.')
 
 # End
 text = f'''

@@ -23,7 +23,7 @@ Estimated cost based on model: text-embedding-ada-002
 print (text)
 
 # openai config -> env file path
-env_file_path = '../../config/.env'
+env_file_path = '../config/.env'
 
 '''
 OpenAIEmbeddingGenerator
@@ -36,7 +36,7 @@ Read csv file and process dataset
 Load text
 '''
 # read dataset
-path = '../../data/big_bang_theory_imdb.csv'
+path = '../data/big_bang_theory_imdb.csv'
 data = pd.read_csv(path, encoding='utf-8', low_memory=False)
 
 # process dataset

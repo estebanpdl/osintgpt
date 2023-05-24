@@ -4,14 +4,14 @@
 import time
 
 # import osintgpt modules
-from osintgpt.gpt import OpenAIGPT
+from osintgpt.llms import OpenAIGPT
 from osintgpt.vector_store import Qdrant
 
 # Init
 text = f'''
 Init program at {time.ctime()}
 
-Example -> OpenAIGPT -> model completion
+Example -> OpenAIGPT -> interactive completion
 '''
 print (text)
 
@@ -52,31 +52,24 @@ for res in results:
     print (f'> {text} -> {score}')
     content += f'{text}\n'
 
-# display new lines
-print ('')
-print ('')
-
 # build prompt
 prompt = f'''
-Summarize the text delimited by triple backticks in one paragraph.
-Determine five topics that are being discussed in the same text.
+You are a knowledgeable critic and skillful analyzer of TV series. Your role \
+aims to analyze inputs from a prestigious user, with the goal to persuade them \
+to watch the TV show under analysis. The Analyzer addresses all user's queries \
+about the TV show in a concise, friendly, conversational style, while maintaining \
+strict focus on the provided text delimited by triple backticks.
+
+Any question or comment out of the scope is responded with, 'Information is not \
+provided in the context'.
 
 Text: ```{content}```
-
-Follow this format:
-
-1. Paragraph as Title.
-Paragraph as Content.
-
-2. Topics as Title:
-Topics separated by comma.
 '''
 
-# model completion
-result = gpt.get_model_completion(prompt)
+# interactive completion: role system
+print ('interactive completion: role system.')
 print ('')
-print ('Model completion:\n')
-print (result)
+gpt.interactive_completion(prompt)
 
 # End
 text = f'''

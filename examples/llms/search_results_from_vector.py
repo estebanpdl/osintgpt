@@ -4,13 +4,14 @@
 import time
 
 # import osintgpt modules
-from osintgpt.gpt import OpenAIGPT
+from osintgpt.llms import OpenAIGPT
+from osintgpt.vector_store import Qdrant
 
 # Init
 text = f'''
 Init program at {time.ctime()}
 
-Example -> OpenAIGPT -> search results from dataframe
+Example -> OpenAIGPT -> search results from vector
 '''
 print (text)
 
@@ -22,31 +23,31 @@ OpenAIGPT connection
 '''
 gpt = OpenAIGPT(env_file_path)
 
-# load embeddings from csv file
-path = '../data/embeddings.csv'
-df = gpt.load_embeddings_from_csv(
-    file_path=path,
-    columns=['embeddings'],
-    encoding='utf-8',
-    sep=',',
-    low_memory=False
-)
 
+'''
+Qdrant connection
+'''
+qdrant = Qdrant(env_file_path)
 query = 'Sheldon explores a new theory on quantum physics'
-response = gpt.search_results_from_dataframe(
-    df,
+collection_name = 'big_bang_theory'
+
+# search results from vector
+response = gpt.search_results_from_vector(
+    vector_engine=qdrant,
     query=query,
-    text_target_column='text_data',
-    top_k=2
+    top_k=2,
+    collection_name=collection_name
 )
 
 # get results
 results = response['results']
 
-print (f'Query: {query}')
-for embeddings, string, score in results:
+# print results
+for res in results:
     # add string to content and give it a new line
-    print (f'> {string} -> Score: {score}')
+    content = res.payload['text_data']
+    score = res.score
+    print (f'> {content} -> {score}')
 
 
 # End

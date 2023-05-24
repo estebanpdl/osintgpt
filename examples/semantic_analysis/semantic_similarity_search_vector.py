@@ -4,14 +4,14 @@
 import time
 
 # import osintgpt modules
-from osintgpt.gpt import OpenAIGPT
+from osintgpt.semantic_operations import SemanticOperations
 from osintgpt.vector_store import Qdrant
 
 # Init
 text = f'''
 Init program at {time.ctime()}
 
-Example -> OpenAIGPT -> Semantic similarity search: Vector
+Example -> SemanticOperations -> Semantic similarity search: Vector
 '''
 print (text)
 
@@ -19,9 +19,10 @@ print (text)
 env_file_path = '../config/.env'
 
 '''
-OpenAIGPT connection
+SemanticOperations connection
+It will initialize the OpenAIGPT class
 '''
-gpt = OpenAIGPT(env_file_path)
+operations = SemanticOperations(env_file_path)
 
 '''
 Qdrant connection
@@ -31,7 +32,7 @@ query = 'Sheldon explores a new theory on quantum physics'
 collection_name = 'big_bang_theory'
 
 # recursive search
-response = gpt.semantic_similarity_search(
+response = operations.semantic_similarity_search(
     query=query,
     vector_engine=qdrant,
     payload_ref_text_key='text_data',

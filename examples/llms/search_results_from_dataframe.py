@@ -4,13 +4,13 @@
 import time
 
 # import osintgpt modules
-from osintgpt.gpt import OpenAIGPT
+from osintgpt.llms import OpenAIGPT
 
 # Init
 text = f'''
 Init program at {time.ctime()}
 
-Example -> OpenAIGPT -> Semantic similarity search: Dataframe
+Example -> OpenAIGPT -> search results from dataframe
 '''
 print (text)
 
@@ -33,19 +33,20 @@ df = gpt.load_embeddings_from_csv(
 )
 
 query = 'Sheldon explores a new theory on quantum physics'
-
-# recursive search
-response = gpt.semantic_similarity_search(
+response = gpt.search_results_from_dataframe(
+    df,
     query=query,
-    df=df,
-    payload_ref_text_key='text_data',
-    score_threshold=0.80,
-    top_k=10,
-    score_based_on_initial_query=True
+    text_target_column='text_data',
+    top_k=2
 )
 
-# display results
-print (response)
+# get results
+results = response['results']
+
+print (f'Query: {query}')
+for embeddings, string, score in results:
+    # add string to content and give it a new line
+    print (f'> {string} -> Score: {score}')
 
 
 # End
