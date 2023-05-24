@@ -33,7 +33,16 @@ You can install the `osintgpt` package using pip:
 pip install osintgpt
 ```
 
-PyPI: [osintgpt](https://pypi.org/project/osintgpt/)
+Given the recent changes and updates, it is highly recommended to upgrade to the latest version of the package by executing the following command
+
+```bash
+pip install -U osintgpt
+```
+
+This command will update your existing installation of `osintgpt` to the most recent version available, ensuring you have access to the latest features and improvements.
+
+To access the package details and documentation on PyPI, please follow the link [osintgpt on PyPI](https://pypi.org/project/osintgpt/)
+
 
 <hr />
 <br />
@@ -43,7 +52,9 @@ PyPI: [osintgpt](https://pypi.org/project/osintgpt/)
 The `osintgpt` Python package is designed to streamline the process of analyzing text data by leveraging OpenAI's GPT models. Here are some of the key features:
 
 - **Text Analysis**: Utilize OpenAI's GPT models to analyze text data, including calculating text embeddings and searching for similar documents.
+
 - **Interactive Mode**: The package includes an interactive mode that allows users to communicate directly with the GPT model. The user can input a prompt and receive a response from the model, facilitating a more dynamic interaction.
+
 - **Database Management**: The package integrates with SQLite database, enabling easy storage and retrieval of conversation data. The SQLDatabaseManager class creates tables, handles data insertion, and manages transactions.
 
 Please note that the development of `osintgpt` is still in progress, and some features may still be refined or expanded.
