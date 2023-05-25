@@ -18,7 +18,6 @@ class MissingEnvironmentVariableError(Exception):
     '''
     def __init__(self, variable_name):
         '''
-        Constructor
         '''
         message = f"Missing required environment variable: {variable_name}"
         super().__init__(message)

@@ -29,15 +29,21 @@ from osintgpt.exceptions.errors import MissingEnvironmentVariableError
 # OpenAIEmbeddingGenerator class
 class OpenAIEmbeddingGenerator(object):
     '''
-    OpenAIEmbeddingGenerator class
+    OpenAIEmbeddingGenerator class.
 
     This class contains the methods for managing the GPT API connection, including
     embeddings and vector stores.
     '''
-    # constructor
     def __init__(self, env_file_path: str):
         '''
-        Constructor
+        Initializes the instance of the class.
+
+        Args:
+            env_file_path (str): Path to the file containing environment variables.
+        
+        Raises:
+            MissingEnvironmentVariableError: If either 'OPENAI_API_KEY' or \
+                'OPENAI_GPT_MODEL' is not found in the environment variables.
         '''
         # load environment variables
         load_dotenv(dotenv_path=env_file_path)
@@ -54,20 +60,20 @@ class OpenAIEmbeddingGenerator(object):
     # get openai api key
     def get_openai_api_key(self):
         '''
-        Get OpenAI API key
+        Get OpenAI API key.
 
         Returns:
-            OPENAI_API_KEY (str): OpenAI API key
+            str: OpenAI API key.
         '''
         return self.OPENAI_API_KEY
 
     # get openai gpt model
     def get_openai_gpt_model(self):
         '''
-        Get OpenAI GPT model
+        Get OpenAI GPT model.
 
         Returns:
-            OPENAI_GPT_MODEL (str): OpenAI GPT model
+            str: OpenAI GPT model.
         '''
         return self.OPENAI_GPT_MODEL
     
@@ -78,7 +84,10 @@ class OpenAIEmbeddingGenerator(object):
         It loads text data to be processed.
 
         Args:
-            data (list): List of strings
+            data (List): List of strings.
+        
+        Returns:
+            None
         '''
         if isinstance(data, list):
             self.data = data
@@ -88,12 +97,11 @@ class OpenAIEmbeddingGenerator(object):
     # count tokens < GPT model >
     def count_tokens(self):
         '''
-        Count tokens
-
+        Count tokens.
         It counts the number of tokens in the data.
 
         Returns:
-            num_tokens (int): Number of tokens
+            int: Number of tokens.
         '''
         # get model
         model = self.get_openai_gpt_model()
@@ -116,20 +124,19 @@ class OpenAIEmbeddingGenerator(object):
         As of April 2023, the cost is 0.0004 per 1000 tokens.
 
         Returns:
-            estimated_cost (float): Estimated cost
+            float: Estimated cost, based on the OpenAI text-embedding-ada-002 model.
         '''
         return ((self.count_tokens() / 1000) * 0.0004)
 
     # calculate embeddings
     def calculate_embeddings(self):
         '''
-        Calculate embeddings
-
+        Calculate embeddings.
         This method calculates embeddings using Openai's text-embedding-ada-002
         model.
 
         Returns:
-            embeddings (list): Embeddings
+            list: Embeddings, using Openai's text-embedding-ada-002 model.
         '''
         EMBEDDING_MODEL = 'text-embedding-ada-002'
         BATCH_SIZE = 1000
@@ -163,12 +170,11 @@ class OpenAIEmbeddingGenerator(object):
     @property
     def embeddings(self):
         '''
-        Get embeddings
-
-        This property calculates the embeddings if they have not been calculated
+        Get embeddings.
+        This property calculates the embeddings if they have not been calculated.
 
         Returns:
-            embeddings (list): Embeddings
+            list: Embeddings.
         '''
         if not hasattr(self, '_embeddings'):
             self._embeddings = self.calculate_embeddings()
@@ -182,10 +188,10 @@ class OpenAIEmbeddingGenerator(object):
         model.
 
         Args:
-            text (str): Text to generate embedding for
+            text (str): Text to generate embedding for.
         
         Returns:
-            embedding (list): Embedding
+            list: Embedding.
         '''
         EMBEDDING_MODEL = 'text-embedding-ada-002'
         openai.api_key = self.get_openai_api_key()
@@ -198,17 +204,15 @@ class OpenAIEmbeddingGenerator(object):
     def load_embeddings_from_csv(self, embeddings_path: str,
         columns: List, **kwargs):
         '''
-        Load embeddings from disk
-
-        This method loads the embeddings from disk.
+        Load embeddings from csv file.
 
         Args:
-            embeddings_path (str): Path to embeddings csv file
-            columns (list): List of columns specifying the embeddings
-            **kwargs: Keyword arguments for pd.read_csv
+            embeddings_path (str): Path to csv file containing embeddings.
+            columns (List): List of columns specifying the embeddings.
+            **kwargs: Keyword arguments for pandas read_csv method.
         
         Returns:
-            embeddings (list): Embeddings
+            list: Embeddings.
         '''
         data = pd.read_csv(embeddings_path, **kwargs)
         for col in columns:

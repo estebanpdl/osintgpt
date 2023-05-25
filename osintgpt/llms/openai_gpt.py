@@ -77,10 +77,10 @@ class OpenAIGPT(object):
     # get openai api key
     def get_openai_api_key(self):
         '''
-        Get OpenAI API key
+        Get OpenAI API key.
 
         Returns:
-            str: OpenAI API key
+            str: OpenAI API key.
         '''
         return self.OPENAI_API_KEY
     
@@ -88,15 +88,15 @@ class OpenAIGPT(object):
     def load_embeddings_from_csv(self, file_path: str,
         columns: List, **kwargs):
         '''
-        Load embeddings from csv file
+        Load embeddings from csv file.
 
         Args:
-            file_path (str): File path
-            columns (List): List of columns specifying the embeddings
-            **kwargs: Keyword arguments for pandas.read_csv
+            file_path (str): CSV file path.
+            columns (List): List of columns specifying the embeddings.
+            **kwargs: Keyword arguments for pandas read_csv method.
         
         Returns:
-            pd.DataFrame: Pandas dataframe
+            pd.DataFrame: Pandas dataframe.
         '''
         data = pd.read_csv(file_path, **kwargs)
         for col in columns:
@@ -112,14 +112,14 @@ class OpenAIGPT(object):
     def load_embeddings_from_dataframe(self, dataframe: pd.DataFrame,
         columns: List):
         '''
-        Load embeddings from dataframe
+        Load embeddings from dataframe.
 
         Args:
-            dataframe (pd.DataFrame): Pandas dataframe
-            columns (List): List of columns specifying the embeddings
+            dataframe (pd.DataFrame): Pandas dataframe.
+            columns (List): List of columns specifying the embeddings.
         
         Returns:
-            pd.DataFrame: Pandas dataframe
+            pd.DataFrame: Pandas dataframe.
         '''
         for col in columns:
             dataframe[col] = dataframe[col].apply(literal_eval)
@@ -133,23 +133,23 @@ class OpenAIGPT(object):
     # get embeddings
     def get_embeddings(self, column: str):
         '''
-        Get embeddings
+        Get embeddings from `self._embeddings` property.
 
         Args:
-            column (str): Column name
+            column (str): Column name containing the embeddings.
 
         Returns:
-            embeddings (list): List of embeddings
+            list: List of embeddings.
         '''
         return self._embeddings[column]
 
     # get embeddings dataframe
     def get_embeddings_dataframe(self):
         '''
-        Get embeddings dataframe
+        Get embeddings dataframe.
 
         Returns:
-            pd.DataFrame: Pandas dataframe
+            pd.DataFrame: Pandas dataframe.
         '''
         if not hasattr(self, '_embeddings'):
             raise AttributeError('No embeddings loaded. Please load embeddings.')
@@ -161,18 +161,18 @@ class OpenAIGPT(object):
         query: Optional[str] = None, embeddings: Optional[List] = None,
         top_k: int = 10, **kwargs):
         '''
-        Search top k results from vector
+        Search top k results from vector database.
 
         Args:
+            vector_engine (BaseVectorEngine): Vector engine.
             query (Optional[str]): Query for the search process.
             embeddings (Optional[List]): List of embeddings.
-            vector_engine (BaseVectorEngine): Vector engine.
             top_k (int): Top k results to be retrieved.
-            **kwargs: Keyword arguments for vector engine search query.
+            **kwargs: Keyword arguments for the vector engine search query method.
 
         Returns:
             search_results (Dict): Dictionary containing the search results, \
-                with the following keys: 'query', 'query_embedding', 'results'
+                with the following keys: 'query', 'query_embedding', 'results'.
         '''
         # check if query or embeddings are provided
         if query is None and embeddings is None:
@@ -235,9 +235,10 @@ class OpenAIGPT(object):
         top_k: int = 10, embeddings_target_column: str = 'embeddings',
         text_target_column: str = 'text'):
         '''
-        Search top k results from dataframe
+        Search top k results from dataframe.
         
         Args:
+            df (pd.DataFrame): Pandas dataframe containing the embeddings. 
             query (Optional[str]): Query for the search process.
             embeddings (Optional[List]): List of embeddings.
             top_k (int): Top k results to be retrieved.
@@ -274,257 +275,6 @@ class OpenAIGPT(object):
             'query_embedding': query_embedding,
             'results': strings_and_relatednesses[:top_k]
         }
-    
-    # # Semantic similarity search
-    # def semantic_similarity_search(self, query: str,
-    #     vector_engine: Optional[BaseVectorEngine] = None,
-    #     df: Optional[pd.DataFrame] = None, payload_ref_text_key: str = 'text',
-    #     payload_ref_embeddings_key: str = 'embeddings', top_k: int = 5,
-    #     depth: int = 50, score_threshold: float = 0.85,
-    #     score_based_on_initial_query: bool = False, **kwargs):
-    #     '''
-    #     Semantic Similarity Search
-
-    #     This function performs a semantic similarity search to find the most similar
-    #     results based on a given query. It first retrieves the most similar
-    #     results to the provided query. Then, it uses the top result as the
-    #     new query and retrieves the most similar results again. This process is
-    #     repeated until the specified depth is reached or until the similarity score
-    #     drops below the defined score threshold. After the second search, the
-    #     function will take the second-most similar result, given that the first
-    #     most similar result is the same as the new query.
-
-    #     Args:
-    #         query (str): The initial query for the search process.
-    #         vector_engine (Optional[BaseVectorEngine]): An instance of the vector \
-    #             engine used to retrieve similar results. If None, method assumes \
-    #             that a dataframe is provided.
-    #         df (Optional[pd.DataFrame]): A dataframe to be used for searching. If \
-    #             None, method assumes that a vector engine is provided.
-    #         payload_ref_text_key (str): The key in the payload that contains the \
-    #             text to be used for searching.
-    #         payload_ref_embeddings_key (str): The key in the payload that contains \
-    #             the embeddings to be used for searching.
-    #         top_k (int): Top k results to be retrieved.
-    #         depth (int): Depth. The number of times the search process is repeated \
-    #             recursively.
-    #         score_threshold (float): The minimum similarity score. If the \
-    #             similarity score of results drops below this threshold, the \
-    #             recursive search will stop.
-    #         score_based_on_initial_query (bool): If True, the similarity score \
-    #             will be based on the initial query. If False, the similarity \
-    #             score will be based on the subsequent search results.
-    #         **kwargs: Additional keyword arguments for vector engine search query \
-    #             or dataframe search query.
-        
-    #     Returns:
-    #         List[Dict]: A list of dictionaries each containing the result string \
-    #             and its similarity score.
-    #     '''
-    #     # check if vector engine or dataframe is provided
-    #     if vector_engine is None and df is None:
-    #         raise ValueError('Either vector engine or dataframe must be provided.')
-        
-    #     # if vector engine is provided
-    #     depth_init = depth
-    #     embeddings = None
-
-    #     # response
-    #     response = []
-
-    #     # set to track seen documents
-    #     seen_documents = set()
-
-    #     # search results from vector engine
-    #     if vector_engine is not None:
-
-    #         while depth > 0:
-    #             # get either query or embeddings
-    #             query = query if embeddings is None else None
-    #             embeddings = embeddings if query is None else None
-
-    #             # search results
-    #             search_results = self.search_results_from_vector(
-    #                 vector_engine=vector_engine,
-    #                 query=query,
-    #                 embeddings=embeddings,
-    #                 top_k=top_k,
-    #                 **kwargs
-    #             )
-
-    #             '''
-    #             extract results
-    #             '''
-    #             results = search_results['results']
-    #             depth_has_decreased = depth % depth_init == 0
-    #             item = 0 if depth_has_decreased else 1
-
-    #             # get query embedding < intial query >
-    #             if score_based_on_initial_query and item == 0:
-    #                 query_embedding = search_results['query_embedding']
-
-    #             # get embeddings
-    #             embeddings = results[item].payload[
-    #                 payload_ref_embeddings_key
-    #             ]
-
-    #             # get document < text >
-    #             document = results[item].payload[payload_ref_text_key]
-
-    #             # get score and check if it is above threshold
-    #             if score_based_on_initial_query:
-    #                 score = self._relatedness_fn(
-    #                     query_embedding,
-    #                     embeddings
-    #                 )
-    #             else:
-    #                 score = results[item].score
-
-    #             if score < score_threshold:
-    #                 break
-                
-    #             if document not in seen_documents:
-    #                 # add to seen documents
-    #                 seen_documents.add(document)
-
-    #                 # append result
-    #                 response.append(
-    #                     {
-    #                         'document': document,
-    #                         'score': score
-    #                     }
-    #                 )
-    #             else:
-    #                 for i in range(item + 1, len(results)):
-    #                     document = results[i].payload[payload_ref_text_key]
-    #                     if document not in seen_documents:
-    #                         # add to seen documents
-    #                         seen_documents.add(document)
-
-    #                         # extract score and embeddings from search results
-    #                         if score_based_on_initial_query:
-    #                             score = self._relatedness_fn(
-    #                                 query_embedding,
-    #                                 results[i].payload[payload_ref_embeddings_key]
-    #                             )
-    #                         else:
-    #                             score = results[i].score
-                            
-    #                         # get new embeddings
-    #                         embeddings = results[i].payload[
-    #                             payload_ref_embeddings_key
-    #                         ]
-    #                         break
-    #                 else:
-    #                     break
-                    
-    #                 if score < score_threshold: 
-    #                     break
-                    
-    #                 # append result
-    #                 response.append(
-    #                     {
-    #                         'document': document,
-    #                         'score': score
-    #                     }
-    #                 )
-                
-    #             # reduce depth
-    #             depth -= 1
-        
-    #     # if dataframe is provided
-    #     else:
-    #         while depth > 0:
-    #             # get either query or embeddings
-    #             query = query if embeddings is None else None
-    #             embeddings = embeddings if query is None else None
-
-    #             # search results
-    #             search_results = self.search_results_from_dataframe(
-    #                 df=df,
-    #                 query=query,
-    #                 embeddings=embeddings,
-    #                 top_k=top_k,
-    #                 text_target_column=payload_ref_text_key
-    #             )
-
-    #             '''
-    #             extract results
-    #             '''
-    #             results = search_results['results']
-    #             depth_has_decreased = depth % depth_init == 0
-    #             item = 0 if depth_has_decreased else 1
-
-    #             # get query embedding < intial query >
-    #             if score_based_on_initial_query and item == 0:
-    #                 query_embedding = search_results['query_embedding']
-                
-    #             # get embeddings
-    #             embeddings = results[item][0]
-
-    #             # get document < text >
-    #             document = results[item][1]
-
-    #             # get score and check if it is above threshold
-    #             if score_based_on_initial_query:
-    #                 score = self._relatedness_fn(
-    #                     query_embedding,
-    #                     embeddings
-    #                 )
-    #             else:
-    #                 score = results[item][2]
-
-    #             if score < score_threshold:
-    #                 break
-                
-    #             if document not in seen_documents:
-    #                 # add to seen documents
-    #                 seen_documents.add(document)
-
-    #                 # append result
-    #                 response.append(
-    #                     {
-    #                         'document': document,
-    #                         'score': score
-    #                     }
-    #                 )
-    #             else:
-    #                 for i in range(item + 1, len(results)):
-    #                     document = results[i][1]
-    #                     if document not in seen_documents:
-    #                         # add to seen documents
-    #                         seen_documents.add(document)
-
-    #                         # extract score and embeddings from search results
-    #                         if score_based_on_initial_query:
-    #                             score = self._relatedness_fn(
-    #                                 query_embedding,
-    #                                 results[i][0]
-    #                             )
-    #                         else:
-    #                             score = results[i][2]
-                            
-    #                         # get new embeddings
-    #                         embeddings = results[i][0]
-    #                         break
-    #                 else:
-    #                     break
-                    
-    #                 if score < score_threshold:
-    #                     break
-                    
-    #                 # append result
-    #                 response.append(
-    #                     {
-    #                         'document': document,
-    #                         'score': score
-    #                     }
-    #                 )
-
-    #             # reduce depth
-    #             depth -= 1
-        
-    #     return response
 
     # count tokens < GPT model >
     def count_tokens(self, prompt: str):
@@ -536,7 +286,7 @@ class OpenAIGPT(object):
             prompt (str): The input prompt for the GPT model.
 
         Returns:
-            int: Number of tokens
+            int: Number of tokens.
         '''
         # get model
         model = self.OPENAI_GPT_MODEL
@@ -560,7 +310,7 @@ class OpenAIGPT(object):
             prompt (str): The input prompt for the GPT model.
 
         Returns:
-            float: GPT Model estimated cost
+            float: GPT Model estimated cost.
         '''
         model = self.OPENAI_GPT_MODEL
 
@@ -580,36 +330,36 @@ class OpenAIGPT(object):
     # get completion response id
     def _get_completion_response_id(self, response: Dict):
         '''
-        Get completion response id
+        Get completion response id.
 
         Args:
-            response (dict): GPT Model response
+            response (Dict): GPT Model response.
         
         Returns:
-            str: GPT Model response id
+            str: GPT Model response id.
         '''
         return response['id']
 
     # get completion response usage
     def _get_completion_response_usage(self, response: Dict):
         '''
-        Get completion response usage
+        Get completion response usage.
 
         Args:
-            response (dict): GPT Model response
+            response (Dict): GPT Model response.
         
         Returns:
-            dict: GPT Model response usage
+            dict: GPT Model response usage.
         '''
         return response['usage']
     
     # get completion response role & message
     def _get_completion_response_role_and_message(self, response: Dict):
         '''
-        Get completion response role & message
+        Get completion response role & message.
 
         Args:
-            response (dict): GPT Model response
+            response (Dict): GPT Model response.
         
         Returns:
             Tuple[str, str]: A tuple where the first element is the response role
@@ -623,10 +373,10 @@ class OpenAIGPT(object):
     # generate unique id
     def _generate_unique_id(self):
         '''
-        Generate unique id for sql database
+        Generate unique id for SQL database.
         
         Returns:
-            str: SQL unique id
+            str: SQL unique id.
         '''
         # SQL database manager instance
         sql_manager = SQLDatabaseManager(self.env_file_path)
@@ -651,7 +401,7 @@ class OpenAIGPT(object):
     # insert system prompt into sql database
     def insert_system_prompt_into_sql_database(self, prompt: str):
         '''
-        Insert system prompt into sql database
+        Insert system prompt into sql database.
 
         Args:
             prompt (str): The input prompt for the GPT model.
@@ -670,10 +420,10 @@ class OpenAIGPT(object):
     # insert user prompt into sql database
     def insert_user_prompt_into_sql_database(self, response: Dict, prompt: str):
         '''
-        Insert user prompt into sql database
+        Insert user prompt into sql database.
 
         Args:
-            response (Dict): GPT Model response
+            response (Dict): GPT Model response.
             prompt (str): The input prompt for the GPT model.
         
         Returns:
@@ -693,10 +443,10 @@ class OpenAIGPT(object):
     # insert completion response into sql database
     def insert_completion_response_into_sql_database(self, response: Dict):
         '''
-        Insert completion response into sql database
+        Insert completion response into sql database.
 
         Args:
-            response (Dict): GPT Model response
+            response (Dict): GPT Model response.
         
         Returns:
             None
@@ -736,7 +486,7 @@ class OpenAIGPT(object):
         messages: Optional[Union[List, Dict]] = None, temperature: float = 0,
         verbose: bool = True):
         '''
-        Get GPT model completion
+        Get GPT model completion.
 
         Args:
             prompt (str): The input prompt for the GPT model.

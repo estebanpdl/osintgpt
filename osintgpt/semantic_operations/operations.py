@@ -296,3 +296,6 @@ class SemanticOperations(object):
                 depth -= 1
         
         return response
+    
+    # Compare two vectors (e.g., twitter vector, youtube transcripts vector, etc.)
+    

@@ -28,15 +28,21 @@ from osintgpt.exceptions.errors import MissingEnvironmentVariableError
 # SQLDatabaseManager class
 class SQLDatabaseManager(object):
     '''
-    SQLDatabaseManager class
+    SQLDatabaseManager class.
 
     This class provides an abstracted interface for interacting with various SQL
-    databases
+    databases.
     '''
-    # constructor
     def __init__(self, env_file_path: str):
         '''
-        constructor
+        Initializes the instance of the class.
+
+        Args:
+            env_file_path (str): Path to the file containing environment variables.
+        
+        Raises:
+            MissingEnvironmentVariableError: If 'SQL_DB_FILE_PATH' is not found \
+                in the environment variables.
         '''
         # load environment variables
         load_dotenv(dotenv_path=env_file_path)
@@ -58,13 +64,13 @@ class SQLDatabaseManager(object):
     # create connection
     def create_connection(self, db_file: str):
         '''
-        create connection
+        Create SQL connection.
 
         Args:
-            db_file (str): database file path
+            db_file (str): Database file path.
 
         Returns:
-            conn (sqlite3.Connection): database connection
+            sqlite3.Connection: Database connection.
         '''
         # set connection
         conn = None
@@ -82,10 +88,10 @@ class SQLDatabaseManager(object):
     # get connection'
     def get_connection(self):
         '''
-        get connection
+        Get SQL connection.
 
         Returns:
-            conn (sqlite3.Connection): database connection
+            sqlite3.Connection: Database connection.
         '''
         # return connection
         return self.conn
@@ -93,7 +99,10 @@ class SQLDatabaseManager(object):
     # create main chat gpt index table
     def _create_chat_gpt_index_table(self):
         '''
-        create table
+        Create table in SQL database.
+
+        Returns:
+            None
         '''
         # set cursor
         cursor = self.conn.cursor()
@@ -118,7 +127,10 @@ class SQLDatabaseManager(object):
     # create chat gpt conversations table
     def _create_chat_gpt_conversations_table(self):
         '''
-        create chat gpt conversations table
+        Create chat gpt conversations table.
+
+        Returns:
+            None
         '''
         # set cursor
         cursor = self.conn.cursor()
@@ -147,11 +159,14 @@ class SQLDatabaseManager(object):
     # insert chat gpt data
     def insert_data_to_chat_gpt_index(self, id: str, created_at: str):
         '''
-        insert data to chat gpt index table
+        Insert data to chat gpt index table.
 
         Args:
-            id (str): conversation id
-            created_at (str): created at
+            id (str): Conversation id.
+            created_at (str): Conversation date.
+        
+        Returns:
+            None
         '''
         # set cursor
         cursor = self.conn.cursor()
@@ -177,13 +192,16 @@ class SQLDatabaseManager(object):
     def insert_data_to_chat_gpt_conversations(self, ref_id: str, chat_id: str,
         role: str, message: str):
         '''
-        insert data to chat gpt conversations table
+        Insert data to chat gpt conversations table.
 
         Args:
-            ref_id (str): conversation id
-            chat_id (str): chat id
-            role (str): role
-            message (str): message
+            ref_id (str): Conversation id.
+            chat_id (str): OpenAI's GPT response chat id.
+            role (str): OpenAI's GPT role (e.g., user, assistant, system).
+            message (str): OpenAI's GPT response message.
+        
+        Returns:
+            None
         '''
         # set cursor
         cursor = self.conn.cursor()
@@ -208,13 +226,13 @@ class SQLDatabaseManager(object):
     # load messages from chat gpt conversations table
     def load_messages_from_chat_gpt_conversations(self, ref_id: str):
         '''
-        load messages from chat gpt conversations table
+        Load messages from chat gpt conversations table.
 
         Args:
-            ref_id (str): conversation id
+            ref_id (str): Conversation id.
         
         Returns:
-            obj (dict): messages object
+            dict: Messages object from SQL database matching a conversation ref id.
 
             example:
             obj = {

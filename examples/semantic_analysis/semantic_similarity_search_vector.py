@@ -28,7 +28,7 @@ operations = SemanticOperations(env_file_path)
 Qdrant connection
 '''
 qdrant = Qdrant(env_file_path)
-query = 'Sheldon explores a new theory on quantum physics'
+query = 'genius explores theory on physics research'
 collection_name = 'big_bang_theory'
 
 # recursive search
@@ -36,7 +36,7 @@ response = operations.semantic_similarity_search(
     query=query,
     vector_engine=qdrant,
     payload_ref_text_key='text_data',
-    score_threshold=0.85,
+    score_threshold=0.75,
     score_based_on_initial_query=True,
     collection_name=collection_name
 )
