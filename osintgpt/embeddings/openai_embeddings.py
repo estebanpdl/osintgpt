@@ -121,12 +121,12 @@ class OpenAIEmbeddingGenerator(object):
         It calculates the estimated cost of the data based on the number of tokens.
         Costs are based on the OpenAI text-embedding-ada-002 pricing model.
 
-        As of April 2023, the cost is 0.0004 per 1000 tokens.
+        As of August 2023, the cost is 0.0001 per 1000 tokens.
 
         Returns:
             float: Estimated cost, based on the OpenAI text-embedding-ada-002 model.
         '''
-        return ((self.count_tokens() / 1000) * 0.0004)
+        return ((self.count_tokens() / 1000) * 0.0001)
 
     # calculate embeddings
     def calculate_embeddings(self):

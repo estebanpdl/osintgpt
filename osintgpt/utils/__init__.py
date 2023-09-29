@@ -2,6 +2,7 @@
 
 # import modules
 import uuid
+import tiktoken
 
 # type hints
 from typing import List
@@ -24,3 +25,24 @@ def create_unique_id(ids: List = []) -> str:
 
     # return unique id
     return unique_id
+
+# count tokens < GPT model >
+def count_tokens(prompt: str, model: str) -> int:
+    '''
+    Count tokens
+    It counts the number of tokens in the data.
+
+    Args:
+        prompt (str): The input prompt for the GPT model.
+        model (str): The GPT model
+
+    Returns:
+        int: Number of tokens.
+    '''
+    encoding = tiktoken.encoding_for_model(model)
+
+    # count tokens
+    tokens = encoding.encode(prompt)
+    num_tokens = len(tokens)
+
+    return num_tokens

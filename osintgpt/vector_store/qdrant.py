@@ -12,6 +12,7 @@
 
 # import modules <Qdrant>
 import os
+import sys
 import qdrant_client
 
 # import submodules <Qdrant>
@@ -105,6 +106,21 @@ class Qdrant(BaseVectorEngine):
                 host=self.host,
                 port=self.port
             )
+        
+        '''
+
+        Ensure if is indeed connected
+        '''
+        # Perform a simple operation to check connectivity
+        try:
+            collections = self.get_collections()
+        except Exception as e:
+            m = f'''
+            Unable to establish a connection to the Qdrant server. Please ensure
+            that the Qdrant server is up and running. If you're using this locally,
+            make sure to start the Qdrant server before using this feature.
+            '''
+            raise ConnectionError(' '.join(m.split()).strip()) from None
     
     # get client
     def get_client(self):

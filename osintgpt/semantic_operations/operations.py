@@ -28,11 +28,17 @@ from osintgpt.llms import OpenAIGPT
 # import osintgpt vector stores
 from osintgpt.vector_store import BaseVectorEngine
 
+# import prompts
+from osintgpt.prompts import basic_summarization
+
 # SemanticOperations class
 class SemanticOperations(object):
     '''
     SemanticOperations class
     '''
+    # Class variables
+    BASIC_SUMMARIZATION = basic_summarization()
+
     def __init__(self, env_file_path: str, llm: str = 'openai'):
         '''
         Initializes the instance of the class.
@@ -47,6 +53,48 @@ class SemanticOperations(object):
         '''
         self.llm = OpenAIGPT(env_file_path)
     
+    # Summarize text data
+    def summarize_content(self, user_prompt: str, context: str,
+        system_prompt: str = BASIC_SUMMARIZATION, verbose: bool = True, **kwargs):
+        '''
+        Summarize provided context based on the given prompt.
+
+        This method employs GPT-based models to extract the essence of the provided
+        context, using the prompt as a guiding element. The result is a concise
+        representation of the original content.
+
+        Args:
+            user_prompt (str): A user prompt to direct the conversation. E.g.,
+                "Provide a brief summary of the content."
+            context (str): The main content or text data that needs to be summarized.
+            system_prompt (str): A system guiding prompt for the LLM.
+            verbose (bool, optional): If set to True, additional details about the \
+                request and response will be printed.
+            **kwargs: Keyword arguments for OpenAI's create completion.
+        
+        Returns:
+            str: A summarized version of the input content.
+        '''
+        # generate system message role
+        system_role = f'''
+        {system_prompt}
+        '''
+
+        # build messages
+        messages = [
+            {'role': 'system', 'content': system_role},
+            {'role': 'user', 'content': f'{user_prompt}: {context}'}
+        ]
+
+        # get chat completion response
+        response = self.llm.get_model_completion_using_system_role(
+            messages=messages,
+            verbose=verbose,
+            **kwargs
+        )
+
+        return response
+
     # Semantic similarity search
     def semantic_similarity_search(self, query: str,
         vector_engine: Optional[BaseVectorEngine] = None,

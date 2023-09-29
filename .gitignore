@@ -9,6 +9,7 @@ nbs/*
 
 # material
 resources.txt
+examples/data/sql_database.db
 
 # test folders
 drafts/

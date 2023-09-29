@@ -32,12 +32,13 @@ df = gpt.load_embeddings_from_csv(
     low_memory=False
 )
 
-query = 'Sheldon explores a new theory on quantum physics'
+query = 'Explain in one paragraph relationship between Sheldon and Penny'
 response = gpt.search_results_from_dataframe(
     df,
     query=query,
     text_target_column='text_data',
-    top_k=2
+    top_k=2,
+    extract_sentence_details=True
 )
 
 # get results

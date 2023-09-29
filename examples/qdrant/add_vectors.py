@@ -39,7 +39,7 @@ data = pd.read_csv(path, encoding='utf-8', low_memory=False)
 dataset = data[data['Plot'].notnull()].copy()
 
 # collect a random sample
-sample = dataset.sample(n=50).copy()
+sample = dataset.sample(n=1).copy()
 
 # collect text data
 text_data = sample['Plot'].tolist()
@@ -76,7 +76,7 @@ qdrant = Qdrant(env_file_path)
 # vector config
 vector_size = len(df['embeddings'][0])
 payload = df.to_dict(orient='records')
-collection_name = 'big_bang_theory'
+collection_name = 'big_bang_theory_beta'
 
 '''
 Create collections

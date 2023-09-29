@@ -233,7 +233,7 @@ class OpenAIGPT(object):
     def search_results_from_dataframe(self, df: pd.DataFrame,
         query: Optional[str] = None, embeddings: Optional[List] = None,
         top_k: int = 10, embeddings_target_column: str = 'embeddings',
-        text_target_column: str = 'text'):
+        text_target_column: str = 'text', extract_sentence_details: bool = False):
         '''
         Search top k results from dataframe.
         
@@ -255,6 +255,20 @@ class OpenAIGPT(object):
         # OpenAIEmbeddingGenerator instance
         if query is not None:
             embedding_generator = OpenAIEmbeddingGenerator(self.env_file_path)
+            if extract_sentence_details:
+                '''
+                This method will try to extract details from query.
+                Only Subject or topics will be embbeded.
+                The premise is that, based on this approach, we can improve
+                    similarity results.
+                '''
+                response = self.analyze_sentence_details(query)
+                response = literal_eval(response)
+                try:
+                    query = response['Subject or topics']
+                except TypeError:
+                    pass
+            
             query_embedding = embedding_generator.generate_embedding(query)
         else:
             query_embedding = embeddings
@@ -480,6 +494,60 @@ class OpenAIGPT(object):
             role,
             message
         )
+    
+    # get GPT model completion when adding a system role
+    def get_model_completion_using_system_role(self, messages: List[Dict],
+        verbose: bool = True, **kwargs):
+        '''
+        Get GPT model completion.
+
+        Args:
+            messages (List[Dict]): A list of message objects. Each object \
+                should be a dictionary containing 'role' and 'content'.
+            verbose (bool, optional): If set to True, additional details about the \
+                request and response will be printed.
+            **kwargs: Keyword arguments for OpenAI's create completion.
+        
+        Returns:
+            str: GPT completion response.
+        '''
+        # set api key
+        if not self.OPENAI_API_KEY:
+            raise ValueError('No OpenAI API key provided. Please provide one.')
+
+        openai.api_key = self.OPENAI_API_KEY
+
+        # get model
+        if not self.OPENAI_GPT_MODEL:
+            raise ValueError('No OpenAI GPT model provided. Please provide one.')
+
+        model = self.OPENAI_GPT_MODEL
+
+        # get completion response
+        response = openai.ChatCompletion.create(
+            model=model,
+            messages=messages,
+            **kwargs
+        )
+
+        # insert system prompt into sql database
+        system_prompt = messages[0]['content']
+        self.insert_system_prompt_into_sql_database(system_prompt)
+
+        # insert user prompt into sql database
+        user_prompt = messages[1]['content']
+        self.insert_user_prompt_into_sql_database(response, user_prompt)
+
+        # insert response into sql database
+        self.insert_completion_response_into_sql_database(response)
+
+        # display main values
+        if verbose:
+            print('Response id: ', self._get_completion_response_id(response))
+            for key, value in self._get_completion_response_usage(response).items():
+                print(f'{key}: {value}')
+        
+        return response['choices'][0].message['content']
 
     # get GPT model completion
     def get_model_completion(self, prompt: str,
@@ -500,7 +568,7 @@ class OpenAIGPT(object):
                 request and response will be printed.
             
         Returns:
-            str: GPT response. Content completuion of the response.
+            str: GPT completion response.
         '''
         # set api key
         if not self.OPENAI_API_KEY:
@@ -568,7 +636,7 @@ class OpenAIGPT(object):
 
         Args:
             prompt (str, optional): The input prompt for the GPT model.
-            messages (List[Dict], optional):A list of message objects. Each object \
+            messages (List[Dict], optional): A list of message objects. Each object \
                 should be a dictionary containing 'role' and 'content'.
             temperature (float, optional): Controls the randomness of the model's \
                 output. The higher the value, the more random the output will be. \
@@ -645,3 +713,68 @@ class OpenAIGPT(object):
             messages.append(msg)
 
             print (f'{model}: ', gpt_response)
+    
+    # Analyze sentence details
+    def analyze_sentence_details(self, sentence: str, temperature: float = 0):
+        '''
+        Analyzes the provided sentence to identify its primary language,
+        the central request or question, and the main theme or subject matter
+        associated with that request.
+
+        Args:
+            sentence (str): The input sentence to be analyzed.
+            temperature (float, optional): Controls the randomness of the model's \
+                output. The higher the value, the more random the output will be. \
+                If not provided, the output will be deterministic.
+        
+        Returns:
+            dict: A dictionary containing keys "Language", "Input request", and
+            "Subject or topics" with their respective identified values.
+        '''
+        # set api key
+        if not self.OPENAI_API_KEY:
+            raise ValueError('No OpenAI API key provided. Please provide one.')
+        
+        openai.api_key = self.OPENAI_API_KEY
+
+        # get model
+        if not self.OPENAI_GPT_MODEL:
+            raise ValueError('No OpenAI GPT model provided. Please provide one.')
+        
+        model = self.OPENAI_GPT_MODEL
+
+        # generate system message role
+        system_role = '''
+        As a Large Language Model, you specialize in dissecting sentences to unearth
+        the core components within them. When presented with a sentence:
+        1. Determine the primary language in which the sentence is written.
+        2. Extract the central request, input, or question that requires assistance.
+        3. Identify the main topic/s or subject/s associated with the central request.
+
+        Compile your findings into a JSON response, highlighting these three
+        essential aspects.
+
+        Example input: "¿Cuáles son los beneficios de la energía solar?"
+        Expected output:
+        ```
+        {
+            "Language": "Spanish",
+            "Input request": "¿Cuáles son los beneficios",
+            "Subject or topics": "energía solar"
+        }
+        ```
+        '''
+        # build messages
+        messages = [
+            {'role': 'system', 'content': system_role},
+            {'role': 'user', 'content': sentence}
+        ]
+
+        # get completion response
+        response = openai.ChatCompletion.create(
+            model=model,
+            messages=messages,
+            temperature=temperature
+        )
+
+        return response['choices'][0].message['content']

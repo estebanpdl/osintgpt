@@ -23,7 +23,6 @@ OpenAIGPT connection
 '''
 gpt = OpenAIGPT(env_file_path)
 
-
 '''
 Qdrant connection
 '''
