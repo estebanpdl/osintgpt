@@ -46,11 +46,11 @@ content_tokens = count_tokens(content, model)
 print (f'Number of tokens in content: {content_tokens}')
 
 # Summarize content
-user_prompt = 'Genera un resumen del siguiente texto'
+user_prompt = 'Utiliza el siguiente texto para elaborar tu reporte'
 response = operations.summarize_content(
     user_prompt=user_prompt,
     context=content,
-    max_tokens=300,
+    system_prompt=SemanticOperations.TOPIC_MODELING_SUMMARIZATION,
     temperature=0
 )
 

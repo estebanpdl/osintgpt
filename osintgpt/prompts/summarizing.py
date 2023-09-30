@@ -68,5 +68,5 @@ def topic_modeling_summarization():
     1. The top themes or topics you've identified.
     2. Noteworthy bigrams and their relevance.
     3. Any observations or narrative patterns that can help understand the content.
+    4. Always respond in the language in which the user made the request.
     '''
-    

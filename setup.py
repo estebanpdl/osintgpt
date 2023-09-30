@@ -12,7 +12,7 @@ with open('./requirements.txt', 'r', encoding='utf-8') as f:
 # setup package
 setup(
     name='osintgpt',
-    version='0.1.21',
+    version='0.1.23',
     author='Esteban Ponce de Leon',
     description='A Python OSINT tool using Large Language Models',
     long_description=long_description,
