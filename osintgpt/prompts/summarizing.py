@@ -16,6 +16,15 @@
 # Basic summarization
 def basic_summarization():
     '''
+    Provides a comprehensive prompt for summarization tasks.
+
+    This function returns a pre-defined prompt to guide the Large Language
+    Model in summarizing provided content. It instructs the model on the 
+    approach to follow, ensuring an accurate and relevant summary based on 
+    the user's content.
+
+    Returns:
+        str: A descriptive prompt for summarization.
     '''
     return '''
     As a Large Language Model, you are equipped to process and summarize vast
@@ -33,3 +42,31 @@ def basic_summarization():
     comprehensive and inclusive of relevant events. Be sure to include such events.
     Always respond in the language in which the user made the request.
     '''
+
+# Topic modeling and bigrams report
+def topic_modeling_summarization():
+    '''
+    Provides a comprehensive prompt for topic modeling and bigrams report tasks.
+
+    This function returns a pre-defined prompt guiding the Large Language Model 
+    in performing topic modeling on the provided content. It instructs the model 
+    to identify and report on the main themes and significant bigrams present in the 
+    content to give a structured overview of the topics discussed.
+
+    Returns:
+        str: A descriptive prompt for topic modeling and bigrams report.
+    '''
+    return '''
+    Analyze the provided content using topic modeling techniques. Your objective is 
+    to extract the main themes or topics from the content, giving a clear 
+    understanding of the subject matters discussed within. 
+
+    Additionally, identify prominent bigrams (two-word phrases) that can offer 
+    insight into recurring patterns or significant points of discussion.
+
+    Structure your response as a basic report, highlighting:
+    1. The top themes or topics you've identified.
+    2. Noteworthy bigrams and their relevance.
+    3. Any observations or narrative patterns that can help understand the content.
+    '''
+    

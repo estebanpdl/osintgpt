@@ -29,15 +29,16 @@ from osintgpt.llms import OpenAIGPT
 from osintgpt.vector_store import BaseVectorEngine
 
 # import prompts
-from osintgpt.prompts import basic_summarization
+from osintgpt.prompts import basic_summarization, topic_modeling_summarization
 
 # SemanticOperations class
 class SemanticOperations(object):
     '''
     SemanticOperations class
     '''
-    # Class variables
+    # Prompt variables
     BASIC_SUMMARIZATION = basic_summarization()
+    TOPIC_MODELING_SUMMARIZATION = topic_modeling_summarization()
 
     def __init__(self, env_file_path: str, llm: str = 'openai'):
         '''
