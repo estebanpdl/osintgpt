@@ -24,7 +24,7 @@ gpt = OpenAIGPT(env_file_path)
 
 
 # build sentence
-sentence = 'Cuáles son las narrativas discutidas alrededor del estallido social?'
+sentence = 'Which are the main narratives dicussed around the protests?'
 
 response = gpt.analyze_sentence_details(
     sentence=sentence
