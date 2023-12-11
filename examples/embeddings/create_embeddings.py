@@ -8,14 +8,13 @@ import time
 import pandas as pd
 
 # import osintgpt modules
-from osintgpt.vector_store import Qdrant
 from osintgpt.embeddings import OpenAIEmbeddingGenerator
 
 # Init
 text = f'''
 Init program at {time.ctime()}
 
-Example -> add vectors to Qdrant collection
+Example -> creating embeddings
 '''
 print (text)
 
@@ -49,54 +48,21 @@ embedding_generator.load_text(text_data)
 
 # count tokens and calculate estimated cost
 n_tokens = embedding_generator.count_tokens()
-estimated_cost = embedding_generator.calculate_embeddings_estimated_cost()
 
 # show values
 print (f'Number of tokens: {n_tokens}')
-print (f'Estimated cost: {estimated_cost}')
 print ('')
 
 # get embeddings
 embeddings = embedding_generator.embeddings
 
-# create dataframe
-obj = {
-    'text_data': text_data,
-    'embeddings': embeddings
-}
+# display sample
+print ('Sample -> Text:')
+print (text_data[0])
 
-df = pd.DataFrame(obj)
-
-
-'''
-Qdrant
-'''
-qdrant = Qdrant(env_file_path)
-
-# vector config
-vector_size = len(df['embeddings'][0])
-payload = df.to_dict(orient='records')
-collection_name = 'big_bang_theory'
-
-'''
-Create collections
-'''
-qdrant.create_collection(collection_name, vector_size)
-
-'''
-Add vectors
-'''
-qdrant.add_vectors(
-    collection_name=collection_name,
-    vectors=embeddings,
-    payload=payload
-)
-
-'''
-Count vectors
-'''
-count = qdrant.count_vectors(collection_name)
-print(f'Collection: {collection_name} -> vectors {count}')
+print ('Sample -> Embeddings:')
+print (embeddings[0][:10])
+print ('')
 print ('')
 
 

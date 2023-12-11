@@ -25,7 +25,7 @@ env_file_path = '../config/.env'
 qdrant = Qdrant(env_file_path)
 
 # get vectors
-collection_name = 'test_dataset_embed_beta'
+collection_name = ''
 qdrant.delete_collection(collection_name=collection_name)
 
 # End

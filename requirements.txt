@@ -1,5 +1,6 @@
-openai>=0.27.4
-python-dotenv>=1.0.0
-qdrant-client>=1.1.4
-scipy>=1.10.1
-tiktoken>=0.3.3
+openai==0.28
+pandas
+python-dotenv
+qdrant-client
+scipy
+tiktoken
