@@ -1,4 +1,5 @@
 # cache
+.pytest_cache/
 __pycache__/
 
 # notebooks
@@ -7,11 +8,11 @@ nbs/*
 # checkpoints
 .ipynb_checkpoints/
 
-# material
+# dev material
 resources.txt
 examples/data/sql_database.db
 
-# test folders
+# dev & test folders
 drafts/
 gpt-results/
 
