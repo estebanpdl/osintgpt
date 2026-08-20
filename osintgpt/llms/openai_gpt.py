@@ -13,7 +13,6 @@
 
 # import modules
 import os
-import openai
 import tiktoken
 import datetime
 import pandas as pd
@@ -22,9 +21,11 @@ import pandas as pd
 from scipy import spatial
 from ast import literal_eval
 from dotenv import load_dotenv
+from openai import OpenAI
 
 # type hints
 from typing import Union, Optional, List, Dict
+from openai.types.chat import ChatCompletion
 
 # import osintgpt vector stores
 from osintgpt.vector_store import BaseVectorEngine, Qdrant
@@ -69,7 +70,10 @@ class OpenAIGPT(object):
         self.OPENAI_GPT_MODEL = os.getenv('OPENAI_GPT_MODEL', '')
         if not self.OPENAI_GPT_MODEL:
             raise MissingEnvironmentVariableError('OPENAI_GPT_MODEL')
-        
+
+        # client
+        self.client = OpenAI(api_key=self.OPENAI_API_KEY)
+
         # set SQL unique id
         self.SQL_UNIQUE_ID = self._generate_unique_id()
         self.SQL_UNIQUE_ID_INSERTED = False
@@ -342,45 +346,48 @@ class OpenAIGPT(object):
         return estimated_cost
     
     # get completion response id
-    def _get_completion_response_id(self, response: Dict):
+    def _get_completion_response_id(self, response: ChatCompletion):
         '''
         Get completion response id.
 
         Args:
-            response (Dict): GPT Model response.
-        
+            response (ChatCompletion): GPT Model response.
+
         Returns:
             str: GPT Model response id.
         '''
-        return response['id']
+        return response.id
 
     # get completion response usage
-    def _get_completion_response_usage(self, response: Dict):
+    def _get_completion_response_usage(self, response: ChatCompletion):
         '''
         Get completion response usage.
 
         Args:
-            response (Dict): GPT Model response.
-        
+            response (ChatCompletion): GPT Model response.
+
         Returns:
             dict: GPT Model response usage.
         '''
-        return response['usage']
-    
+        if response.usage is None:
+            return {}
+
+        return response.usage.model_dump(exclude_none=True)
+
     # get completion response role & message
-    def _get_completion_response_role_and_message(self, response: Dict):
+    def _get_completion_response_role_and_message(self, response: ChatCompletion):
         '''
         Get completion response role & message.
 
         Args:
-            response (Dict): GPT Model response.
-        
+            response (ChatCompletion): GPT Model response.
+
         Returns:
             Tuple[str, str]: A tuple where the first element is the response role
             and the second element is the response message.
         '''
-        role = response['choices'][0]['message']['role']
-        message = response['choices'][0]['message']['content']
+        role = response.choices[0].message.role
+        message = response.choices[0].message.content
 
         return role, message
     
@@ -432,12 +439,13 @@ class OpenAIGPT(object):
         )
     
     # insert user prompt into sql database
-    def insert_user_prompt_into_sql_database(self, response: Dict, prompt: str):
+    def insert_user_prompt_into_sql_database(self, response: ChatCompletion,
+        prompt: str):
         '''
         Insert user prompt into sql database.
 
         Args:
-            response (Dict): GPT Model response.
+            response (ChatCompletion): GPT Model response.
             prompt (str): The input prompt for the GPT model.
         
         Returns:
@@ -455,23 +463,23 @@ class OpenAIGPT(object):
         )
     
     # insert completion response into sql database
-    def insert_completion_response_into_sql_database(self, response: Dict):
+    def insert_completion_response_into_sql_database(self, response: ChatCompletion):
         '''
         Insert completion response into sql database.
 
         Args:
-            response (Dict): GPT Model response.
-        
+            response (ChatCompletion): GPT Model response.
+
         Returns:
             None
         '''
         # get response id
         chat_id = self._get_completion_response_id(response)
         role, message = self._get_completion_response_role_and_message(response)
-        
+
         # convert timestamp to %Y-%m-%d %H:%M:%S format
         created_at = datetime.datetime.fromtimestamp(
-            response['created']
+            response.created
         ).strftime('%Y-%m-%d %H:%M:%S')
 
         # SQL database manager instance
@@ -515,8 +523,6 @@ class OpenAIGPT(object):
         if not self.OPENAI_API_KEY:
             raise ValueError('No OpenAI API key provided. Please provide one.')
 
-        openai.api_key = self.OPENAI_API_KEY
-
         # get model
         if not self.OPENAI_GPT_MODEL:
             raise ValueError('No OpenAI GPT model provided. Please provide one.')
@@ -524,7 +530,7 @@ class OpenAIGPT(object):
         model = self.OPENAI_GPT_MODEL
 
         # get completion response
-        response = openai.ChatCompletion.create(
+        response = self.client.chat.completions.create(
             model=model,
             messages=messages,
             **kwargs
@@ -546,8 +552,8 @@ class OpenAIGPT(object):
             print('Response id: ', self._get_completion_response_id(response))
             for key, value in self._get_completion_response_usage(response).items():
                 print(f'{key}: {value}')
-        
-        return response['choices'][0].message['content']
+
+        return response.choices[0].message.content
 
     # get GPT model completion
     def get_model_completion(self, prompt: str,
@@ -573,8 +579,6 @@ class OpenAIGPT(object):
         # set api key
         if not self.OPENAI_API_KEY:
             raise ValueError('No OpenAI API key provided. Please provide one.')
-
-        openai.api_key = self.OPENAI_API_KEY
 
         # get model
         if not self.OPENAI_GPT_MODEL:
@@ -607,7 +611,7 @@ class OpenAIGPT(object):
                 pass
 
         # get completion response
-        response = openai.ChatCompletion.create(
+        response = self.client.chat.completions.create(
             model=model,
             messages=messages,
             temperature=temperature
@@ -624,9 +628,9 @@ class OpenAIGPT(object):
             print('Response id: ', self._get_completion_response_id(response))
             for key, value in self._get_completion_response_usage(response).items():
                 print(f'{key}: {value}')
-        
-        return response['choices'][0].message['content']
-    
+
+        return response.choices[0].message.content
+
     # interactive completion: role system
     def interactive_completion(self, prompt: Optional[str] = None,
         messages: Optional[Dict] = None, temperature: float = 0,
@@ -654,8 +658,6 @@ class OpenAIGPT(object):
         # set api key
         if not self.OPENAI_API_KEY:
             raise ValueError('No OpenAI API key provided. Please provide one.')
-        
-        openai.api_key = self.OPENAI_API_KEY
 
         # get model
         if not self.OPENAI_GPT_MODEL:
@@ -734,13 +736,11 @@ class OpenAIGPT(object):
         # set api key
         if not self.OPENAI_API_KEY:
             raise ValueError('No OpenAI API key provided. Please provide one.')
-        
-        openai.api_key = self.OPENAI_API_KEY
 
         # get model
         if not self.OPENAI_GPT_MODEL:
             raise ValueError('No OpenAI GPT model provided. Please provide one.')
-        
+
         model = self.OPENAI_GPT_MODEL
 
         # generate system message role
@@ -771,10 +771,10 @@ class OpenAIGPT(object):
         ]
 
         # get completion response
-        response = openai.ChatCompletion.create(
+        response = self.client.chat.completions.create(
             model=model,
             messages=messages,
             temperature=temperature
         )
 
-        return response['choices'][0].message['content']
+        return response.choices[0].message.content

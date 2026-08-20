@@ -12,13 +12,13 @@
 
 # import modules
 import os
-import openai
 import tiktoken
 import pandas as pd
 
 # import submodules
 from ast import literal_eval
 from dotenv import load_dotenv
+from openai import OpenAI
 
 # type hints
 from typing import List, Optional
@@ -56,6 +56,9 @@ class OpenAIEmbeddingGenerator(object):
         self.OPENAI_GPT_MODEL = os.getenv('OPENAI_GPT_MODEL', '')
         if not self.OPENAI_GPT_MODEL:
             raise MissingEnvironmentVariableError('OPENAI_GPT_MODEL')
+
+        # client
+        self.client = OpenAI(api_key=self.OPENAI_API_KEY)
 
     # get openai api key
     def get_openai_api_key(self):
@@ -148,22 +151,22 @@ class OpenAIEmbeddingGenerator(object):
             )
         ]
 
-        # set openai api key
-        openai.api_key = self.get_openai_api_key()
-
         # calculate embeddings
         embeddings = []
         for docs in documents:
-            response = openai.Embedding.create(model=EMBEDDING_MODEL, input=docs)
+            response = self.client.embeddings.create(
+                model=EMBEDDING_MODEL,
+                input=docs
+            )
 
             # double check embeddings are in same order as input
-            for i, be in enumerate(response['data']):
-                assert i == be['index']
-            
+            for i, be in enumerate(response.data):
+                assert i == be.index
+
             # batch embeddings
-            batch_embeddings = [e['embedding'] for e in response['data']]
+            batch_embeddings = [e.embedding for e in response.data]
             embeddings.extend(batch_embeddings)
-        
+
         return embeddings
 
     # property for embeddings
@@ -194,9 +197,11 @@ class OpenAIEmbeddingGenerator(object):
             list: Embedding.
         '''
         EMBEDDING_MODEL = 'text-embedding-ada-002'
-        openai.api_key = self.get_openai_api_key()
-        response = openai.Embedding.create(model=EMBEDDING_MODEL, input=[text])
-        embedding = response['data'][0]['embedding']
+        response = self.client.embeddings.create(
+            model=EMBEDDING_MODEL,
+            input=[text]
+        )
+        embedding = response.data[0].embedding
 
         return embedding
 
