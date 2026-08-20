@@ -3,13 +3,21 @@
 __pycache__/
 
 # notebooks
-nbs/*
+nbs/
 
 # checkpoints
 .ipynb_checkpoints/
 
 # dev material
+plan/
+rules/
+.agents/
+.claude/
+references/
+.human-read-only/
+CLAUDE.md
 resources.txt
+skills-lock.json
 examples/data/sql_database.db
 
 # dev & test folders
