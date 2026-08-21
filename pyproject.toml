@@ -46,7 +46,8 @@ dependencies = [
 dev = [
     "pytest>=8",
     "pytest-cov",
-    "pytest-mock"
+    "pytest-mock",
+    "tomli; python_version < '3.11'"
 ]
 
 [project.urls]

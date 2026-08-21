@@ -11,8 +11,13 @@
 # =================================================================================
 
 # import modules
-import tomllib
 import pytest
+
+# tomllib landed in 3.11; 3.10 is still a supported floor.
+try:
+    import tomllib
+except ModuleNotFoundError:
+    import tomli as tomllib
 
 # import submodules
 from pathlib import Path
