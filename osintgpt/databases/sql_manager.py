@@ -12,18 +12,16 @@
 # =================================================================================
 
 # import modules
-import os
 import sqlite3
 
 # import submodules
 from sqlite3 import Error
-from dotenv import load_dotenv
 
 # type hints
-from typing import List, Optional
+from typing import List, Optional, Union
 
-# import exceptions
-from osintgpt.exceptions.errors import MissingEnvironmentVariableError
+# import osintgpt config
+from osintgpt.config import Settings, resolve_settings
 
 # SQLDatabaseManager class
 class SQLDatabaseManager(object):
@@ -33,25 +31,23 @@ class SQLDatabaseManager(object):
     This class provides an abstracted interface for interacting with various SQL
     databases.
     '''
-    def __init__(self, env_file_path: str):
+    def __init__(self, config: Union[Settings, str]):
         '''
         Initializes the instance of the class.
 
         Args:
-            env_file_path (str): Path to the file containing environment variables.
-        
+            config (Union[Settings, str]): Settings, or a path to a .env file \
+                (deprecated).
+
         Raises:
-            MissingEnvironmentVariableError: If 'SQL_DB_FILE_PATH' is not found \
-                in the environment variables.
+            MissingEnvironmentVariableError: If 'sql_db_file_path' has no value.
         '''
-        # load environment variables
-        load_dotenv(dotenv_path=env_file_path)
+        # settings
+        self.settings = resolve_settings(config).require('sql_db_file_path')
 
         # set database file path
-        self.db_file = os.getenv('SQL_DB_FILE_PATH', '')
-        if not self.db_file:
-            raise MissingEnvironmentVariableError('SQL_DB_FILE_PATH')
-        
+        self.db_file = self.settings.sql_db_file_path
+
         # set database connection
         self.conn = self.create_connection(self.db_file)
 

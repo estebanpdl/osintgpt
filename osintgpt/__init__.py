@@ -9,10 +9,23 @@
 # Description: Package initialization file.
 # =================================================
 
+# import submodules
+from importlib.metadata import PackageNotFoundError, version
+
+# import osintgpt config
+from osintgpt.config import Settings
+
 # define package-level variables and constants
-__version__ = '0.0.1'
+# The version lives in pyproject.toml; reading it back from the installed
+# metadata keeps one source of truth. Running from a source tree that was
+# never installed has no metadata to read.
+try:
+    __version__ = version('osintgpt')
+except PackageNotFoundError:
+    __version__ = '0.0.0+unknown'
+
 __name__ = 'osintgpt'
-__all__ = []
+__all__ = ['Settings']
 
 # describition variables
 __author__ = 'Esteban Ponce de Leon'

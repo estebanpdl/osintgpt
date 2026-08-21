@@ -11,20 +11,23 @@
 # =============================================================================
 
 # import modules
-import os
-import tiktoken
 import pandas as pd
 
 # import submodules
 from ast import literal_eval
-from dotenv import load_dotenv
 from openai import OpenAI
 
 # type hints
-from typing import List, Optional
+from typing import List, Optional, Union
 
-# import exceptions
-from osintgpt.exceptions.errors import MissingEnvironmentVariableError
+# import osintgpt config
+from osintgpt.config import Settings, resolve_settings
+
+# import osintgpt pricing
+from osintgpt.pricing import estimate_cost
+
+# import utils
+from osintgpt.utils import encoding_for_model
 
 # OpenAIEmbeddingGenerator class
 class OpenAIEmbeddingGenerator(object):
@@ -34,31 +37,39 @@ class OpenAIEmbeddingGenerator(object):
     This class contains the methods for managing the GPT API connection, including
     embeddings and vector stores.
     '''
-    def __init__(self, env_file_path: str):
+    def __init__(self, config: Union[Settings, str]):
         '''
         Initializes the instance of the class.
 
         Args:
-            env_file_path (str): Path to the file containing environment variables.
-        
+            config (Union[Settings, str]): Settings, or a path to a .env file \
+                (deprecated).
+
         Raises:
-            MissingEnvironmentVariableError: If either 'OPENAI_API_KEY' or \
-                'OPENAI_GPT_MODEL' is not found in the environment variables.
+            MissingEnvironmentVariableError: If either 'openai_api_key' or \
+                'openai_gpt_model' has no value.
         '''
-        # load environment variables
-        load_dotenv(dotenv_path=env_file_path)
+        # settings
+        self.settings = resolve_settings(config).require(
+            'openai_api_key', 'openai_gpt_model'
+        )
 
-        # set environment variables
-        self.OPENAI_API_KEY = os.getenv('OPENAI_API_KEY', '')
-        if not self.OPENAI_API_KEY:
-            raise MissingEnvironmentVariableError('OPENAI_API_KEY')
-
-        self.OPENAI_GPT_MODEL = os.getenv('OPENAI_GPT_MODEL', '')
-        if not self.OPENAI_GPT_MODEL:
-            raise MissingEnvironmentVariableError('OPENAI_GPT_MODEL')
+        self.OPENAI_API_KEY = self.settings.openai_api_key
+        self.OPENAI_GPT_MODEL = self.settings.openai_gpt_model
+        self.OPENAI_EMBEDDING_MODEL = self.settings.openai_embedding_model
 
         # client
         self.client = OpenAI(api_key=self.OPENAI_API_KEY)
+
+    # get openai embedding model
+    def get_openai_embedding_model(self):
+        '''
+        Get the embedding model these embeddings are generated with.
+
+        Returns:
+            str: OpenAI embedding model.
+        '''
+        return self.OPENAI_EMBEDDING_MODEL
 
     # get openai api key
     def get_openai_api_key(self):
@@ -97,18 +108,18 @@ class OpenAIEmbeddingGenerator(object):
         else:
             raise TypeError('Data must be a list')
     
-    # count tokens < GPT model >
+    # count tokens < embedding model >
     def count_tokens(self):
         '''
         Count tokens.
-        It counts the number of tokens in the data.
+        It counts the number of tokens in the data, using the encoding of the
+        embedding model the data will actually be sent to.
 
         Returns:
             int: Number of tokens.
         '''
         # get model
-        model = self.get_openai_gpt_model()
-        encoding = tiktoken.encoding_for_model(model)
+        encoding = encoding_for_model(self.get_openai_embedding_model())
 
         # count tokens
         self.num_tokens = 0
@@ -117,33 +128,33 @@ class OpenAIEmbeddingGenerator(object):
             self.num_tokens += len(tokens)
 
         return self.num_tokens
-    
+
     # calculate estimated cost
     def calculate_embeddings_estimated_cost(self):
         '''
-        It calculates the estimated cost of the data based on the number of tokens.
-        Costs are based on the OpenAI text-embedding-ada-002 pricing model.
-
-        As of August 2023, the cost is 0.0001 per 1000 tokens.
+        It calculates the estimated cost of embedding the loaded data.
 
         Returns:
-            float: Estimated cost, based on the OpenAI text-embedding-ada-002 model.
+            Optional[float]: Estimated cost in USD, or None when the embedding \
+                model carries no price in the table.
         '''
-        return ((self.count_tokens() / 1000) * 0.0001)
+        return estimate_cost(
+            self.get_openai_embedding_model(),
+            self.count_tokens()
+        )
 
     # calculate embeddings
     def calculate_embeddings(self):
         '''
         Calculate embeddings.
-        This method calculates embeddings using Openai's text-embedding-ada-002
-        model.
+        This method calculates embeddings using the configured embedding model.
 
         Returns:
-            list: Embeddings, using Openai's text-embedding-ada-002 model.
+            list: Embeddings.
         '''
-        EMBEDDING_MODEL = 'text-embedding-ada-002'
+        EMBEDDING_MODEL = self.get_openai_embedding_model()
         BATCH_SIZE = 1000
-        
+
         # batch data
         documents = [
             self.data[i:i + BATCH_SIZE] for i in range(
@@ -187,7 +198,7 @@ class OpenAIEmbeddingGenerator(object):
     # generate embedding
     def generate_embedding(self, text: str):
         '''
-        Generate an embedding for a given text using the text-embedding-ada-002
+        Generate an embedding for a given text using the configured embedding
         model.
 
         Args:
@@ -196,7 +207,7 @@ class OpenAIEmbeddingGenerator(object):
         Returns:
             list: Embedding.
         '''
-        EMBEDDING_MODEL = 'text-embedding-ada-002'
+        EMBEDDING_MODEL = self.get_openai_embedding_model()
         response = self.client.embeddings.create(
             model=EMBEDDING_MODEL,
             input=[text]

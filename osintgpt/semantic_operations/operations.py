@@ -13,14 +13,13 @@
 # =================================================================================
 
 # import modules
-import os
 import pandas as pd
-
-# import submodules
-from dotenv import load_dotenv
 
 # type hints
 from typing import Union, Optional, List, Dict
+
+# import osintgpt config
+from osintgpt.config import Settings, resolve_settings
 
 # import osintgpt vector stores
 from osintgpt.llms import OpenAIGPT
@@ -40,19 +39,20 @@ class SemanticOperations(object):
     BASIC_SUMMARIZATION = basic_summarization()
     TOPIC_MODELING_SUMMARIZATION = topic_modeling_summarization()
 
-    def __init__(self, env_file_path: str, llm: str = 'openai'):
+    def __init__(self, config: Union[Settings, str]):
         '''
         Initializes the instance of the class.
 
         Args:
-            env_file_path (str): Path to the file containing environment variables.
-            model (str): Name of the model to use.
-        
+            config (Union[Settings, str]): Settings, or a path to a .env file \
+                (deprecated).
+
         Raises:
-            MissingEnvironmentVariableError: If either 'OPENAI_API_KEY' or \
-                'OPENAI_GPT_MODEL' is not found in the environment variables.
+            MissingEnvironmentVariableError: If either 'openai_api_key' or \
+                'openai_gpt_model' has no value.
         '''
-        self.llm = OpenAIGPT(env_file_path)
+        self.settings = resolve_settings(config)
+        self.llm = OpenAIGPT(self.settings)
     
     # Summarize text data
     def summarize_content(self, user_prompt: str, context: str,

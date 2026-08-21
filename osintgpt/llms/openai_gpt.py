@@ -12,20 +12,20 @@
 # =================================================================================
 
 # import modules
-import os
-import tiktoken
 import datetime
 import pandas as pd
 
 # import submodules
 from scipy import spatial
 from ast import literal_eval
-from dotenv import load_dotenv
 from openai import OpenAI
 
 # type hints
 from typing import Union, Optional, List, Dict
 from openai.types.chat import ChatCompletion
+
+# import osintgpt config
+from osintgpt.config import Settings, resolve_settings
 
 # import osintgpt vector stores
 from osintgpt.vector_store import BaseVectorEngine, Qdrant
@@ -33,43 +33,39 @@ from osintgpt.vector_store import BaseVectorEngine, Qdrant
 # import osintgpt openai embeddings
 from osintgpt.embeddings import OpenAIEmbeddingGenerator
 
-# import exceptions
-from osintgpt.exceptions.errors import MissingEnvironmentVariableError
-
 # import database manager
 from osintgpt.databases import SQLDatabaseManager
 
+# import osintgpt pricing
+from osintgpt.pricing import estimate_cost
+
 # import utils
-from osintgpt.utils import create_unique_id
+from osintgpt.utils import count_tokens as count_model_tokens, create_unique_id
 
 # OpenAIGPT class
 class OpenAIGPT(object):
     '''
     OpenAIGPT class
     '''
-    def __init__(self, env_file_path: str):
+    def __init__(self, config: Union[Settings, str]):
         '''
         Initializes the instance of the class.
 
         Args:
-            env_file_path (str): Path to the file containing environment variables.
-        
-        Raises:
-            MissingEnvironmentVariableError: If either 'OPENAI_API_KEY' or \
-                'OPENAI_GPT_MODEL' is not found in the environment variables.
-        '''
-        # load environment variables
-        self.env_file_path = env_file_path
-        load_dotenv(dotenv_path=env_file_path)
+            config (Union[Settings, str]): Settings, or a path to a .env file \
+                (deprecated).
 
-        # set environment variables
-        self.OPENAI_API_KEY = os.getenv('OPENAI_API_KEY', '')
-        if not self.OPENAI_API_KEY:
-            raise MissingEnvironmentVariableError('OPENAI_API_KEY')
-        
-        self.OPENAI_GPT_MODEL = os.getenv('OPENAI_GPT_MODEL', '')
-        if not self.OPENAI_GPT_MODEL:
-            raise MissingEnvironmentVariableError('OPENAI_GPT_MODEL')
+        Raises:
+            MissingEnvironmentVariableError: If either 'openai_api_key' or \
+                'openai_gpt_model' has no value.
+        '''
+        # settings
+        self.settings = resolve_settings(config).require(
+            'openai_api_key', 'openai_gpt_model'
+        )
+
+        self.OPENAI_API_KEY = self.settings.openai_api_key
+        self.OPENAI_GPT_MODEL = self.settings.openai_gpt_model
 
         # client
         self.client = OpenAI(api_key=self.OPENAI_API_KEY)
@@ -198,7 +194,7 @@ class OpenAIGPT(object):
         
         # OpenAIEmbeddingGenerator instance
         if query is not None:
-            embedding_generator = OpenAIEmbeddingGenerator(self.env_file_path)
+            embedding_generator = OpenAIEmbeddingGenerator(self.settings)
             query_embedding = embedding_generator.generate_embedding(query)
         else:
             query_embedding = embeddings
@@ -258,7 +254,7 @@ class OpenAIGPT(object):
         
         # OpenAIEmbeddingGenerator instance
         if query is not None:
-            embedding_generator = OpenAIEmbeddingGenerator(self.env_file_path)
+            embedding_generator = OpenAIEmbeddingGenerator(self.settings)
             if extract_sentence_details:
                 '''
                 This method will try to extract details from query.
@@ -306,44 +302,25 @@ class OpenAIGPT(object):
         Returns:
             int: Number of tokens.
         '''
-        # get model
-        model = self.OPENAI_GPT_MODEL
-        encoding = tiktoken.encoding_for_model(model)
-
-        # count tokens
-        tokens = encoding.encode(prompt)
-        num_tokens = len(tokens)
-
-        return num_tokens
+        return count_model_tokens(prompt, self.OPENAI_GPT_MODEL)
 
     # calculate completion response usage cost
     def estimated_prompt_cost(self, prompt: str):
         '''
-        It calculates the estimated cost of the prompt based on the number of
-        tokens.
-        
-        Costs are based on the OpenAI gpt-3.5-turbo or gpt-4 models.
+        It calculates the estimated cost of sending a prompt to the configured
+        model, based on the number of tokens.
 
         Args:
             prompt (str): The input prompt for the GPT model.
 
         Returns:
-            float: GPT Model estimated cost.
+            Optional[float]: Estimated USD, or None when the model carries no \
+                price in the table. None means unknown, not free.
         '''
-        model = self.OPENAI_GPT_MODEL
-
-        # get number of tokens
-        num_tokens = self.count_tokens(prompt)
-
-        # dict based on model costs
-        model_costs = {
-            'gpt-3.5-turbo': 0.002,
-            'gpt-4': 0.03
-        }
-
-        # calculate estimated cost
-        estimated_cost = (num_tokens / 1000) * model_costs[model]
-        return estimated_cost
+        return estimate_cost(
+            self.OPENAI_GPT_MODEL,
+            self.count_tokens(prompt)
+        )
     
     # get completion response id
     def _get_completion_response_id(self, response: ChatCompletion):
@@ -400,7 +377,7 @@ class OpenAIGPT(object):
             str: SQL unique id.
         '''
         # SQL database manager instance
-        sql_manager = SQLDatabaseManager(self.env_file_path)
+        sql_manager = SQLDatabaseManager(self.settings)
 
         # get connection
         conn = sql_manager.get_connection()
@@ -431,7 +408,7 @@ class OpenAIGPT(object):
             None
         '''
         # SQL database manager instance
-        sql_manager = SQLDatabaseManager(self.env_file_path)
+        sql_manager = SQLDatabaseManager(self.settings)
 
         # insert prompt into sql table > chat_gpt_conversations
         sql_manager.insert_data_to_chat_gpt_conversations(
@@ -455,7 +432,7 @@ class OpenAIGPT(object):
         chat_id = self._get_completion_response_id(response)
 
         # SQL database manager instance
-        sql_manager = SQLDatabaseManager(self.env_file_path)
+        sql_manager = SQLDatabaseManager(self.settings)
 
         # insert prompt into sql table > chat_gpt_conversations
         sql_manager.insert_data_to_chat_gpt_conversations(
@@ -483,7 +460,7 @@ class OpenAIGPT(object):
         ).strftime('%Y-%m-%d %H:%M:%S')
 
         # SQL database manager instance
-        sql_manager = SQLDatabaseManager(self.env_file_path)
+        sql_manager = SQLDatabaseManager(self.settings)
 
         # insert response into sql table > chat_gpt_index
         if not self.SQL_UNIQUE_ID_INSERTED:
