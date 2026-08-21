@@ -28,12 +28,20 @@ from osintgpt.exceptions.errors import MissingEnvironmentVariableError
 # Current, cheap, and available to every account.
 DEFAULT_EMBEDDING_MODEL = 'text-embedding-3-small'
 
+# Ollama's own default. Applied where the value is used, not as a field
+# default, so an unset base URL stays distinguishable from a chosen one.
+DEFAULT_OLLAMA_BASE_URL = 'http://localhost:11434'
+
 # Maps each setting to the environment variable `Settings.from_env` reads it
 # from. Single source of truth for both the loader and the error messages.
 ENV_VARS = {
     'openai_api_key': 'OPENAI_API_KEY',
     'openai_gpt_model': 'OPENAI_GPT_MODEL',
     'openai_embedding_model': 'OPENAI_EMBEDDING_MODEL',
+    'gemini_api_key': 'GEMINI_API_KEY',
+    'voyage_api_key': 'VOYAGE_API_KEY',
+    'anthropic_api_key': 'ANTHROPIC_API_KEY',
+    'ollama_base_url': 'OLLAMA_BASE_URL',
     'sql_db_file_path': 'SQL_DB_FILE_PATH',
     'qdrant_api_key': 'QDRANT_API_KEY',
     'qdrant_url': 'QDRANT_URL',
@@ -54,6 +62,12 @@ class Settings:
     openai_api_key: str = ''
     openai_gpt_model: str = ''
     openai_embedding_model: str = ''
+    gemini_api_key: str = ''
+    voyage_api_key: str = ''
+    anthropic_api_key: str = ''
+    # Empty defers to DEFAULT_OLLAMA_BASE_URL. Worth setting inside a
+    # container, where localhost is the container rather than the host.
+    ollama_base_url: str = ''
     sql_db_file_path: str = ''
     qdrant_api_key: str = ''
     qdrant_url: str = ''
