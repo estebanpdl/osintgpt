@@ -11,18 +11,17 @@
 # ===============================================================
 
 # import modules <Qdrant>
-import os
 import sys
 import qdrant_client
 
 # import submodules <Qdrant>
 from qdrant_client.http import models as rest
 
-# import submodules
-from dotenv import load_dotenv
-
 # type hints
-from typing import List, Optional
+from typing import List, Optional, Union
+
+# import osintgpt config
+from osintgpt.config import Settings, resolve_settings
 
 # import exceptions
 from osintgpt.exceptions.errors import MissingEnvironmentVariableError
@@ -52,44 +51,49 @@ class Qdrant(BaseVectorEngine):
     github.com/qdrant/qdrant-client/blob/master/qdrant_client/qdrant_client.py
     '''
     # constructor
-    def __init__(self, env_file_path: str):
+    def __init__(self, config: Union[Settings, str]):
         '''
         Constructor
 
         args:
-            **kwargs: keyword arguments for QdrantClient
+            config (Union[Settings, str]): Settings, or a path to a .env file \
+                (deprecated).
         '''
-        # load environment variables
-        load_dotenv(dotenv_path=env_file_path)
+        # settings
+        self.settings = resolve_settings(config)
 
-        # set environment variables
+        # connect
         self.set_required_variables()
 
-    # set required environment variables
+    # set required settings
     def set_required_variables(self):
         '''
-        set required environment variables
+        set required settings
 
-        This method sets for the required environment variables for connecting
-        to a Qdrant server.
+        This method reads the settings required to connect to a Qdrant server
+        and opens the connection. A remote pair (api key + url) wins over a
+        local pair (host + port) when both are present.
 
         returns:
             use_remote: use remote
             use_local: use local
         '''
-        # set required environment variables
-        use_remote = os.getenv('QDRANT_API_KEY') and os.getenv('QDRANT_URL')
-        use_local = os.getenv('QDRANT_PORT') and os.getenv('QDRANT_HOST')
+        # set required settings
+        settings = self.settings
+        use_remote = settings.qdrant_api_key and settings.qdrant_url
+        use_local = settings.qdrant_port and settings.qdrant_host
 
         if not (use_remote or use_local):
             raise MissingEnvironmentVariableError(
-                'QDRANT_API_KEY or QDRANT_URL or QDRANT_HOST or QDRANT_PORT'
+                'QDRANT_API_KEY or QDRANT_URL or QDRANT_HOST or QDRANT_PORT',
+                hint='a remote Qdrant needs an api key and a url; a local one '
+                     'needs a host and a port'
             )
 
-        # set environment variables
+        # set connection settings
         if use_remote:
-            self.api_key = os.getenv('QDRANT_API_KEY')
-            self.url = os.getenv('QDRANT_URL')
+            self.api_key = settings.qdrant_api_key
+            self.url = settings.qdrant_url
 
             # connect
             self.qdrant = qdrant_client.QdrantClient(
@@ -98,15 +102,15 @@ class Qdrant(BaseVectorEngine):
                 https=True
             )
         else:
-            self.host = os.getenv('QDRANT_HOST')
-            self.port = int(os.getenv('QDRANT_PORT'))
+            self.host = settings.qdrant_host
+            self.port = settings.qdrant_port
 
             # connect
             self.qdrant = qdrant_client.QdrantClient(
                 host=self.host,
                 port=self.port
             )
-        
+
         '''
 
         Ensure if is indeed connected
@@ -351,12 +355,13 @@ class Qdrant(BaseVectorEngine):
         vector_name = kwargs.get('vector_name', 'main')
 
         # query results
-        query_results = self.qdrant.search(
+        # qdrant-client removed `search` in 1.19; `query_points` replaces it and
+        # wraps the hits, so unwrap to keep returning a plain list of points.
+        response = self.qdrant.query_points(
             collection_name=collection_name,
-            query_vector=(
-                vector_name, embedded_query
-            ),
+            query=embedded_query,
+            using=vector_name,
             limit=top_k
         )
 
-        return query_results
+        return response.points
