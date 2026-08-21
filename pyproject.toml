@@ -45,6 +45,15 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+all = [
+    "osintgpt[anthropic,local]"
+]
+anthropic = [
+    "anthropic>=0.40,<2"
+]
+local = [
+    "sentence-transformers>=3,<6"
+]
 dev = [
     "pytest>=8",
     "pytest-cov",
