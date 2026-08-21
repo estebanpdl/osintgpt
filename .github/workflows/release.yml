@@ -5,15 +5,19 @@
 # breaks publishing with an authorization error that says nothing about the
 # rename, so the name is load-bearing: leave it as release.yml.
 #
-# Configure once, on each index, under the project's Publishing settings:
+# Configure on pypi.org, under the project's Publishing settings:
 #   Owner           estebanpdl
 #   Repository      osintgpt
 #   Workflow        release.yml
-#   Environment     pypi         (on pypi.org)
-#                   testpypi     (on test.pypi.org)
+#   Environment     pypi
 #
-# TestPyPI is a separate site with separate settings — configuring one does not
-# configure the other.
+# The testpypi job is optional and only runs when explicitly dispatched. Leave
+# it unconfigured unless you want it; TestPyPI is a separate site needing its
+# own account, its own project registration and its own publisher entry.
+#
+# A version cannot be re-uploaded to either index, so rehearse with a
+# pre-release version (1.0.0rc1) rather than a second index: it exercises the
+# real publish path, and pip will not install it without --pre.
 
 name: Release
 
@@ -25,8 +29,8 @@ on:
       target:
         description: Index to publish to
         type: choice
-        options: [testpypi, pypi]
-        default: testpypi
+        options: [pypi, testpypi]
+        default: pypi
 
 permissions:
   contents: read
