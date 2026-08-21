@@ -1,0 +1,100 @@
+# Publishing runs on PyPI Trusted Publishing (OIDC) — there is no API token in
+# this repository, and there must never be one again.
+#
+# PyPI binds a publisher to this exact WORKFLOW FILENAME. Renaming this file
+# breaks publishing with an authorization error that says nothing about the
+# rename, so the name is load-bearing: leave it as release.yml.
+#
+# Configure once, on each index, under the project's Publishing settings:
+#   Owner           estebanpdl
+#   Repository      osintgpt
+#   Workflow        release.yml
+#   Environment     pypi         (on pypi.org)
+#                   testpypi     (on test.pypi.org)
+#
+# TestPyPI is a separate site with separate settings — configuring one does not
+# configure the other.
+
+name: Release
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      target:
+        description: Index to publish to
+        type: choice
+        options: [testpypi, pypi]
+        default: testpypi
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Build the distributions
+        run: |
+          python -m pip install --upgrade pip build twine
+          python -m build
+
+      - name: Check the metadata
+        run: python -m twine check dist/*
+
+      # Built once and reused, so the artifact that passes checks is byte-for-byte
+      # the artifact that gets published.
+      - uses: actions/upload-artifact@v4
+        with:
+          name: distributions
+          path: dist/
+
+  testpypi:
+    name: publish to TestPyPI
+    needs: build
+    if: github.event_name == 'workflow_dispatch' && inputs.target == 'testpypi'
+    runs-on: ubuntu-latest
+    environment:
+      name: testpypi
+      url: https://test.pypi.org/p/osintgpt
+    permissions:
+      # The OIDC token this whole mechanism rests on. Without it the publish
+      # step has nothing to authenticate with.
+      id-token: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: distributions
+          path: dist/
+
+      - uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          repository-url: https://test.pypi.org/legacy/
+
+  pypi:
+    name: publish to PyPI
+    needs: build
+    if: >-
+      github.event_name == 'release' ||
+      (github.event_name == 'workflow_dispatch' && inputs.target == 'pypi')
+    runs-on: ubuntu-latest
+    environment:
+      name: pypi
+      url: https://pypi.org/p/osintgpt
+    permissions:
+      id-token: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: distributions
+          path: dist/
+
+      - uses: pypa/gh-action-pypi-publish@release/v1
