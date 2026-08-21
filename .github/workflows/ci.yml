@@ -77,6 +77,23 @@ jobs:
         env:
           PYTHONPATH: ci
 
+      # The suite above stubs its clients, so it proves tests do not reach a
+      # provider. This proves the configuration an offline operator would
+      # actually choose is judged local, with the guard still up.
+      - name: The local configuration reports itself local
+        run: |
+          python -c "
+          from osintgpt.config import Settings
+          from osintgpt.llm import audit_locality
+          report = audit_locality(Settings(), 'sentence-transformers', 'ollama')
+          assert report.is_local, report.summary
+          print(report.summary)
+          for item in report.setup:
+              print('setup:', item)
+          "
+        env:
+          PYTHONPATH: ci
+
   build:
     name: build + metadata check
     runs-on: ubuntu-latest
