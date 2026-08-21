@@ -6,191 +6,185 @@
 # Author: @estebanpdl
 #
 # File: test_qdrant.py
-# Description: Testing Qdrant methods
+# Description: Testing Qdrant methods against a mocked client.
 # ===============================================================
 
 # import modules
 import pytest
 
 # import submodules
-from unittest.mock import Mock
+from qdrant_client.http import models as rest
+
+# import osintgpt config
+from osintgpt.config import Settings
+
+# import exceptions
+from osintgpt.exceptions.errors import MissingEnvironmentVariableError
 
 # import Qdrant
-from qdrant_client.http import models as rest
 from osintgpt.vector_store.qdrant import Qdrant
 
+LOCAL = Settings(qdrant_host='localhost', qdrant_port=6333)
+REMOTE = Settings(qdrant_api_key='qdrant-key', qdrant_url='https://example.invalid')
 
-def test_get_collections(mocker):
-    # Mock qdrant_client.QdrantClient
-    mock_qdrant_client = mocker.patch(
-        'qdrant_client.QdrantClient',
-        autospec=True
-    )
 
-    # Mock environment variables
-    mocker.patch('os.getenv', side_effect=lambda x: 'dummy_value')
+@pytest.fixture
+def client(mocker):
+    '''The mocked QdrantClient class; `.return_value` is the instance.'''
+    return mocker.patch('qdrant_client.QdrantClient', autospec=True)
 
-    # Create Qdrant instance with a mocked QdrantClient
-    qdrant = Qdrant(env_file_path='/path/to/your/env/file')
 
-    # The mocked method
-    mock_qdrant_client.return_value.get_collections.return_value = [
-        'test_collection1',
-        'test_collection2'
-    ]
+@pytest.fixture
+def qdrant(client):
+    return Qdrant(LOCAL)
 
-    collections = qdrant.get_collections()
 
-    # Verify get_collections method was called on qdrant client
-    mock_qdrant_client.return_value.get_collections.assert_called_once()
+class TestConnection:
+    def test_local_settings_connect_by_host_and_port(self, client):
+        Qdrant(LOCAL)
 
-    # Assert that the collections returned by the method match the expected value
-    assert collections == ['test_collection1', 'test_collection2']
+        client.assert_called_once_with(host='localhost', port=6333)
 
-def test_create_collection(mocker):
-    # Mock qdrant_client.QdrantClient
-    mock_qdrant_client = mocker.patch(
-        'qdrant_client.QdrantClient',
-        autospec=True
-    )
+    def test_remote_settings_connect_by_url(self, client):
+        Qdrant(REMOTE)
 
-    # Mock environment variables
-    mocker.patch('os.getenv', side_effect=lambda x: 'dummy_value')
+        client.assert_called_once_with(
+            url='https://example.invalid', api_key='qdrant-key', https=True
+        )
 
-    # Create Qdrant instance with a mocked QdrantClient
-    qdrant = Qdrant(env_file_path='/path/to/your/env/file')
+    def test_remote_wins_when_both_pairs_are_present(self, client):
+        Qdrant(Settings(
+            qdrant_host='localhost', qdrant_port=6333,
+            qdrant_api_key='qdrant-key', qdrant_url='https://example.invalid'
+        ))
 
-    # Define the arguments for create_collection
-    collection_name = 'test_collection'
-    vector_size = 128
-    vector_name = 'main'
+        assert 'url' in client.call_args.kwargs
 
-    # Call create_collection
-    qdrant.create_collection(collection_name, vector_size, vector_name)
+    @pytest.mark.parametrize('settings', [
+        Settings(),
+        Settings(qdrant_host='localhost'),
+        Settings(qdrant_api_key='qdrant-key')
+    ])
+    def test_incomplete_settings_are_rejected(self, client, settings):
+        with pytest.raises(MissingEnvironmentVariableError):
+            Qdrant(settings)
 
-    # Check that recreate_collection was called with the correct arguments
-    mock_qdrant_client.return_value.recreate_collection.assert_called_with(
-        collection_name=collection_name,
-        vectors_config={
-            vector_name: rest.VectorParams(
-                distance=rest.Distance.COSINE,
-                size=vector_size
+    def test_accepts_a_path_with_a_deprecation_warning(self, client, tmp_path):
+        path = tmp_path / '.env'
+        path.write_text('QDRANT_HOST=localhost\nQDRANT_PORT=6333\n', encoding='utf-8')
+
+        with pytest.warns(DeprecationWarning):
+            Qdrant(str(path))
+
+    def test_an_unreachable_server_raises_connection_error(self, client):
+        client.return_value.get_collections.side_effect = OSError('refused')
+
+        with pytest.raises(ConnectionError):
+            Qdrant(LOCAL)
+
+
+class TestCollections:
+    def test_get_collections(self, qdrant, client):
+        expected = ['test_collection1', 'test_collection2']
+        client.return_value.get_collections.return_value = expected
+
+        assert qdrant.get_collections() == expected
+
+    def test_create_collection(self, qdrant, client):
+        qdrant.create_collection('test_collection', 128, 'main')
+
+        client.return_value.recreate_collection.assert_called_with(
+            collection_name='test_collection',
+            vectors_config={
+                'main': rest.VectorParams(
+                    distance=rest.Distance.COSINE, size=128
+                )
+            }
+        )
+
+    def test_delete_collection(self, qdrant, client):
+        qdrant.delete_collection('test_collection')
+
+        client.return_value.delete_collection.assert_called_with(
+            collection_name='test_collection'
+        )
+
+
+class TestVectors:
+    def test_add_vectors(self, qdrant, client):
+        qdrant.add_vectors(
+            'test_collection', [[0.1, 0.2], [0.3, 0.4]], 'test_vector',
+            [{'id': 1}, {'id': 2}]
+        )
+
+        client.return_value.upsert.assert_called_with(
+            collection_name='test_collection',
+            points=[
+                rest.PointStruct(
+                    id=0, vector={'test_vector': [0.1, 0.2]}, payload={'id': 1}
+                ),
+                rest.PointStruct(
+                    id=1, vector={'test_vector': [0.3, 0.4]}, payload={'id': 2}
+                )
+            ]
+        )
+
+    def test_add_vectors_rejects_a_mismatched_payload(self, qdrant):
+        with pytest.raises(ValueError):
+            qdrant.add_vectors(
+                'test_collection', [[0.1], [0.2]], 'test_vector', [{'id': 1}]
             )
-        }
-    )
 
-# test add vectors
-def test_add_vectors(mocker):
-    # Mock qdrant_client.QdrantClient
-    mock_qdrant_client = mocker.patch(
-        'qdrant_client.QdrantClient',
-        autospec=True
-    )
+    def test_update_vector_collection_continues_the_id_sequence(
+        self, qdrant, client, mocker
+    ):
+        client.return_value.count.return_value = mocker.MagicMock(count=2)
 
-    # Mock environment variables
-    mocker.patch('os.getenv', side_effect=lambda x: 'dummy_value')
+        qdrant.update_vector_collection(
+            'test_collection', [[0.5, 0.6], [0.7, 0.8]], 'test_vector',
+            [{'id': 3}, {'id': 4}]
+        )
 
-    # Create Qdrant instance with a mocked QdrantClien
-    
-    
-    
-    
-    qdrant = Qdrant(env_file_path='/path/to/your/env/file')
-
-    # The mocked method
-    mock_qdrant_client.return_value.upsert.return_value = True
-
-    vectors = [[0.1, 0.2], [0.3, 0.4]]
-    payload = [{'id': 1}, {'id': 2}]
-
-    qdrant.add_vectors('test_collection', vectors, 'test_vector', payload)
-
-    # Test if upsert method was called with the correct parameters
-    mock_qdrant_client.return_value.upsert.assert_called_with(
-        collection_name='test_collection',
-        points=[
-            {'id': 0, 'vector': {'test_vector': [0.1, 0.2]}, 'payload': {'id': 1}},
-            {'id': 1, 'vector': {'test_vector': [0.3, 0.4]}, 'payload': {'id': 2}}
-        ]
-    )
-
-# test update vector collection
-def test_update_vector_collection(mocker):
-    # Mock qdrant_client.QdrantClient
-    mock_qdrant_client = mocker.patch(
-        'qdrant_client.QdrantClient',
-        autospec=True
-    )
-
-    # Mock environment variables
-    mocker.patch('os.getenv', side_effect=lambda x: 'dummy_value')
-
-    # Create Qdrant instance with a mocked QdrantClient
-    qdrant = Qdrant(env_file_path='/path/to/your/env/file')
-
-    # The mocked method
-    mock_qdrant_client.return_value.upsert.return_value = True
-
-    # Mock count_vectors method to return count=2
-    mock_qdrant_client.return_value.count.return_value = mocker.MagicMock(count=2)
-
-    vectors = [[0.5, 0.6], [0.7, 0.8]]
-    payload = [{'id': 3}, {'id': 4}]
-
-    qdrant.update_vector_collection(
-        'test_collection',
-        vectors,
-        'test_vector',
-        payload
-    )
-
-    # Test if upsert method was called with the correct parameters
-    mock_qdrant_client.return_value.upsert.assert_called_with(
-        collection_name='test_collection',
-        points=[
-            {'id': 2, 'vector': {'test_vector': [0.5, 0.6]}, 'payload': {'id': 3}},
-            {'id': 3, 'vector': {'test_vector': [0.7, 0.8]}, 'payload': {'id': 4}}
-        ]
-    )
+        client.return_value.upsert.assert_called_with(
+            collection_name='test_collection',
+            points=[
+                rest.PointStruct(
+                    id=2, vector={'test_vector': [0.5, 0.6]}, payload={'id': 3}
+                ),
+                rest.PointStruct(
+                    id=3, vector={'test_vector': [0.7, 0.8]}, payload={'id': 4}
+                )
+            ]
+        )
 
 
-def test_search_query(mocker):
-    # Mock qdrant_client.QdrantClient
-    mock_qdrant_client = mocker.patch(
-        'qdrant_client.QdrantClient',
-        autospec=True
-    )
+class TestSearchQuery:
+    def test_searches_the_named_collection(self, qdrant, client, mocker):
+        expected = ['dummy_result']
+        client.return_value.query_points.return_value = mocker.MagicMock(
+            points=expected
+        )
 
-    # Mock environment variables
-    mocker.patch('os.getenv', side_effect=lambda x: 'dummy_value')
+        result = qdrant.search_query(
+            [0.1, 0.2, 0.3], 5,
+            collection_name='test_collection', vector_name='main'
+        )
 
-    # Create Qdrant instance with a mocked QdrantClient
-    qdrant = Qdrant(env_file_path='/path/to/your/env/file')
+        client.return_value.query_points.assert_called_with(
+            collection_name='test_collection',
+            query=[0.1, 0.2, 0.3],
+            using='main',
+            limit=5
+        )
+        assert result == expected
 
-    # The mocked method
-    query_result = ['dummy_result']
-    mock_qdrant_client.return_value.search.return_value = query_result
+    def test_uses_the_current_client_api(self, qdrant, client):
+        '''
+        `search` was removed in qdrant-client 1.19. autospec means this fails
+        rather than passing against a method the SDK no longer has.
+        '''
+        assert not hasattr(client.return_value, 'search')
 
-    # Define the arguments for search_query
-    embedded_query = [0.1, 0.2, 0.3]
-    top_k = 5
-    collection_name = 'test_collection'
-    vector_name = 'main'
-
-    # Call search_query
-    result = qdrant.search_query(
-        embedded_query,
-        top_k,
-        collection_name=collection_name,
-        vector_name=vector_name
-    )
-
-    # Check that search was called with the correct arguments
-    mock_qdrant_client.return_value.search.assert_called_with(
-        collection_name=collection_name,
-        query_vector=(vector_name, embedded_query),
-        limit=top_k
-    )
-
-    # Assert the search_query result
-    assert result == query_result, 'The result does not match the expected result'
+    def test_requires_a_collection_name(self, qdrant):
+        with pytest.raises(ValueError, match='collection_name'):
+            qdrant.search_query([0.1, 0.2], 5)
