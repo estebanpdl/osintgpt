@@ -1,5 +1,6 @@
 # cache
 .pytest_cache/
+.coverage
 __pycache__/
 
 # notebooks
@@ -49,3 +50,4 @@ README-BETA.md
 
 # .env file
 *.env
+
