@@ -39,7 +39,9 @@ dependencies = [
     "python-dotenv",
     "qdrant-client>=1.10,<2",
     "scipy",
-    "tiktoken"
+    "tiktoken",
+    "tomli-w",
+    "tomli; python_version < '3.11'"
 ]
 
 [project.optional-dependencies]

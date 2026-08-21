@@ -15,6 +15,9 @@ from importlib.metadata import PackageNotFoundError, version
 # import osintgpt config
 from osintgpt.config import Settings
 
+# import osintgpt projects
+from osintgpt.projects import Project, ProjectSettings
+
 # define package-level variables and constants
 # The version lives in pyproject.toml; reading it back from the installed
 # metadata keeps one source of truth. Running from a source tree that was
@@ -25,7 +28,7 @@ except PackageNotFoundError:
     __version__ = '0.0.0+unknown'
 
 __name__ = 'osintgpt'
-__all__ = ['Settings']
+__all__ = ['Project', 'ProjectSettings', 'Settings']
 
 # describition variables
 __author__ = 'Esteban Ponce de Leon'
