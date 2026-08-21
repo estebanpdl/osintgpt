@@ -71,8 +71,7 @@ jobs:
 
       # Unit tests stub their clients, so any real socket from here is a test
       # that would have called a provider for real. ci/sitecustomize.py refuses
-      # outbound connections. Phase 3 extends this into the proof that the
-      # local-only configuration is genuinely local.
+      # outbound connections.
       - name: Test with sockets blocked
         run: python -m pytest -p no:cacheprovider
         env:

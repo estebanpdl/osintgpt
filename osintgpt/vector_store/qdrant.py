@@ -11,7 +11,6 @@
 # ===============================================================
 
 # import modules <Qdrant>
-import sys
 import qdrant_client
 
 # import submodules <Qdrant>
@@ -355,8 +354,7 @@ class Qdrant(BaseVectorEngine):
         vector_name = kwargs.get('vector_name', 'main')
 
         # query results
-        # qdrant-client removed `search` in 1.19; `query_points` replaces it and
-        # wraps the hits, so unwrap to keep returning a plain list of points.
+        # query_points wraps its hits; unwrap to return a plain list of points.
         response = self.qdrant.query_points(
             collection_name=collection_name,
             query=embedded_query,

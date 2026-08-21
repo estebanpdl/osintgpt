@@ -18,7 +18,7 @@ import sqlite3
 from sqlite3 import Error
 
 # type hints
-from typing import List, Optional, Union
+from typing import Union
 
 # import osintgpt config
 from osintgpt.config import Settings, resolve_settings

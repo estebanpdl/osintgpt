@@ -179,10 +179,8 @@ class TestSearchQuery:
         assert result == expected
 
     def test_uses_the_current_client_api(self, qdrant, client):
-        '''
-        `search` was removed in qdrant-client 1.19. autospec means this fails
-        rather than passing against a method the SDK no longer has.
-        '''
+        '''autospec fails here rather than passing against a method the
+        installed client does not have.'''
         assert not hasattr(client.return_value, 'search')
 
     def test_requires_a_collection_name(self, qdrant):

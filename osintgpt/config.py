@@ -25,8 +25,7 @@ from typing import Optional, Union
 # import exceptions
 from osintgpt.exceptions.errors import MissingEnvironmentVariableError
 
-# Chosen because it is current, cheap, and available to every account. The
-# retired text-embedding-ada-002 was hardcoded here before it was a setting.
+# Current, cheap, and available to every account.
 DEFAULT_EMBEDDING_MODEL = 'text-embedding-3-small'
 
 # Maps each setting to the environment variable `Settings.from_env` reads it
@@ -68,10 +67,10 @@ class Settings:
         Build Settings from environment variables, optionally reading a .env
         file. The one place osintgpt reads the environment at all.
 
-        Precedence is overrides, then the process environment, then the file —
-        matching what `load_dotenv(override=False)` used to do. The file is
-        parsed, never loaded: `os.environ` is left untouched, so two calls with
-        two different files return two different Settings in the same process.
+        Precedence is overrides, then the process environment, then the file.
+        The file is parsed, never loaded: `os.environ` is left untouched, so two
+        calls with two different files return two different Settings in the same
+        process.
 
         Args:
             env_file_path (str, optional): Path to a .env file. When omitted, \

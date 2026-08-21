@@ -33,10 +33,7 @@ class TestEncodingForModel:
         assert encoding_for_model('text-embedding-3-small').name == 'cl100k_base'
 
     def test_chat_and_embedding_encodings_differ(self):
-        '''
-        The reason count_tokens takes a model rather than assuming one. When
-        these two agreed, counting for the wrong model was invisible.
-        '''
+        '''Why count_tokens takes a model rather than assuming one.'''
         chat = encoding_for_model('gpt-4o')
         embedding = encoding_for_model('text-embedding-3-small')
 

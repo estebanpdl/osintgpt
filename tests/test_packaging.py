@@ -6,8 +6,8 @@
 # Author: @estebanpdl
 #
 # File: test_packaging.py
-# Description: Packaging invariants. The version disagreed with itself for two
-#   releases because two files declared it; these pin the single source.
+# Description: Packaging invariants — one source for the version, and metadata
+#   that matches what the package actually supports.
 # =================================================================================
 
 # import modules
@@ -47,8 +47,8 @@ class TestSingleSource:
             encoding='utf-8'
         )
 
-        # The fallback literal is fine; a release number declared here is not,
-        # because pyproject already declares one.
+        # A fallback literal is fine; a release number here would be a second
+        # source of truth alongside pyproject.
         assert "__version__ = '0.0.1'" not in source
         assert 'importlib.metadata' in source
 
