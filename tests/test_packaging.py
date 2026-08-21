@@ -56,6 +56,8 @@ class TestSingleSource:
         assert osintgpt.__version__
 
     def test_version_matches_the_project_metadata(self, pyproject):
+        # An editable install writes its metadata once, so a local version bump
+        # needs a reinstall before this agrees.
         assert osintgpt.__version__ == pyproject['project']['version']
 
 
