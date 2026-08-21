@@ -21,7 +21,11 @@ from openai import OpenAI
 from typing import List, Optional, Union
 
 # import osintgpt config
-from osintgpt.config import Settings, resolve_settings
+from osintgpt.config import (
+    DEFAULT_EMBEDDING_MODEL,
+    Settings,
+    resolve_settings
+)
 
 # import osintgpt pricing
 from osintgpt.pricing import estimate_cost
@@ -56,7 +60,9 @@ class OpenAIEmbeddingGenerator(object):
 
         self.OPENAI_API_KEY = self.settings.openai_api_key
         self.OPENAI_GPT_MODEL = self.settings.openai_gpt_model
-        self.OPENAI_EMBEDDING_MODEL = self.settings.openai_embedding_model
+        self.OPENAI_EMBEDDING_MODEL = (
+            self.settings.openai_embedding_model or DEFAULT_EMBEDDING_MODEL
+        )
 
         # client
         self.client = OpenAI(api_key=self.OPENAI_API_KEY)

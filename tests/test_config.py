@@ -33,8 +33,10 @@ class TestConstruction:
         assert settings.openai_api_key == ''
         assert settings.qdrant_port is None
 
-    def test_embedding_model_has_a_current_default(self):
-        assert Settings().openai_embedding_model == DEFAULT_EMBEDDING_MODEL
+    def test_embedding_model_is_unset_like_every_other_field(self):
+        # A default value here would be indistinguishable from a caller who
+        # chose that same value, which the project layer has to tell apart.
+        assert Settings().openai_embedding_model == ''
         assert DEFAULT_EMBEDDING_MODEL != 'text-embedding-ada-002'
 
     def test_is_frozen(self):
@@ -80,13 +82,13 @@ class TestFromEnv:
 
         assert Settings.from_env(env_file).openai_gpt_model == 'from-the-shell'
 
-    def test_absent_variable_keeps_the_field_default(self, tmp_path):
+    def test_absent_variable_leaves_the_field_unset(self, tmp_path):
         path = tmp_path / 'partial.env'
         path.write_text('OPENAI_API_KEY=k\n', encoding='utf-8')
 
         settings = Settings.from_env(str(path))
 
-        assert settings.openai_embedding_model == DEFAULT_EMBEDDING_MODEL
+        assert settings.openai_embedding_model == ''
 
     def test_without_a_path_reads_only_the_process_environment(self, monkeypatch):
         monkeypatch.setenv('OPENAI_API_KEY', 'from-the-shell')

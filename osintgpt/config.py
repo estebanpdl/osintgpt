@@ -53,7 +53,7 @@ class Settings:
     '''
     openai_api_key: str = ''
     openai_gpt_model: str = ''
-    openai_embedding_model: str = DEFAULT_EMBEDDING_MODEL
+    openai_embedding_model: str = ''
     sql_db_file_path: str = ''
     qdrant_api_key: str = ''
     qdrant_url: str = ''
