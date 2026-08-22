@@ -13,9 +13,6 @@
 # import modules
 import datetime
 
-# type hints
-from openai.types.chat import ChatCompletion
-
 # import database manager
 from osintgpt.databases import SQLDatabaseManager
 
@@ -28,12 +25,12 @@ class ConversationLogMixin(object):
     Response accessors and the conversation log they feed.
     '''
     # get completion response id
-    def _get_completion_response_id(self, response: ChatCompletion):
+    def _get_completion_response_id(self, response):
         '''
         Get completion response id.
 
         Args:
-            response (ChatCompletion): GPT Model response.
+            response: An OpenAI-shaped chat completion.
 
         Returns:
             str: GPT Model response id.
@@ -41,12 +38,12 @@ class ConversationLogMixin(object):
         return response.id
 
     # get completion response usage
-    def _get_completion_response_usage(self, response: ChatCompletion):
+    def _get_completion_response_usage(self, response):
         '''
         Get completion response usage.
 
         Args:
-            response (ChatCompletion): GPT Model response.
+            response: An OpenAI-shaped chat completion.
 
         Returns:
             dict: GPT Model response usage.
@@ -57,12 +54,12 @@ class ConversationLogMixin(object):
         return response.usage.model_dump(exclude_none=True)
 
     # get completion response role & message
-    def _get_completion_response_role_and_message(self, response: ChatCompletion):
+    def _get_completion_response_role_and_message(self, response):
         '''
         Get completion response role & message.
 
         Args:
-            response (ChatCompletion): GPT Model response.
+            response: An OpenAI-shaped chat completion.
 
         Returns:
             Tuple[str, str]: A tuple where the first element is the response role
@@ -121,13 +118,13 @@ class ConversationLogMixin(object):
         )
 
     # insert user prompt into sql database
-    def insert_user_prompt_into_sql_database(self, response: ChatCompletion,
+    def insert_user_prompt_into_sql_database(self, response,
         prompt: str):
         '''
         Insert user prompt into sql database.
 
         Args:
-            response (ChatCompletion): GPT Model response.
+            response: An OpenAI-shaped chat completion.
             prompt (str): The input prompt for the GPT model.
         
         Returns:
@@ -145,12 +142,12 @@ class ConversationLogMixin(object):
         )
 
     # insert completion response into sql database
-    def insert_completion_response_into_sql_database(self, response: ChatCompletion):
+    def insert_completion_response_into_sql_database(self, response):
         '''
         Insert completion response into sql database.
 
         Args:
-            response (ChatCompletion): GPT Model response.
+            response: An OpenAI-shaped chat completion.
 
         Returns:
             None

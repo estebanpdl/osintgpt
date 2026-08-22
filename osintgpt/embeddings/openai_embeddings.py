@@ -11,11 +11,11 @@
 # =============================================================================
 
 # import modules
+import warnings
 import pandas as pd
 
 # import submodules
 from ast import literal_eval
-from openai import OpenAI
 
 # type hints
 from typing import List, Optional, Union
@@ -26,6 +26,9 @@ from osintgpt.config import (
     Settings,
     resolve_settings
 )
+
+# import osintgpt llm
+from osintgpt.llm import build_embedding_provider
 
 # import osintgpt pricing
 from osintgpt.pricing import estimate_cost
@@ -64,8 +67,27 @@ class OpenAIEmbeddingGenerator(object):
             self.settings.openai_embedding_model or DEFAULT_EMBEDDING_MODEL
         )
 
-        # client
-        self.client = OpenAI(api_key=self.OPENAI_API_KEY)
+        warnings.warn(
+            'OpenAIEmbeddingGenerator is deprecated and will be removed in '
+            "1.0; use osintgpt.llm.build_embedding_provider('openai', "
+            'settings) instead.',
+            DeprecationWarning,
+            stacklevel=2
+        )
+
+        # provider
+        self.provider = build_embedding_provider(
+            'openai', self.settings, model=self.OPENAI_EMBEDDING_MODEL
+        )
+
+    # the underlying client, which lives on the provider
+    @property
+    def client(self):
+        return self.provider.client
+
+    @client.setter
+    def client(self, value):
+        self.provider.client = value
 
     # get openai embedding model
     def get_openai_embedding_model(self):
@@ -158,33 +180,7 @@ class OpenAIEmbeddingGenerator(object):
         Returns:
             list: Embeddings.
         '''
-        EMBEDDING_MODEL = self.get_openai_embedding_model()
-        BATCH_SIZE = 1000
-
-        # batch data
-        documents = [
-            self.data[i:i + BATCH_SIZE] for i in range(
-                0, len(self.data), BATCH_SIZE
-            )
-        ]
-
-        # calculate embeddings
-        embeddings = []
-        for docs in documents:
-            response = self.client.embeddings.create(
-                model=EMBEDDING_MODEL,
-                input=docs
-            )
-
-            # double check embeddings are in same order as input
-            for i, be in enumerate(response.data):
-                assert i == be.index
-
-            # batch embeddings
-            batch_embeddings = [e.embedding for e in response.data]
-            embeddings.extend(batch_embeddings)
-
-        return embeddings
+        return self.provider.embed(self.data)
 
     # property for embeddings
     @property
@@ -213,14 +209,7 @@ class OpenAIEmbeddingGenerator(object):
         Returns:
             list: Embedding.
         '''
-        EMBEDDING_MODEL = self.get_openai_embedding_model()
-        response = self.client.embeddings.create(
-            model=EMBEDDING_MODEL,
-            input=[text]
-        )
-        embedding = response.data[0].embedding
-
-        return embedding
+        return self.provider.embed([text])[0]
 
     # load embeddings
     def load_embeddings_from_csv(self, embeddings_path: str,

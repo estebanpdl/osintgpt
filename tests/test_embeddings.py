@@ -19,6 +19,9 @@ from osintgpt.config import DEFAULT_EMBEDDING_MODEL, Settings
 # import osintgpt embeddings
 from osintgpt.embeddings import OpenAIEmbeddingGenerator
 
+# import osintgpt llm
+from osintgpt.llm.openai_compat import MAX_BATCH
+
 # import exceptions
 from osintgpt.exceptions.errors import MissingEnvironmentVariableError
 
@@ -79,7 +82,16 @@ class TestCalculateEmbeddings:
         vectors = generator.calculate_embeddings()
 
         assert len(vectors) == 2_500
-        assert generator.client.embeddings.batches == [1_000, 1_000, 500]
+
+    def test_batches_at_the_provider_ceiling(self, generator):
+        '''
+        Delegation adopts the provider's batch size rather than this class's
+        old one, so requests are smaller and the Gemini cap is respected.
+        '''
+        generator.load_text([f'doc {i}' for i in range(2_500)])
+        generator.calculate_embeddings()
+
+        assert generator.client.embeddings.batches == [MAX_BATCH] * 25
 
     def test_sends_the_configured_model(self, settings, stub_client):
         instance = OpenAIEmbeddingGenerator(
