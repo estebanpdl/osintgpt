@@ -204,3 +204,118 @@ class TestConfigurableCap:
         assert len(chunk_text(text, max_chars=3_000)) < len(
             chunk_text(text, max_chars=500)
         )
+
+
+class TestTables:
+    HEADER = '| Layer | Description |\n|-------|-------------|'
+
+    def rows(self, count, width=60):
+        return '\n'.join(
+            f'| Layer {i} | {"detail " * (width // 7)} |' for i in range(count)
+        )
+
+    def test_a_small_table_stays_whole(self):
+        table = f'{self.HEADER}\n{self.rows(4)}'
+        chunks = chunk_text(f'# Section\n\nIntro.\n\n{table}')
+
+        holding = [c for c in chunks if 'Layer 0' in c]
+
+        assert len(holding) == 1
+        assert 'Layer 3' in holding[0]
+
+    def test_an_oversized_table_repeats_its_header(self):
+        '''
+        Rows without the header that names their columns are a chunk nobody
+        can read, so the header is worth its few characters in every piece.
+        '''
+        table = f'{self.HEADER}\n{self.rows(60)}'
+        chunks = chunk_text(table)
+
+        assert len(chunks) > 1
+        for chunk in chunks:
+            assert chunk.startswith('| Layer | Description |')
+            assert '|---' in chunk.splitlines()[1]
+
+    def test_no_chunk_begins_mid_row(self):
+        table = f'{self.HEADER}\n{self.rows(60)}'
+
+        for chunk in chunk_text(table):
+            first = chunk.splitlines()[0].strip()
+            assert first.startswith('|')
+            assert first.endswith('|')
+
+    def test_a_table_is_not_broken_by_surrounding_prose(self):
+        table = f'{self.HEADER}\n{self.rows(4)}'
+        text = f'Lead-in paragraph.\n\n{table}\n\nFollow-up paragraph.'
+        chunks = chunk_text(text, max_chars=400)
+
+        rows_only = [c for c in chunks if 'Layer 0' in c]
+
+        assert 'Layer 3' in rows_only[0]
+
+    def test_a_table_without_a_header_rule_still_holds_together(self):
+        table = '\n'.join(f'| a{i} | b{i} |' for i in range(6))
+        chunks = chunk_text(table)
+
+        assert len(chunks) == 1
+
+    def test_the_cap_is_still_respected(self):
+        chunks = chunk_text(f'{self.HEADER}\n{self.rows(200)}')
+
+        assert all(len(chunk) <= MAX_CHARS for chunk in chunks)
+
+
+class TestSentenceBoundaries:
+    def test_a_long_paragraph_cuts_after_a_sentence(self):
+        text = 'This is a complete sentence about the material. ' * 80
+        chunks = chunk_text(text)
+
+        assert len(chunks) > 1
+        for chunk in chunks[:-1]:
+            assert chunk.rstrip().endswith('.')
+
+    @pytest.mark.parametrize('terminator, sentence', [
+        ('؟', 'هذه جملة كاملة طويلة بما يكفي؟ '),
+        ('।', 'यह एक पूर्ण वाक्य है जो काफी लंबा है। '),
+        ('!', 'A complete exclamation of reasonable length! ')
+    ])
+    def test_spaced_scripts_cut_after_a_terminator(
+        self, terminator, sentence
+    ):
+        chunks = chunk_text(sentence * 200)
+
+        assert len(chunks) > 1
+        assert chunks[0].rstrip().endswith(terminator)
+
+    @pytest.mark.parametrize('terminator, sentence', [
+        ('。', '这是一个完整的句子。'),
+        ('！', '这是一个感叹句！'),
+        ('？', '这是一个疑问句？')
+    ])
+    def test_full_width_terminators_need_no_following_space(
+        self, terminator, sentence
+    ):
+        '''
+        Scripts that do not space their words never put whitespace after a
+        full stop, so requiring one leaves them with no boundaries at all.
+        '''
+        chunks = chunk_text(sentence * 400)
+
+        assert len(chunks) > 1
+        assert chunks[0].rstrip().endswith(terminator)
+
+    def test_text_with_no_terminator_still_cuts_at_whitespace(self):
+        chunks = chunk_text('alpha ' * 800)
+
+        assert len(chunks) > 1
+        for chunk in chunks[:-1]:
+            assert chunk.endswith('alpha')
+
+    def test_a_decimal_is_not_a_sentence_end(self):
+        '''A terminator needs whitespace after it, or 3.14 becomes a break.'''
+        text = ('The measured value was 3.14159 and the second was 2.71828 '
+                'in every recorded observation of the series. ') * 40
+        chunks = chunk_text(text)
+
+        for chunk in chunks[:-1]:
+            assert not chunk.rstrip().endswith('3.')
