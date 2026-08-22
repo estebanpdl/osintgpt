@@ -14,6 +14,7 @@
 from typing import List, Optional
 
 from .base import EmbeddingProvider
+from .usage import Usage, UsageRecorder
 
 # Small, fast, and the model most people start from. A local backend needs a
 # default that is actually local-shaped; an OpenAI model name would fail here.
@@ -30,7 +31,8 @@ class SentenceTransformerEmbedding(EmbeddingProvider):
         self,
         model: str = DEFAULT_LOCAL_EMBEDDING_MODEL,
         device: Optional[str] = None,
-        encoder: Optional[object] = None
+        encoder: Optional[object] = None,
+        recorder: Optional[UsageRecorder] = None
     ) -> None:
         '''
         Args:
@@ -45,6 +47,7 @@ class SentenceTransformerEmbedding(EmbeddingProvider):
             ImportError: If sentence-transformers is not installed.
         '''
         self.model = model
+        self.recorder = recorder
 
         if encoder is not None:
             self.encoder = encoder
@@ -66,6 +69,15 @@ class SentenceTransformerEmbedding(EmbeddingProvider):
 
         # Batching is the encoder's job; it already groups by length.
         vectors = self.encoder.encode(texts)
+
+        # An encoder returns vectors, not a usage block. Cost is a real zero;
+        # the token count is genuinely absent, and says so.
+        self._record(Usage(
+            provider='sentence-transformers',
+            model=self.model,
+            billable=False,
+            counted=False
+        ))
 
         # Returns a NumPy array, which is not what the interface promises.
         return [

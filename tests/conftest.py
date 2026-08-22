@@ -82,6 +82,7 @@ class StubEmbeddings:
 
         return SimpleNamespace(
             model=model,
+            usage=SimpleNamespace(prompt_tokens=len(input) * 5),
             data=[
                 SimpleNamespace(index=i, embedding=[float(i), 0.2, 0.3])
                 for i in range(len(input))
@@ -90,8 +91,18 @@ class StubEmbeddings:
 
 
 class StubUsage:
+    '''Carries the attributes and the model_dump the real object has.'''
+
+    prompt_tokens = 11
+    completion_tokens = 7
+    total_tokens = 18
+
     def model_dump(self, exclude_none=False):
-        return {'prompt_tokens': 11, 'completion_tokens': 7, 'total_tokens': 18}
+        return {
+            'prompt_tokens': self.prompt_tokens,
+            'completion_tokens': self.completion_tokens,
+            'total_tokens': self.total_tokens
+        }
 
 
 class StubCompletions:

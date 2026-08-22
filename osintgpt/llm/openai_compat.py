@@ -17,6 +17,7 @@ from openai import OpenAI
 from typing import List, Optional
 
 from .base import EmbeddingProvider, GenerationProvider
+from .usage import Usage, UsageRecorder
 
 
 # list the models an OpenAI-compatible endpoint reports
@@ -30,6 +31,13 @@ def _list_models(client) -> List[str]:
             models pulled onto this machine.
     '''
     return sorted(model.id for model in client.models.list())
+
+
+# read a prompt-token count that some gateways omit
+def _prompt_tokens(response) -> int:
+    usage = getattr(response, 'usage', None)
+
+    return getattr(usage, 'prompt_tokens', 0) or 0
 
 
 # Gemini's compatibility endpoint rejects batches over 100 inputs. Other
@@ -48,7 +56,10 @@ class OpenAICompatEmbedding(EmbeddingProvider):
         api_key: str,
         base_url: Optional[str] = None,
         batch_size: int = MAX_BATCH,
-        discovers_models: bool = False
+        discovers_models: bool = False,
+        billable: bool = True,
+        provider: str = '',
+        recorder: Optional[UsageRecorder] = None
     ) -> None:
         '''
         Args:
@@ -63,6 +74,9 @@ class OpenAICompatEmbedding(EmbeddingProvider):
         self.client = OpenAI(api_key=api_key, base_url=base_url)
         self.batch_size = batch_size
         self.supports_model_discovery = discovers_models
+        self.billable = billable
+        self.provider = provider
+        self.recorder = recorder
 
     def embed(self, texts: List[str]) -> List[List[float]]:
         vectors: List[List[float]] = []
@@ -74,6 +88,13 @@ class OpenAICompatEmbedding(EmbeddingProvider):
             # Providers are not required to return the batch in order.
             ordered = sorted(response.data, key=lambda item: item.index)
             vectors.extend(item.embedding for item in ordered)
+            self._record(Usage(
+                provider=self.provider,
+                model=self.model,
+                input_tokens=_prompt_tokens(response),
+                billable=self.billable,
+                counted=getattr(response, 'usage', None) is not None
+            ))
 
         return vectors
 
@@ -91,7 +112,10 @@ class OpenAICompatGeneration(GenerationProvider):
         model: str,
         api_key: str,
         base_url: Optional[str] = None,
-        discovers_models: bool = False
+        discovers_models: bool = False,
+        billable: bool = True,
+        provider: str = '',
+        recorder: Optional[UsageRecorder] = None
     ) -> None:
         '''
         Args:
@@ -104,6 +128,9 @@ class OpenAICompatGeneration(GenerationProvider):
         self.model = model
         self.client = OpenAI(api_key=api_key, base_url=base_url)
         self.supports_model_discovery = discovers_models
+        self.billable = billable
+        self.provider = provider
+        self.recorder = recorder
 
     def generate(self, system: str, user: str) -> str:
         response = self.client.chat.completions.create(
@@ -113,6 +140,16 @@ class OpenAICompatGeneration(GenerationProvider):
                 {'role': 'user', 'content': user}
             ]
         )
+
+        usage = getattr(response, 'usage', None)
+        self._record(Usage(
+            provider=self.provider,
+            model=self.model,
+            input_tokens=getattr(usage, 'prompt_tokens', 0) or 0,
+            output_tokens=getattr(usage, 'completion_tokens', 0) or 0,
+            billable=self.billable,
+            counted=usage is not None
+        ))
 
         return response.choices[0].message.content or ''
 

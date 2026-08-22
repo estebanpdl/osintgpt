@@ -14,6 +14,7 @@
 from typing import List, Optional
 
 from .base import GenerationProvider
+from .usage import Usage, UsageRecorder
 
 # The API requires an explicit ceiling. Too low truncates a reply mid-thought
 # and costs a retry, so this is generous rather than frugal.
@@ -35,7 +36,8 @@ class AnthropicGeneration(GenerationProvider):
         model: str,
         api_key: str,
         max_tokens: int = DEFAULT_MAX_TOKENS,
-        client: Optional[object] = None
+        client: Optional[object] = None,
+        recorder: Optional[UsageRecorder] = None
     ) -> None:
         '''
         Args:
@@ -49,6 +51,7 @@ class AnthropicGeneration(GenerationProvider):
         '''
         self.model = model
         self.max_tokens = max_tokens
+        self.recorder = recorder
 
         if client is not None:
             self.client = client
@@ -73,6 +76,17 @@ class AnthropicGeneration(GenerationProvider):
             system=system,
             messages=[{'role': 'user', 'content': user}]
         )
+
+        # Field names differ from the OpenAI shape: input_tokens rather than
+        # prompt_tokens.
+        usage = getattr(response, 'usage', None)
+        self._record(Usage(
+            provider='anthropic',
+            model=self.model,
+            input_tokens=getattr(usage, 'input_tokens', 0) or 0,
+            output_tokens=getattr(usage, 'output_tokens', 0) or 0,
+            counted=usage is not None
+        ))
 
         # A reply can carry thinking blocks alongside text; only text is asked
         # for here, and a refusal returns no text blocks at all.

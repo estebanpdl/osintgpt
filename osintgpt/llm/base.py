@@ -14,7 +14,9 @@
 from abc import ABC, abstractmethod
 
 # type hints
-from typing import List
+from typing import List, Optional
+
+from .usage import Usage, UsageRecorder
 
 # EmbeddingProvider class
 class EmbeddingProvider(ABC):
@@ -31,6 +33,14 @@ class EmbeddingProvider(ABC):
     # True when the backend can be asked what models it has. Set from the
     # registry, because it depends on the endpoint rather than the client.
     supports_model_discovery: bool = False
+
+    # Collects what each call consumed. Optional: a provider works without one
+    # and simply reports nothing.
+    recorder: Optional[UsageRecorder] = None
+
+    def _record(self, usage: Usage) -> None:
+        if self.recorder is not None:
+            self.recorder.record(usage)
 
     def list_models(self) -> List[str]:
         '''
@@ -72,6 +82,13 @@ class GenerationProvider(ABC):
 
     # See EmbeddingProvider.supports_model_discovery.
     supports_model_discovery: bool = False
+
+    # See EmbeddingProvider.recorder.
+    recorder: Optional[UsageRecorder] = None
+
+    def _record(self, usage: Usage) -> None:
+        if self.recorder is not None:
+            self.recorder.record(usage)
 
     def list_models(self) -> List[str]:
         '''

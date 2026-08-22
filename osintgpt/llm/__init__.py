@@ -14,12 +14,13 @@
 from typing import Optional
 
 # import osintgpt config
-from osintgpt.config import DEFAULT_EMBEDDING_MODEL, Settings
+from osintgpt.config import Settings
 
 from .anthropic_native import AnthropicGeneration
 from .base import EmbeddingProvider, GenerationProvider
 from .local import SentenceTransformerEmbedding
 from .locality import LocalityReport, ProviderLocality, audit_locality
+from .usage import Usage, UsageRecorder
 from .openai_compat import OpenAICompatEmbedding, OpenAICompatGeneration
 from .registry import (
     ANTHROPIC,
@@ -41,6 +42,8 @@ __all__ = [
     'EmbeddingProvider',
     'GENERATION_BACKENDS',
     'GenerationProvider',
+    'Usage',
+    'UsageRecorder',
     'build_embedding_provider',
     'build_generation_provider'
 ]
@@ -48,7 +51,10 @@ __all__ = [
 
 # build an embedding provider
 def build_embedding_provider(
-    provider: str, settings: Settings, model: Optional[str] = None
+    provider: str,
+    settings: Settings,
+    model: Optional[str] = None,
+    recorder: Optional[UsageRecorder] = None
 ) -> EmbeddingProvider:
     '''
     Construct the embedding backend named by `provider`.
@@ -78,17 +84,21 @@ def build_embedding_provider(
         )
 
     if spec.kind == SENTENCE_TRANSFORMERS:
-        return SentenceTransformerEmbedding(model=model)
+        return SentenceTransformerEmbedding(model=model, recorder=recorder)
 
     return OpenAICompatEmbedding(
         model=model, api_key=api_key, base_url=base_url,
-        discovers_models=spec.discovers_models
+        discovers_models=spec.discovers_models,
+        billable=not spec.local, provider=provider, recorder=recorder
     )
 
 
 # build a generation provider
 def build_generation_provider(
-    provider: str, settings: Settings, model: Optional[str] = None
+    provider: str,
+    settings: Settings,
+    model: Optional[str] = None,
+    recorder: Optional[UsageRecorder] = None
 ) -> GenerationProvider:
     '''
     Construct the generation backend named by `provider`.
@@ -117,9 +127,12 @@ def build_generation_provider(
         )
 
     if spec.kind == ANTHROPIC:
-        return AnthropicGeneration(model=model, api_key=api_key)
+        return AnthropicGeneration(
+            model=model, api_key=api_key, recorder=recorder
+        )
 
     return OpenAICompatGeneration(
         model=model, api_key=api_key, base_url=base_url,
-        discovers_models=spec.discovers_models
+        discovers_models=spec.discovers_models,
+        billable=not spec.local, provider=provider, recorder=recorder
     )
