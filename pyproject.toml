@@ -38,6 +38,7 @@ dependencies = [
     "pandas",
     "python-dotenv",
     "qdrant-client>=1.10,<2",
+    "openpyxl",
     "scipy",
     "tiktoken",
     "tomli-w",
