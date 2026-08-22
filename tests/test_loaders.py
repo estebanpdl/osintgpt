@@ -338,3 +338,69 @@ class TestUnsupported:
 
         assert '.zip' in message
         assert '.csv' in message
+
+
+class TestFrontmatter:
+    BLOCK = (
+        '---\n'
+        'type: synthesis\n'
+        'version: 2\n'
+        'prepared_by: an analyst\n'
+        '---\n'
+    )
+
+    def test_it_becomes_metadata_rather_than_text(self, tmp_path):
+        '''
+        Frontmatter describes a document rather than saying anything, and its
+        fields are what a citation wants. Embedding it puts field names into
+        the vector instead.
+        '''
+        path = tmp_path / 'report.md'
+        path.write_text(f'{self.BLOCK}\n# Title\n\nBody text.', encoding='utf-8')
+
+        document = load_documents(path)[0]
+
+        assert document.metadata['type'] == 'synthesis'
+        assert document.metadata['version'] == '2'
+        assert 'prepared_by' not in document.text
+        assert document.text.startswith('# Title')
+
+    def test_a_byte_order_mark_does_not_hide_it(self, tmp_path):
+        '''An editor's BOM sits in front of the opening rule.'''
+        path = tmp_path / 'report.md'
+        path.write_text(
+            f'{self.BLOCK}\n# Title\n\nBody.', encoding='utf-8-sig'
+        )
+
+        document = load_documents(path)[0]
+
+        assert document.metadata['type'] == 'synthesis'
+        assert not document.text.startswith('\ufeff')
+
+    def test_a_rule_further_down_is_left_alone(self, tmp_path):
+        path = tmp_path / 'report.md'
+        path.write_text('# Title\n\nBody.\n\n---\n\nMore body.', encoding='utf-8')
+
+        document = load_documents(path)[0]
+
+        assert document.metadata == {}
+        assert '---' in document.text
+
+    def test_an_unparseable_block_is_still_removed(self, tmp_path):
+        path = tmp_path / 'report.md'
+        path.write_text(
+            '---\ntags:\n  - one\n  - two\n---\n\nBody text.', encoding='utf-8'
+        )
+
+        document = load_documents(path)[0]
+
+        assert document.text == 'Body text.'
+
+    def test_plain_text_files_are_not_searched_for_one(self, tmp_path):
+        path = tmp_path / 'notes.txt'
+        path.write_text(f'{self.BLOCK}\nBody.', encoding='utf-8')
+
+        document = load_documents(path)[0]
+
+        assert document.metadata == {}
+        assert document.text.startswith('---')

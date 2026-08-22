@@ -10,18 +10,34 @@
 #   so nothing has to be chosen before it can be indexed.
 # =================================================================================
 
+# import modules
+import re
+
 # import submodules
 from html.parser import HTMLParser
 from pathlib import Path
 
 # type hints
-from typing import List, Union
+from typing import Dict, List, Tuple, Union
 
 from .documents import Document
 
 # Extensions read as prose without any configuration.
 TEXT_SUFFIXES = {'.txt', '.md', '.markdown', '.rst', '.log'}
 HTML_SUFFIXES = {'.html', '.htm'}
+
+# Formats that conventionally open with a metadata block.
+FRONTMATTER_SUFFIXES = {'.md', '.markdown'}
+
+# A fenced block at the very top of a file. Nothing else in the document is
+# treated this way: a rule further down is a rule.
+_FRONTMATTER = re.compile(
+    r'^---[ \t]*\r?\n(.*?)\r?\n---[ \t]*\r?\n', re.DOTALL
+)
+
+# Flat 'key: value' lines. Indented lines and list items belong to a nested
+# value this deliberately does not try to reconstruct.
+_FRONTMATTER_FIELD = re.compile(r'^([A-Za-z0-9_.-]+):[ \t]*(.*)$')
 
 # Elements whose text is markup machinery rather than content.
 _SKIPPED = {'script', 'style', 'head', 'meta', 'link', 'noscript'}
@@ -72,6 +88,43 @@ class _TextExtractor(HTMLParser):
         return '\n\n'.join(line for line in lines if line)
 
 
+# separate a leading metadata block from the body
+def split_frontmatter(raw: str) -> Tuple[Dict[str, str], str]:
+    '''
+    Take a leading '---' block off a document and read it as metadata.
+
+    Frontmatter describes a document rather than saying anything; embedding it
+    puts field names into the vector, and the fields it carries — type,
+    version, who prepared it — are exactly what belongs in a citation instead.
+
+    Only flat 'key: value' lines are read. A block that cannot be read is
+    still removed from the body, because it is metadata either way.
+
+    Args:
+        raw (str): File contents.
+
+    Returns:
+        Tuple[Dict[str, str], str]: The fields found, and the remaining body.
+    '''
+    match = _FRONTMATTER.match(raw)
+    if match is None:
+        return {}, raw
+
+    fields: Dict[str, str] = {}
+    for line in match.group(1).splitlines():
+        if line[:1] in (' ', '\t', '-') or not line.strip():
+            continue
+        field = _FRONTMATTER_FIELD.match(line)
+        if field is None:
+            continue
+        key = field.group(1)
+        value = field.group(2).strip().strip('"').strip("'")
+        if value:
+            fields[key] = value
+
+    return fields, raw[match.end():]
+
+
 # read a prose file as one document
 def load_text(path: Union[str, Path]) -> List[Document]:
     '''
@@ -84,7 +137,15 @@ def load_text(path: Union[str, Path]) -> List[Document]:
         List[Document]: One document, or none when the file holds no text.
     '''
     path = Path(path)
-    raw = path.read_text(encoding='utf-8', errors='replace')
+    # utf-8-sig rather than utf-8: an editor's byte order mark would
+    # otherwise sit in front of the first character, which stops a
+    # leading metadata block from being recognised and rides into the
+    # first chunk. Harmless on a file that has none.
+    raw = path.read_text(encoding='utf-8-sig', errors='replace')
+    metadata: Dict[str, str] = {}
+
+    if path.suffix.lower() in FRONTMATTER_SUFFIXES:
+        metadata, raw = split_frontmatter(raw)
 
     if path.suffix.lower() in HTML_SUFFIXES:
         extractor = _TextExtractor()
@@ -95,4 +156,4 @@ def load_text(path: Union[str, Path]) -> List[Document]:
     if not text:
         return []
 
-    return [Document(ref=path.as_posix(), text=text)]
+    return [Document(ref=path.as_posix(), text=text, metadata=metadata)]
