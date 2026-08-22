@@ -14,7 +14,11 @@
 import pytest
 
 # import osintgpt ingestion
-from osintgpt.ingestion.chunking import MAX_CHARS, chunk_text
+from osintgpt.ingestion.chunking import (
+    BREADCRUMB_SEPARATOR,
+    MAX_CHARS,
+    chunk_text
+)
 
 
 class TestProperties:
@@ -69,8 +73,18 @@ class TestEmptyInput:
 
 
 class TestHeadings:
-    def test_a_heading_starts_a_chunk(self):
+    def test_a_small_document_stays_whole(self):
+        '''
+        The largest unit that fits wins. Splitting a document that already fits
+        into one chunk fragments a whole thought for no gain.
+        '''
         text = '# First\n\nAlpha.\n\n# Second\n\nBeta.'
+
+        assert chunk_text(text) == [text]
+
+    def test_headings_split_a_document_that_does_not_fit(self):
+        body = 'A sentence of assessed material. ' * 30
+        text = f'# First\n\n{body}\n\n# Second\n\n{body}'
         chunks = chunk_text(text)
 
         assert len(chunks) == 2
@@ -89,7 +103,8 @@ class TestHeadings:
     @pytest.mark.parametrize('level', range(1, 7))
     def test_every_heading_level_splits(self, level):
         marker = '#' * level
-        text = f'{marker} One\n\nAlpha.\n\n{marker} Two\n\nBeta.'
+        body = 'A sentence of assessed material. ' * 30
+        text = f'{marker} One\n\n{body}\n\n{marker} Two\n\n{body}'
 
         assert len(chunk_text(text)) == 2
 
@@ -319,3 +334,122 @@ class TestSentenceBoundaries:
 
         for chunk in chunks[:-1]:
             assert not chunk.rstrip().endswith('3.')
+
+
+class TestNoStructure:
+    '''
+    The shapes the corpus that prompted hierarchy does not contain. A rule that
+    only pays off on well-formed markdown has been fitted to a sample.
+    '''
+
+    def test_a_wall_of_text_chunks_as_before(self):
+        text = 'A sentence of collected material. ' * 300
+        chunks = chunk_text(text)
+
+        assert len(chunks) > 1
+        assert all(BREADCRUMB_SEPARATOR not in chunk for chunk in chunks)
+
+    def test_transcript_shaped_text_carries_no_path(self):
+        lines = [
+            f'SPEAKER {i % 3}: A line of transcribed speech about the matter.'
+            for i in range(200)
+        ]
+        chunks = chunk_text('\n\n'.join(lines))
+
+        assert len(chunks) > 1
+        assert all(BREADCRUMB_SEPARATOR not in chunk for chunk in chunks)
+
+    def test_structure_costs_nothing_when_absent(self):
+        '''
+        A document with no headings must chunk identically to how it would
+        without any of this, or the tree is a tax on unstructured text.
+        '''
+        text = 'Assessed material in a single unbroken block. ' * 200
+        chunks = chunk_text(text)
+
+        assert all(len(chunk) <= MAX_CHARS for chunk in chunks)
+        assert ''.join(chunks).replace(' ', '') == text.strip().replace(' ', '')
+
+    def test_a_single_paragraph_is_one_chunk(self):
+        assert chunk_text('One short paragraph.') == ['One short paragraph.']
+
+
+class TestIrregularHeadings:
+    BODY = 'A sentence of assessed material. ' * 30
+
+    def test_a_skipped_level_is_not_an_error(self):
+        '''`#` straight to `###` is ordinary, not malformed.'''
+        text = (
+            f'# Report\n\n{self.BODY}\n\n'
+            f'### Detail\n\n{self.BODY}\n\n'
+            f'### Other\n\n{self.BODY}'
+        )
+        chunks = chunk_text(text)
+
+        assert len(chunks) > 1
+        assert any('Report' in chunk for chunk in chunks)
+
+    def test_a_single_level_throughout_still_splits(self):
+        text = '\n\n'.join(
+            f'## Section {i}\n\n{self.BODY}' for i in range(4)
+        )
+        chunks = chunk_text(text)
+
+        assert len(chunks) == 4
+
+    def test_a_heading_with_no_body_is_dropped_not_emitted_blank(self):
+        text = f'# Report\n\n## Empty\n\n## Real\n\n{self.BODY * 2}'
+
+        assert all(chunk.strip() for chunk in chunk_text(text))
+
+    def test_text_before_the_first_heading_survives(self):
+        text = f'Preamble that matters.\n\n# Later\n\n{self.BODY * 2}'
+        rejoined = ' '.join(chunk_text(text))
+
+        assert 'Preamble that matters.' in rejoined
+
+
+class TestCarriedContext:
+    BODY = 'A sentence of assessed material. ' * 30
+
+    def nested(self):
+        return (
+            f'# Report Title\n\n{self.BODY}\n\n'
+            f'## First Area\n\n{self.BODY}\n\n'
+            f'### Narrow Point\n\n{self.BODY}\n\n'
+            f'### Other Point\n\n{self.BODY}'
+        )
+
+    def test_a_nested_chunk_carries_its_ancestors(self):
+        chunks = chunk_text(self.nested())
+        narrow = next(c for c in chunks if 'Narrow Point' in c)
+
+        assert narrow.startswith('Report Title › First Area')
+
+    def test_the_path_excludes_the_chunk_s_own_heading(self):
+        '''The heading is already in the text; repeating it is noise.'''
+        chunks = chunk_text(self.nested())
+        narrow = next(c for c in chunks if 'Narrow Point' in c)
+        path = narrow.split('\n\n')[0]
+
+        assert 'Narrow Point' not in path
+
+    def test_a_top_level_section_needs_no_path(self):
+        chunks = chunk_text(self.nested())
+
+        assert chunks[0].startswith('# Report Title')
+
+    def test_the_path_counts_against_the_cap(self):
+        assert all(len(chunk) <= MAX_CHARS for chunk in chunk_text(self.nested()))
+
+    def test_a_path_that_would_crowd_the_content_is_dropped(self):
+        '''
+        Context is not content. A label longer than the passage it describes
+        is dropped rather than trimmed into something misleading.
+        '''
+        long_heading = '# ' + ('Extremely Verbose Section Title ' * 40)
+        text = f'{long_heading}\n\n## Inner\n\n{self.BODY * 2}'
+        chunks = chunk_text(text, max_chars=600)
+
+        assert all(len(chunk) <= 600 for chunk in chunks)
+        assert all(BREADCRUMB_SEPARATOR not in chunk for chunk in chunks)

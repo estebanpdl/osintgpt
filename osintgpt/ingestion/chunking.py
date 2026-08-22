@@ -6,12 +6,15 @@
 # Author: @estebanpdl
 #
 # File: chunking.py
-# Description: Splitting a document into retrieval-sized pieces. A pure
-#   function over text, which is what makes it cheap to judge against a corpus.
+# Description: Splitting a document into units of meaning. A pure function over
+#   text, which is what makes it cheap to judge against a corpus.
 # =================================================================================
 
 # import modules
 import re
+
+# import submodules
+from dataclasses import dataclass, field
 
 # type hints
 from typing import Iterator, List, Tuple
@@ -21,7 +24,15 @@ from typing import Iterator, List, Tuple
 # before a tokenizer is chosen, and it must not differ per embedding model.
 MAX_CHARS = 1500
 
-_HEADING = re.compile(r'^#{1,6}\s')
+# Separates the headings a chunk sits under. Rare enough in prose that its
+# presence marks the line as osintgpt's rather than the document's.
+BREADCRUMB_SEPARATOR = ' › '
+
+# A path that would leave less than this for content is not worth its cost, so
+# the chunk goes out without one rather than being crowded by its own label.
+MIN_CONTENT_ROOM = 300
+
+_HEADING = re.compile(r'^(#{1,6})\s')
 
 # Paragraph breaks tolerant of trailing whitespace and Windows line endings,
 # which real documents carry and a bare '\n\n' split misses.
@@ -44,53 +55,174 @@ TABLE = 'table'
 PROSE = 'prose'
 
 
+# Chunk class
+@dataclass(frozen=True)
+class Chunk:
+    '''
+    One retrieval unit and the section path it sits under.
+
+    The path is kept apart from the text because it is metadata that happens
+    to be worth embedding: a citation can show it without re-parsing prose,
+    and a store keeps it in a field rather than inferring it from a first line.
+    '''
+    text: str
+    path: str = ''
+
+    @property
+    def rendered(self) -> str:
+        '''The chunk as it is embedded, path included.'''
+        return f'{self.path}\n\n{self.text}' if self.path else self.text
+
+    def __len__(self) -> int:
+        return len(self.rendered)
+
+
+# _Section class
+@dataclass
+class _Section:
+    """
+    One heading and everything beneath it, addressed by line range so the
+    source is never reconstructed: a chunk is a slice of the document.
+    """
+    level: int
+    heading: str
+    start: int
+    end: int
+    children: List["_Section"] = field(default_factory=list)
+
+
 # split a document into chunks
 def chunk_text(text: str, max_chars: int = MAX_CHARS) -> List[str]:
-    '''
+    """
     Split text into retrieval chunks.
 
-    Sections start at markdown headings; a section over the cap is re-split on
-    paragraph and table boundaries, and text with no usable boundary is cut at
-    a sentence end so that a document with no structure at all still chunks.
-
-    Splitting on structure rather than a sliding window means a chunk tends to
-    be about one thing, which is what makes a hit interpretable.
+    Where a document has headings, the largest section that fits becomes one
+    chunk and carries the path of headings above it, so a passage arrives with
+    the context that frames it. Where it has none -- a transcript, a scraped
+    page, extracted PDF text -- none of that applies and the text falls through
+    to tables, paragraphs and sentence ends exactly as it would otherwise.
 
     Args:
         text (str): Document text.
-        max_chars (int): Ceiling on a chunk, in characters.
+        max_chars (int): Ceiling on a chunk, in characters, path included.
 
     Returns:
         List[str]: Chunks in document order, stripped, never empty strings.
+    """
+    return [chunk.rendered for chunk in chunk_document(text, max_chars)]
+
+
+# split a document into chunks, keeping each one's path
+def chunk_document(text: str, max_chars: int = MAX_CHARS) -> List['Chunk']:
     '''
-    chunks: List[str] = []
-    for section in _sections(text):
-        if len(section) <= max_chars:
-            chunks.append(section)
-            continue
-        chunks.extend(_split_section(section, max_chars))
+    As `chunk_text`, but each chunk keeps its section path as a separate field
+    rather than only as a line of prose in front of it.
+
+    Args:
+        text (str): Document text.
+        max_chars (int): Ceiling on a chunk, in characters, path included.
+
+    Returns:
+        List[Chunk]: Chunks in document order.
+    '''
+    lines = (text or '').splitlines()
+    chunks: List[Chunk] = []
+    _emit(_outline(lines), lines, (), max_chars, chunks)
 
     return chunks
 
 
-# split on markdown headings
-def _sections(text: str) -> List[str]:
-    sections: List[str] = []
-    current: List[str] = []
+# build the heading tree
+def _outline(lines: List[str]) -> _Section:
+    """
+    A tree of sections by heading level.
 
-    for line in (text or '').splitlines():
-        # A heading opens a section rather than joining the previous one, so a
-        # chunk carries the heading that introduces it.
-        if _HEADING.match(line) and current:
-            sections.append('\n'.join(current))
-            current = [line]
-        else:
-            current.append(line)
+    A document that skips a level or uses only one is ordinary rather than
+    malformed: a heading attaches to the nearest shallower one. A document with
+    no headings yields a single root covering everything, which is what makes
+    the tree free for text that has no structure to find.
+    """
+    root = _Section(level=0, heading="", start=0, end=len(lines))
+    stack = [root]
 
-    if current:
-        sections.append('\n'.join(current))
+    for index, line in enumerate(lines):
+        match = _HEADING.match(line)
+        if match is None:
+            continue
 
-    return [section for section in (s.strip() for s in sections) if section]
+        level = len(match.group(1))
+        while len(stack) > 1 and stack[-1].level >= level:
+            stack.pop().end = index
+
+        section = _Section(
+            level=level, heading=line.strip(), start=index, end=len(lines)
+        )
+        stack[-1].children.append(section)
+        stack.append(section)
+
+    while len(stack) > 1:
+        stack.pop().end = len(lines)
+
+    return root
+
+
+# walk the tree, taking the largest section that fits
+def _emit(
+    section: _Section,
+    lines: List[str],
+    ancestors: Tuple[str, ...],
+    max_chars: int,
+    chunks: List[Chunk]
+) -> None:
+    text = '\n'.join(lines[section.start:section.end]).strip()
+    if not text:
+        return
+
+    path = _breadcrumb(ancestors, max_chars)
+    room = max_chars - len(path) - 2 if path else max_chars
+
+    if len(text) <= room:
+        chunks.append(Chunk(text=text, path=path))
+        return
+
+    # Too large to stand alone: its own opening becomes chunks, then each
+    # child is tried in turn.
+    below = ancestors + ((section.heading,) if section.heading else ())
+    deeper = _breadcrumb(below, max_chars)
+
+    own_end = section.children[0].start if section.children else section.end
+    own = '\n'.join(lines[section.start:own_end]).strip()
+    if own:
+        # Only the first piece opens with the heading itself. The rest take it
+        # into their path, or a section split into five leaves four chunks
+        # with nothing saying where they sit. Room is measured against the
+        # longer path so every piece fits either way.
+        own_room = max_chars - len(deeper) - 2 if deeper else max_chars
+        pieces = [own] if len(own) <= own_room else _split_section(own, own_room)
+        chunks.extend(
+            Chunk(text=piece, path=path if index == 0 else deeper)
+            for index, piece in enumerate(pieces)
+        )
+
+    for child in section.children:
+        _emit(child, lines, below, max_chars, chunks)
+
+
+# the path of headings a chunk sits under
+def _breadcrumb(ancestors: Tuple[str, ...], max_chars: int) -> str:
+    names = [
+        heading.lstrip("#").strip()
+        for heading in ancestors
+        if heading.lstrip("#").strip()
+    ]
+    if not names:
+        return ""
+
+    path = BREADCRUMB_SEPARATOR.join(names)
+
+    # A path is context, not content. One that would crowd out the passage it
+    # describes is dropped rather than trimmed into something misleading.
+    return path if max_chars - len(path) >= MIN_CONTENT_ROOM else ""
 
 
 # re-split an oversized section
