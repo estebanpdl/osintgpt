@@ -47,13 +47,16 @@ dependencies = [
 
 [project.optional-dependencies]
 all = [
-    "osintgpt[anthropic,docx,local,pdf]"
+    "osintgpt[anthropic,docx,fallback,local,pdf]"
 ]
 anthropic = [
     "anthropic>=0.40,<2"
 ]
 docx = [
     "python-docx>=1,<2"
+]
+fallback = [
+    "markitdown[docx,pdf,pptx,xlsx]>=0.1,<1"
 ]
 local = [
     "sentence-transformers>=3,<6"

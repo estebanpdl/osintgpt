@@ -28,7 +28,7 @@ from osintgpt.utils import count_tokens
 
 from .chunking import MAX_CHARS, chunk_text
 from .documents import FieldMapping
-from .loaders import SUPPORTED_SUFFIXES, load_documents, needs_mapping
+from .loaders import READABLE_SUFFIXES, load_documents, needs_mapping
 from .pdf import extract_pdf
 from .tabular import UnmappedSourceError, describe_fields
 
@@ -245,7 +245,7 @@ def dry_run(
     unsupported: List[Path] = []
 
     for path in _walk(root):
-        if path.suffix.lower() not in SUPPORTED_SUFFIXES:
+        if path.suffix.lower() not in READABLE_SUFFIXES:
             unsupported.append(path)
             continue
 

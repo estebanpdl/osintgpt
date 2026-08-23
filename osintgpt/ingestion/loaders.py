@@ -17,6 +17,7 @@ from pathlib import Path
 from typing import List, Optional, Union
 
 from .documents import Document, FieldMapping
+from .fallback import FALLBACK_SUFFIXES, can_convert, convert
 from .office import extract_docx
 from .pdf import Transcriber, extract_pdf
 from .tabular import load_records
@@ -33,6 +34,11 @@ DOCUMENT_SUFFIXES = {'.pdf', '.docx'}
 SUPPORTED_SUFFIXES = (
     TEXT_SUFFIXES | HTML_SUFFIXES | STRUCTURED_SUFFIXES | DOCUMENT_SUFFIXES
 )
+
+# What osintgpt can read at all, including formats only the optional converter
+# reaches. Kept apart from SUPPORTED_SUFFIXES so a dry run can distinguish
+# "read by a reader chosen for it" from "converted as a last resort".
+READABLE_SUFFIXES = SUPPORTED_SUFFIXES | FALLBACK_SUFFIXES
 
 
 # does osintgpt read this file
@@ -103,9 +109,17 @@ def load_documents(
     if suffix in TEXT_SUFFIXES | HTML_SUFFIXES:
         return load_text(path)
 
-    supported = ', '.join(sorted(SUPPORTED_SUFFIXES))
+    # Last resort, and only for formats with no reader of their own. Where a
+    # reader exists it is better: it was chosen for that format, and a general
+    # converter would undo decisions taken for a reason.
+    if can_convert(path):
+        text = convert(path)
+
+        return [Document(ref=path.as_posix(), text=text)] if text else []
+
+    readable = ', '.join(sorted(READABLE_SUFFIXES))
 
     raise ValueError(
         f'{path.name}: osintgpt has no loader for {suffix!r}; '
-        f'supported: {supported}'
+        f'readable: {readable}'
     )
