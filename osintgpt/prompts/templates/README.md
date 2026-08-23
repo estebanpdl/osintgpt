@@ -23,7 +23,7 @@ contains literal `{` and `}` and `.format` would require doubling every one.
 |---|---|---|
 | `summarize` | `prompts.basic_summarization` → `SemanticOperations.summarize_content` | — |
 | `topic_modeling` | `prompts.topic_modeling_summarization` | — |
-| `sentence_details` | `OpenAIGPT.analyze_sentence_details` | — |
+| `sentence_details` | `OpenAIGPT.analyze_sentence_details` (deprecated) | — |
 
 ## Two kinds of prompt
 
@@ -41,6 +41,22 @@ edit freely.
 
 If per-project prompt overrides are ever built, only voice prompts are safe to
 expose.
+
+## What is on its way out
+
+`sentence_details` asks the model to reduce a question to its subject before
+that subject is embedded — reformulation, and the right instinct: request words
+like "summarize" pollute a similarity search. It survives because its caller is
+part of the deprecated `OpenAIGPT` surface and someone's script depends on it.
+
+Agentic retrieval absorbs it. A model that calls `semantic_search(query=...)`
+composes that phrase itself, inside a call it was already making, so the
+separate pre-flight stops being cheaper-and-better and simply stops having a
+caller. The instinct survives as a standing instruction in the retrieval
+prompt; the round trip does not. Explicit reformulation remains only in the
+static fallback, where no model is choosing the query.
+
+Read this template as a record of the current API, not a pattern to extend.
 
 ## What is deliberately not here
 
