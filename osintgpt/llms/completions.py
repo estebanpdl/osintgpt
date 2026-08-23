@@ -13,6 +13,9 @@
 # type hints
 from typing import Union, Optional, List, Dict
 
+# import osintgpt prompts
+from osintgpt.prompts import static_prompt
+
 # CompletionsMixin class
 class CompletionsMixin(object):
     '''
@@ -259,26 +262,8 @@ class CompletionsMixin(object):
         model = self.OPENAI_GPT_MODEL
 
         # generate system message role
-        system_role = '''
-        As a Large Language Model, you specialize in dissecting sentences to unearth
-        the core components within them. When presented with a sentence:
-        1. Determine the primary language in which the sentence is written.
-        2. Extract the central request, input, or question that requires assistance.
-        3. Identify the main topic/s or subject/s associated with the central request.
+        system_role = static_prompt('sentence_details')
 
-        Compile your findings into a JSON response, highlighting these three
-        essential aspects.
-
-        Example input: "¿Cuáles son los beneficios de la energía solar?"
-        Expected output:
-        ```
-        {
-            "Language": "Spanish",
-            "Input request": "¿Cuáles son los beneficios",
-            "Subject or topics": "energía solar"
-        }
-        ```
-        '''
         # build messages
         messages = [
             {'role': 'system', 'content': system_role},

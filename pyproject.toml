@@ -78,8 +78,17 @@ Homepage = "https://github.com/estebanpdl/osintgpt"
 Repository = "https://github.com/estebanpdl/osintgpt"
 Issues = "https://github.com/estebanpdl/osintgpt/issues"
 
+[tool.setuptools]
+# Prompt templates are .md.j2, not .py, so packaging has to be told to carry
+# them. Without this a wheel installs the loader and none of the prompts, and
+# every call raises TemplateNotFound.
+include-package-data = true
+
 [tool.setuptools.packages.find]
 include = ["osintgpt*"]
+
+[tool.setuptools.package-data]
+"osintgpt.prompts" = ["templates/*.md.j2", "templates/README.md"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
