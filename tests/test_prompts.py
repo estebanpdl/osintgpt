@@ -133,9 +133,18 @@ class TestCallers:
                     continue
                 if id(node) in docstrings:
                     continue
-                # A model instruction is long, multi-line, and addresses a
-                # reader. Operator-facing messages are none of those.
-                if len(node.value) > 400 and node.value.count('\n') > 5:
+                if len(node.value) <= 400 or node.value.count('\n') <= 5:
+                    continue
+                # Long and multi-line is not enough: a SQL schema is code a
+                # database reads, not an instruction a model follows. What
+                # makes a string a prompt is that it addresses a reader.
+                lowered = node.value.lower()
+                if any(
+                    marker in lowered for marker in (
+                        'you are', 'your task', 'you specialize', 'respond',
+                        'analyze the', 'when the user', 'when presented'
+                    )
+                ):
                     offenders.append(f'{path.name}:{node.lineno}')
 
         assert offenders == []

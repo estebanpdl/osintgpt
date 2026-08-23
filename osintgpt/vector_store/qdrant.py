@@ -25,11 +25,12 @@ from osintgpt.config import Settings, resolve_settings
 # import exceptions
 from osintgpt.exceptions.errors import MissingEnvironmentVariableError
 
-# import base class
-from .base import BaseVectorEngine
+# Not a BaseVectorEngine yet: this class predates the widened interface and
+# still speaks in collections rather than documents. Adapting it is its own
+# step; until then it keeps the surface its callers already use.
 
 # Qdrant class
-class Qdrant(BaseVectorEngine):
+class Qdrant(object):
     '''
     Qdrant class
 
