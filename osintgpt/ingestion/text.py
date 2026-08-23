@@ -18,9 +18,9 @@ from html.parser import HTMLParser
 from pathlib import Path
 
 # type hints
-from typing import Dict, List, Tuple, Union
+from typing import Dict, List, Optional, Tuple, Union
 
-from .documents import Document
+from .documents import Document, FieldMapping
 
 # Extensions read as prose without any configuration.
 TEXT_SUFFIXES = {'.txt', '.md', '.markdown', '.rst', '.log'}
@@ -28,6 +28,14 @@ HTML_SUFFIXES = {'.html', '.htm'}
 
 # Formats that conventionally open with a metadata block.
 FRONTMATTER_SUFFIXES = {'.md', '.markdown'}
+
+# Frontmatter keys read as a document's own timestamp and author when a source
+# names none. Conventional rather than exhaustive: a project whose documents
+# use other keys names them explicitly, and nothing is inferred beyond this
+# list — a guessed timestamp is worse than an absent one, because a filter
+# built on it fails silently.
+TIMESTAMP_KEYS = ('date', 'created', 'created_at', 'published', 'published_at')
+AUTHOR_KEYS = ('author', 'authors', 'by', 'prepared_by')
 
 # A fenced block at the very top of a file. Nothing else in the document is
 # treated this way: a rule further down is a rule.
@@ -125,18 +133,38 @@ def split_frontmatter(raw: str) -> Tuple[Dict[str, str], str]:
     return fields, raw[match.end():]
 
 
+# the value of the first key a mapping has
+def _first_of(fields: Dict[str, str], keys) -> str:
+    for key in keys:
+        value = str(fields.get(key, '')).strip()
+        if value:
+            return value
+
+    return ''
+
+
 # read a prose file as one document
-def load_text(path: Union[str, Path]) -> List[Document]:
+def load_text(
+    path: Union[str, Path], mapping: Optional[FieldMapping] = None
+) -> List[Document]:
     '''
     Read a whole file as a single document.
 
+    A prose document has no columns to map, but it can still carry when it was
+    written and who wrote it. Those come from frontmatter — named by the source
+    where it says so, and otherwise from the conventional keys — because
+    retrieval filters on them, and a question about April should not land on a
+    mapped spreadsheet while silently missing every markdown file beside it.
+
     Args:
         path (Union[str, Path]): File to read.
+        mapping (FieldMapping, optional): Names which frontmatter fields are             the timestamp and author, when the conventional keys are wrong.
 
     Returns:
         List[Document]: One document, or none when the file holds no text.
     '''
     path = Path(path)
+    mapping = mapping or FieldMapping()
     # utf-8-sig rather than utf-8: an editor's byte order mark would
     # otherwise sit in front of the first character, which stops a
     # leading metadata block from being recognised and rides into the
@@ -156,4 +184,19 @@ def load_text(path: Union[str, Path]) -> List[Document]:
     if not text:
         return []
 
-    return [Document(ref=path.as_posix(), text=text, metadata=metadata)]
+    timestamp = (
+        str(metadata.get(mapping.timestamp, '')).strip() if mapping.timestamp
+        else _first_of(metadata, TIMESTAMP_KEYS)
+    )
+    author = (
+        str(metadata.get(mapping.author, '')).strip() if mapping.author
+        else _first_of(metadata, AUTHOR_KEYS)
+    )
+
+    return [Document(
+        ref=path.as_posix(),
+        text=text,
+        metadata=metadata,
+        timestamp=timestamp,
+        author=author
+    )]

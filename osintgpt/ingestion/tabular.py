@@ -18,7 +18,7 @@ import json
 from pathlib import Path
 
 # type hints
-from typing import Any, Dict, Iterator, List, Optional, Union
+from typing import Any, Dict, Iterator, List, Union
 
 from .documents import Document, FieldMapping, document_from_record, value_at
 

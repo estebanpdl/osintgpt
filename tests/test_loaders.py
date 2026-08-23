@@ -404,3 +404,77 @@ class TestFrontmatter:
 
         assert document.metadata == {}
         assert document.text.startswith('---')
+
+
+class TestProseProvenance:
+    '''
+    A prose document has no columns to map, but retrieval still filters on
+    when and who — and a question about a month should not land on a mapped
+    spreadsheet while silently missing every markdown file beside it.
+    '''
+
+    def write(self, tmp_path, frontmatter):
+        path = tmp_path / 'report.md'
+        path.write_text(
+            f'---\n{frontmatter}\n---\n\n# Title\n\nBody.', encoding='utf-8'
+        )
+
+        return path
+
+    def test_a_conventional_date_key_is_read(self, tmp_path):
+        path = self.write(tmp_path, 'date: 2026-04-22')
+
+        assert load_documents(path)[0].timestamp == '2026-04-22'
+
+    def test_a_conventional_author_key_is_read(self, tmp_path):
+        path = self.write(tmp_path, 'author: an analyst')
+
+        assert load_documents(path)[0].author == 'an analyst'
+
+    @pytest.mark.parametrize('key', [
+        'date', 'created', 'created_at', 'published', 'published_at'
+    ])
+    def test_every_conventional_timestamp_key(self, tmp_path, key):
+        path = self.write(tmp_path, f'{key}: 2026-04-22')
+
+        assert load_documents(path)[0].timestamp == '2026-04-22'
+
+    def test_a_source_can_name_its_own_field(self, tmp_path):
+        path = self.write(tmp_path, 'collected_on: 2026-04-22')
+        mapping = FieldMapping(timestamp='collected_on')
+
+        assert load_documents(path, mapping)[0].timestamp == '2026-04-22'
+
+    def test_a_named_field_beats_a_conventional_one(self, tmp_path):
+        path = self.write(
+            tmp_path, 'date: 2026-01-01\ncollected_on: 2026-04-22'
+        )
+        mapping = FieldMapping(timestamp='collected_on')
+
+        assert load_documents(path, mapping)[0].timestamp == '2026-04-22'
+
+    def test_nothing_is_invented_when_absent(self, tmp_path):
+        '''
+        A guessed timestamp is worse than an absent one: a filter built on it
+        fails silently rather than reporting nothing to filter.
+        '''
+        path = self.write(tmp_path, 'type: synthesis')
+        document = load_documents(path)[0]
+
+        assert document.timestamp == ''
+        assert document.author == ''
+
+    def test_a_document_with_no_frontmatter_carries_neither(self, tmp_path):
+        path = tmp_path / 'plain.md'
+        path.write_text('# Title\n\nBody.', encoding='utf-8')
+        document = load_documents(path)[0]
+
+        assert document.timestamp == ''
+        assert document.author == ''
+
+    def test_the_value_stays_in_metadata_too(self, tmp_path):
+        '''Named separately for filtering, kept in metadata for citation.'''
+        path = self.write(tmp_path, 'date: 2026-04-22')
+        document = load_documents(path)[0]
+
+        assert document.metadata['date'] == '2026-04-22'

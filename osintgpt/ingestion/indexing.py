@@ -20,7 +20,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 # type hints
-from typing import Dict, Iterable, List, Optional, Union
+from typing import Dict, Iterable, List, Union
 
 # import osintgpt projects
 from osintgpt.projects.toml_io import read_toml, write_toml

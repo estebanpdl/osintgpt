@@ -14,7 +14,7 @@
 from dataclasses import dataclass, field
 
 # type hints
-from typing import Any, Dict, List, Optional, Sequence, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 # Separates a document's file from the record inside it, so a row keeps a ref
 # that survives a re-index: 'data/records.csv#4821'.

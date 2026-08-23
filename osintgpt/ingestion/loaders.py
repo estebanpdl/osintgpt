@@ -107,7 +107,7 @@ def load_documents(
         return [Document(ref=path.as_posix(), text=text)] if text else []
 
     if suffix in TEXT_SUFFIXES | HTML_SUFFIXES:
-        return load_text(path)
+        return load_text(path, mapping)
 
     # Last resort, and only for formats with no reader of their own. Where a
     # reader exists it is better: it was chosen for that format, and a general

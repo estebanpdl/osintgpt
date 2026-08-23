@@ -59,11 +59,9 @@ PROSE = 'prose'
 @dataclass(frozen=True)
 class Chunk:
     '''
-    One retrieval unit and the section path it sits under.
-
-    The path is kept apart from the text because it is metadata that happens
-    to be worth embedding: a citation can show it without re-parsing prose,
-    and a store keeps it in a field rather than inferring it from a first line.
+    One retrieval unit and the section path it sits under. The path stays a
+    field rather than only a line of prose, so a citation and a store can read
+    it without parsing the text back.
     '''
     text: str
     path: str = ''
