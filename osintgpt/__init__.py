@@ -18,6 +18,10 @@ from osintgpt.config import Settings
 # import osintgpt projects
 from osintgpt.projects import Project, ProjectSettings
 
+# import osintgpt indexing and search
+from osintgpt.indexing import IndexReport, index_project
+from osintgpt.search import search_across_projects, search_project
+
 # define package-level variables and constants
 # The version lives in pyproject.toml; reading it back from the installed
 # metadata keeps one source of truth. Running from a source tree that was
@@ -28,7 +32,15 @@ except PackageNotFoundError:
     __version__ = '0.0.0+unknown'
 
 __name__ = 'osintgpt'
-__all__ = ['Project', 'ProjectSettings', 'Settings']
+__all__ = [
+    'IndexReport',
+    'Project',
+    'ProjectSettings',
+    'Settings',
+    'index_project',
+    'search_across_projects',
+    'search_project'
+]
 
 # describition variables
 __author__ = 'Esteban Ponce de Leon'
