@@ -47,13 +47,22 @@ dependencies = [
 
 [project.optional-dependencies]
 all = [
-    "osintgpt[anthropic,local]"
+    "osintgpt[anthropic,docx,local,pdf]"
 ]
 anthropic = [
     "anthropic>=0.40,<2"
 ]
+docx = [
+    "python-docx>=1,<2"
+]
 local = [
     "sentence-transformers>=3,<6"
+]
+pdf = [
+    "pypdf>=5,<8",
+    "pypdfium2>=4,<6",
+    # pypdfium2 renders to a raw bitmap; Pillow is what writes it as PNG.
+    "pillow>=10,<13"
 ]
 dev = [
     "pytest>=8",

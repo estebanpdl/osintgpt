@@ -29,6 +29,7 @@ from osintgpt.utils import count_tokens
 from .chunking import MAX_CHARS, chunk_text
 from .documents import FieldMapping
 from .loaders import SUPPORTED_SUFFIXES, load_documents, needs_mapping
+from .pdf import extract_pdf
 from .tabular import UnmappedSourceError, describe_fields
 
 # Directories that hold tooling rather than corpus.
@@ -51,6 +52,10 @@ class FilePreview:
     tokens: int = 0
     # Fields awaiting a role, for a structured file with no mapping yet.
     fields: Dict[str, dict] = field(default_factory=dict)
+    # PDF pages a vision model would have to read. Counted separately because
+    # this is the expensive half of ingestion, and nothing else in a dry run
+    # costs a generation call.
+    vision_pages: int = 0
     # Why this file would contribute nothing, if it would not.
     problem: str = ''
 
@@ -98,6 +103,17 @@ class DryRun:
     def tokens(self) -> int:
         return sum(f.tokens for f in self.readable)
 
+    @property
+    def vision_pages(self) -> int:
+        '''
+        Pages that would each cost one generation call to read.
+
+        Reported apart from the embedding estimate because it is a different
+        order of expense: embedding a corpus is fractions of a cent, and
+        transcribing a scanned document is a call per page.
+        '''
+        return sum(f.vision_pages for f in self.files)
+
     # what embedding this would cost
     @property
     def estimated_cost(self) -> Optional[float]:
@@ -125,6 +141,11 @@ class DryRun:
             f'{self.tokens:,} tokens',
             f'~${cost:.4f} to embed' if cost is not None else 'cost unknown'
         ]
+        if self.vision_pages:
+            parts.append(
+                f'{self.vision_pages} pages need a vision model, at one '
+                'generation call each'
+            )
         if self.unconfigured:
             parts.append(f'{len(self.unconfigured)} need field mapping')
         if self.failed:
@@ -176,12 +197,22 @@ def preview_file(
     ]
     characters = sum(len(chunk) for chunk in chunks)
 
+    vision_pages = 0
+    if path.suffix.lower() == '.pdf':
+        # Counted without transcribing: the point is to know the cost before
+        # committing to it.
+        try:
+            vision_pages = extract_pdf(path).needs_vision
+        except Exception:  # noqa: BLE001 — a count, not the document
+            vision_pages = 0
+
     return FilePreview(
         path=path,
         documents=len(documents),
         chunks=len(chunks),
         characters=characters,
-        tokens=sum(count_tokens(chunk, embedding_model) for chunk in chunks)
+        tokens=sum(count_tokens(chunk, embedding_model) for chunk in chunks),
+        vision_pages=vision_pages
     )
 
 

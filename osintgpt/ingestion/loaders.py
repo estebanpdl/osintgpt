@@ -17,6 +17,8 @@ from pathlib import Path
 from typing import List, Optional, Union
 
 from .documents import Document, FieldMapping
+from .office import extract_docx
+from .pdf import Transcriber, extract_pdf
 from .tabular import load_records
 from .text import HTML_SUFFIXES, TEXT_SUFFIXES, load_text
 
@@ -24,7 +26,13 @@ from .text import HTML_SUFFIXES, TEXT_SUFFIXES, load_text
 # mapping; prose does not.
 STRUCTURED_SUFFIXES = {'.csv', '.xlsx', '.xlsm', '.json', '.jsonl', '.ndjson'}
 
-SUPPORTED_SUFFIXES = TEXT_SUFFIXES | HTML_SUFFIXES | STRUCTURED_SUFFIXES
+# Formats whose text has to be recovered before it can be read: a PDF stores
+# glyphs and positions, a .docx stores XML. Both become markdown first.
+DOCUMENT_SUFFIXES = {'.pdf', '.docx'}
+
+SUPPORTED_SUFFIXES = (
+    TEXT_SUFFIXES | HTML_SUFFIXES | STRUCTURED_SUFFIXES | DOCUMENT_SUFFIXES
+)
 
 
 # does osintgpt read this file
@@ -53,7 +61,9 @@ def needs_mapping(path: Union[str, Path]) -> bool:
 
 # read a file as documents
 def load_documents(
-    path: Union[str, Path], mapping: Optional[FieldMapping] = None
+    path: Union[str, Path],
+    mapping: Optional[FieldMapping] = None,
+    transcriber: Optional[Transcriber] = None
 ) -> List[Document]:
     '''
     Read any supported file into documents.
@@ -64,6 +74,7 @@ def load_documents(
     Args:
         path (Union[str, Path]): File to read.
         mapping (FieldMapping, optional): Required for structured formats.
+        transcriber (Transcriber, optional): Reads scanned PDF pages. Without             one, those pages degrade to a named gap rather than failing.
 
     Raises:
         ValueError: If the extension has no loader.
@@ -77,6 +88,17 @@ def load_documents(
 
     if suffix in STRUCTURED_SUFFIXES:
         return list(load_records(path, mapping or FieldMapping()))
+
+    if suffix == '.pdf':
+        extraction = extract_pdf(path, transcriber)
+        text = extraction.markdown.strip()
+
+        return [Document(ref=path.as_posix(), text=text)] if text else []
+
+    if suffix == '.docx':
+        text = extract_docx(path).strip()
+
+        return [Document(ref=path.as_posix(), text=text)] if text else []
 
     if suffix in TEXT_SUFFIXES | HTML_SUFFIXES:
         return load_text(path)
