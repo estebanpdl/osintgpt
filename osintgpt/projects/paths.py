@@ -18,6 +18,7 @@ from pathlib import Path
 CONFIG_FILE = 'project.toml'
 STORE_FILE = 'store.sqlite'
 SOURCES_FILE = 'sources.toml'
+INDEX_STATE_FILE = 'index.toml'
 EXTRACTS_DIR = 'extracts'
 CANON_DIR = 'canon'
 
@@ -71,6 +72,10 @@ class ProjectPaths:
     @property
     def sources(self) -> Path:
         return self.root / SOURCES_FILE
+
+    @property
+    def index_state(self) -> Path:
+        return self.root / INDEX_STATE_FILE
 
     @property
     def extracts(self) -> Path:
