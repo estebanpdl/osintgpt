@@ -33,12 +33,22 @@ classifiers = [
     "Topic :: Text Processing :: Indexing",
     "Topic :: Utilities"
 ]
+# An OSINT tool that cannot read a PDF out of the box is failing at its own
+# description, so every format an analyst routinely holds is here rather than
+# behind a flag. The one thing kept optional is the local embedding stack,
+# which is twenty times the size of everything else combined.
 dependencies = [
+    "anthropic>=0.40,<2",
+    "markitdown[docx,pdf,pptx,xlsx]>=0.1,<1",
     "openai>=1.0,<3",
+    "openpyxl",
     "pandas",
+    "pillow>=10,<13",
+    "pypdf>=5,<8",
+    "pypdfium2>=4,<6",
+    "python-docx>=1,<2",
     "python-dotenv",
     "qdrant-client>=1.10,<2",
-    "openpyxl",
     "scipy",
     "tiktoken",
     "tomli-w",
@@ -46,31 +56,20 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-all = [
-    "osintgpt[anthropic,docx,fallback,local,pdf]"
-]
-anthropic = [
-    "anthropic>=0.40,<2"
-]
-docx = [
-    "python-docx>=1,<2"
-]
-fallback = [
-    "markitdown[docx,pdf,pptx,xlsx]>=0.1,<1"
-]
+# sentence-transformers pulls torch: ~650 MB against ~120 MB for everything
+# else. Offline embedding stays first-class as a capability and opt-in as a
+# download.
 local = [
     "sentence-transformers>=3,<6"
 ]
-pdf = [
-    "pypdf>=5,<8",
-    "pypdfium2>=4,<6",
-    # pypdfium2 renders to a raw bitmap; Pillow is what writes it as PNG.
-    "pillow>=10,<13"
+all = [
+    "osintgpt[local]"
 ]
 dev = [
     "pytest>=8",
     "pytest-cov",
     "pytest-mock",
+    "python-pptx",
     "tomli; python_version < '3.11'"
 ]
 

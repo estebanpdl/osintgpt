@@ -109,7 +109,8 @@ def extract_page_texts(path: Union[str, Path]) -> List[str]:
         from pypdf import PdfReader
     except ImportError as error:
         raise ImportError(
-            "reading PDFs needs the 'pypdf' package: pip install osintgpt[pdf]"
+            "reading PDFs needs the 'pypdf' package, which osintgpt "
+            'requires: reinstall with pip install --force-reinstall osintgpt'
         ) from error
 
     reader = PdfReader(str(path))
@@ -139,8 +140,9 @@ def render_page(path: Union[str, Path], index: int) -> bytes:
         from PIL import Image  # noqa: F401
     except ImportError as error:
         raise ImportError(
-            'transcribing scanned pages needs pypdfium2 and pillow: '
-            'pip install osintgpt[pdf]'
+            'transcribing scanned pages needs pypdfium2 and pillow, which '
+            'osintgpt requires: reinstall with pip install '
+            '--force-reinstall osintgpt'
         ) from error
 
     import io

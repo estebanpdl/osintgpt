@@ -55,8 +55,9 @@ def convert(path: Union[str, Path]) -> Optional[str]:
         from markitdown import MarkItDown
     except ImportError as error:
         raise ImportError(
-            f'{Path(path).suffix} needs the markitdown package: '
-            'pip install osintgpt[fallback]'
+            f'{Path(path).suffix} needs the markitdown package, which '
+            'osintgpt requires: reinstall with pip install --force-reinstall '
+            'osintgpt'
         ) from error
 
     # Plugins stay off: a converter reaching for third-party code on a file an

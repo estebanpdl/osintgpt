@@ -45,8 +45,9 @@ def extract_docx(path: Union[str, Path]) -> str:
         import docx
     except ImportError as error:
         raise ImportError(
-            "reading Word documents needs the 'python-docx' package: "
-            'pip install osintgpt[docx]'
+            "reading Word documents needs the 'python-docx' package, which "
+            'osintgpt requires: reinstall with pip install '
+            '--force-reinstall osintgpt'
         ) from error
 
     document = docx.Document(str(path))

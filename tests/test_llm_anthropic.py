@@ -75,8 +75,12 @@ class TestRegistration:
         assert GENERATION_BACKENDS['anthropic'].kind == ANTHROPIC
         assert GENERATION_BACKENDS['anthropic'].kind != OPENAI_COMPAT
 
-    def test_declares_the_extra_that_installs_it(self):
-        assert GENERATION_BACKENDS['anthropic'].extra == 'anthropic'
+    def test_ships_with_osintgpt(self):
+        '''
+        No extra: the SDK is a core dependency, so a missing one is a broken
+        install rather than a capability nobody asked for.
+        '''
+        assert GENERATION_BACKENDS['anthropic'].extra is None
 
     def test_offers_no_embeddings(self):
         '''Anthropic publishes no embedding model.'''
@@ -190,4 +194,4 @@ class TestMissingPackage:
         message = str(excinfo.value)
 
         assert 'anthropic' in message
-        assert 'osintgpt[anthropic]' in message
+        assert 'reinstall' in message

@@ -61,8 +61,9 @@ class AnthropicGeneration(GenerationProvider):
             from anthropic import Anthropic
         except ImportError as error:
             raise ImportError(
-                "the anthropic provider needs the 'anthropic' package: "
-                'pip install osintgpt[anthropic]'
+                "the anthropic provider needs the 'anthropic' package, "
+                'which osintgpt requires: reinstall with pip install '
+                '--force-reinstall osintgpt'
             ) from error
 
         self.client = Anthropic(api_key=api_key)

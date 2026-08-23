@@ -52,7 +52,8 @@ class BackendSpec:
     # Base URL comes from settings rather than being fixed here.
     ollama: bool = False
     # pip extra that installs this backend's SDK; None when it ships with
-    # osintgpt. Named in the error when the import fails.
+    # osintgpt, which is most of them. Named in the error when the import
+    # fails, so a missing backend says what would install it.
     extra: Optional[str] = None
     # Model to use when the caller names none. Set only where the right answer
     # is known and stable; elsewhere the caller must choose, because a guess
@@ -102,8 +103,7 @@ GENERATION_BACKENDS: Dict[str, BackendSpec] = {
     # Native SDK because Anthropic publishes no compatible endpoint, not
     # because it is preferred.
     'anthropic': BackendSpec(
-        ANTHROPIC, 'anthropic_api_key', extra='anthropic',
-        discovers_models=True
+        ANTHROPIC, 'anthropic_api_key', discovers_models=True
     )
 }
 
