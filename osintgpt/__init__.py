@@ -18,6 +18,15 @@ from osintgpt.config import Settings
 # import osintgpt projects
 from osintgpt.projects import Project, ProjectSettings
 
+# import osintgpt evaluation
+from osintgpt.evaluation import (
+    EvaluationReport,
+    Question,
+    evaluate,
+    load_questions,
+    save_questions
+)
+
 # import osintgpt indexing and search
 from osintgpt.indexing import IndexReport, index_project
 from osintgpt.search import search_across_projects, search_project
@@ -33,11 +42,16 @@ except PackageNotFoundError:
 
 __name__ = 'osintgpt'
 __all__ = [
+    'EvaluationReport',
     'IndexReport',
+    'Question',
     'Project',
     'ProjectSettings',
     'Settings',
+    'evaluate',
     'index_project',
+    'load_questions',
+    'save_questions',
     'search_across_projects',
     'search_project'
 ]
