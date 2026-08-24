@@ -197,12 +197,14 @@ class TestPackaging:
         packaging is told to include it. Without this, every prompt raises
         TemplateNotFound for anyone who installed from a wheel.
         '''
-        import tomllib
         from pathlib import Path
 
+        # read_toml carries the tomllib/tomli fallback: tomllib is 3.11+ and
+        # 3.10 is a supported floor.
+        from osintgpt.projects.toml_io import read_toml
+
         root = Path(__file__).resolve().parent.parent
-        with open(root / 'pyproject.toml', 'rb') as handle:
-            config = tomllib.load(handle)
+        config = read_toml(root / 'pyproject.toml')
 
         setuptools = config.get('tool', {}).get('setuptools', {})
 
