@@ -20,6 +20,7 @@ from osintgpt.ingestion.pdf import (
     PdfExtraction,
     extract_pdf,
     extract_page_texts,
+    join_page_texts,
     render_page
 )
 
@@ -57,6 +58,19 @@ def write_pdf(path, pages):
     return path
 
 
+def extracted_text(monkeypatch, text):
+    class Page:
+        def extract_text(self):
+            return text
+
+    class Reader:
+        pages = [Page()]
+
+    monkeypatch.setattr('pypdf.PdfReader', lambda path: Reader())
+
+    return extract_page_texts('unused.pdf')[0]
+
+
 @pytest.fixture
 def text_pdf(tmp_path):
     return write_pdf(tmp_path / 'report.pdf', [PARAGRAPH, PARAGRAPH])
@@ -77,6 +91,69 @@ class TestPageExtraction:
 
         assert rendered.startswith(b'\x89PNG')
         assert len(rendered) > 1_000
+
+
+class TestPageJoins:
+    def test_a_sentence_split_across_pages_is_rejoined(self):
+        pages = [
+            'Its involvement is justifiable, have',
+            'entered the mainstream media.'
+        ]
+
+        assert join_page_texts(pages) == (
+            'Its involvement is justifiable, have entered the mainstream media.'
+        )
+
+    def test_a_new_capitalised_paragraph_keeps_its_break(self):
+        pages = ['A heading without punctuation', 'Another paragraph begins']
+
+        assert join_page_texts(pages) == '\n\n'.join(pages)
+
+    def test_a_sentence_terminator_keeps_the_page_break(self):
+        pages = ['The first thought ends.', 'Another thought begins.']
+
+        assert join_page_texts(pages) == '\n\n'.join(pages)
+
+    def test_a_full_width_terminator_keeps_the_page_break(self):
+        pages = ['分析は完了した。', '次の分析を始める']
+
+        assert join_page_texts(pages) == '\n\n'.join(pages)
+
+    @pytest.mark.parametrize('continuation', [
+        'يتابع النص عبر الصفحة',
+        'הטקסט ממשיך בעמוד הבא',
+        'पाठ अगले पृष्ठ पर जारी है',
+        '文本延续到下一页'
+    ])
+    def test_scripts_without_case_can_continue_a_sentence(self, continuation):
+        assert join_page_texts(['The sentence continues', continuation]) == (
+            f'The sentence continues {continuation}'
+        )
+
+
+class TestExtractionNoise:
+    def test_private_use_ranges_are_removed_from_extracted_text(self, monkeypatch):
+        text = (
+            'a\ue000b\uf8ffc\U000F0000d\U000FFFFD'
+            'e\U00100000f\U0010FFFDg'
+        )
+
+        assert extracted_text(monkeypatch, text) == 'abcdefg'
+
+    def test_form_feeds_are_removed_from_extracted_text(self, monkeypatch):
+        assert extracted_text(monkeypatch, 'before\x0cafter') == 'beforeafter'
+
+    def test_ordinary_non_ascii_text_is_untouched(self, monkeypatch):
+        text = 'café Анализ تحليل 分析'
+
+        assert extracted_text(monkeypatch, text) == text
+
+    def test_private_use_text_from_a_transcriber_is_preserved(self, scanned_pdf):
+        extraction = extract_pdf(
+            scanned_pdf, lambda image: 'Recovered \ue000 transcription.'
+        )
+
+        assert '\ue000' in extraction.markdown
 
 
 class TestWithoutATranscriber:
