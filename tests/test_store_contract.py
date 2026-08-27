@@ -42,15 +42,35 @@ def unit(*values):
     return [v / length for v in values]
 
 
-@pytest.fixture(params=['sqlite', 'qdrant'])
+# Postgres has no in-process mode, so this backend is exercised only when a
+# server is actually reachable. Set it to run the contract against pgvector:
+#
+#   docker run -d --rm --name osintgpt-pg -p 5433:5432 #     -e POSTGRES_PASSWORD=osintgpt pgvector/pgvector:pg17
+#   OSINTGPT_TEST_POSTGRES_DSN=postgresql://postgres:osintgpt@localhost:5433/postgres
+POSTGRES_DSN_VAR = 'OSINTGPT_TEST_POSTGRES_DSN'
+
+# Qdrant runs in local mode by default. Point this at a server to run the same
+# suite against the real thing:
+#
+#   docker run -d --rm --name osintgpt-qdrant -p 6333:6333 qdrant/qdrant
+#   OSINTGPT_TEST_QDRANT_HOST=localhost
+QDRANT_HOST_VAR = 'OSINTGPT_TEST_QDRANT_HOST'
+
+
+@pytest.fixture(params=['sqlite', 'qdrant', 'postgres'])
 def store(request, tmp_path):
     '''
-    Both backends, same suite.
+    Every backend, one suite.
 
-    Qdrant runs in its local mode rather than against a container: the point
-    is that the two agree on behaviour, and a suite that needs Docker is a
-    suite that does not run.
+    Qdrant runs in its local mode rather than against a container, because a
+    suite that needs Docker is a suite that does not run. Postgres has no
+    equivalent, so it is skipped unless a server is configured.
     '''
+    if request.param == 'postgres':
+        yield from _postgres_store()
+
+        return
+
     if request.param == 'sqlite':
         engine = SQLiteVectorStore(':memory:')
         yield engine
@@ -58,23 +78,82 @@ def store(request, tmp_path):
 
         return
 
+    import os
+    import uuid
     import warnings
 
     qdrant_client = pytest.importorskip('qdrant_client')
-    client = qdrant_client.QdrantClient(':memory:')
+    collection = f'contract_{uuid.uuid4().hex[:12]}'
+    host = os.environ.get(QDRANT_HOST_VAR, '')
 
+    if host:
+        # A real server, when one is offered. Local mode is a reimplementation
+        # of Qdrant rather than Qdrant, so it can agree with us about
+        # something the server does differently.
+        # The same timeout production uses: the point of running against a
+        # server is to hit what an operator hits.
+        from osintgpt.vector_store.connection import TIMEOUT_SECONDS
+
+        client = qdrant_client.QdrantClient(
+            host=host, port=6333, timeout=TIMEOUT_SECONDS
+        )
+        engine = QdrantVectorStore(
+            Settings(qdrant_host=host, qdrant_port=6333),
+            collection=collection,
+            client=client
+        )
+        try:
+            yield engine
+        finally:
+            if client.collection_exists(collection):
+                client.delete_collection(collection)
+            client.close()
+
+        return
+
+    client = qdrant_client.QdrantClient(':memory:')
     with warnings.catch_warnings():
         # Local mode warns that payload indexes do nothing. True, and beside
         # the point here: they matter on a server, which is where the data
         # would be.
         warnings.filterwarnings('ignore', message='.*local Qdrant.*')
         engine = QdrantVectorStore(
-            Settings(), collection='contract', client=client
+            Settings(), collection=collection, client=client
         )
 
         yield engine
 
     client.close()
+
+
+def _postgres_store():
+    '''
+    A real Postgres, or a skip. Each test gets its own table so an
+    interrupted run cannot leave rows that make the next one pass.
+    '''
+    import os
+    import uuid
+
+    dsn = os.environ.get(POSTGRES_DSN_VAR, '')
+    if not dsn:
+        pytest.skip(f'set {POSTGRES_DSN_VAR} to run the pgvector contract')
+
+    pytest.importorskip('psycopg')
+    pytest.importorskip('pgvector')
+
+    from osintgpt.vector_store.pgvector_store import PgVectorStore
+
+    engine = PgVectorStore(
+        Settings(postgres_dsn=dsn),
+        collection=f'contract_{uuid.uuid4().hex[:12]}'
+    )
+    try:
+        yield engine
+    finally:
+        with engine.connection.cursor() as cursor:
+            cursor.execute(f'DROP TABLE IF EXISTS {engine.table}')
+        engine.connection.commit()
+        engine.close()
 
 
 class TestInterface:

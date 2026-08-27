@@ -282,10 +282,15 @@ class QdrantVectorStore(BaseVectorEngine):
             )
         )
         for key in (REF, EMBEDDING_MODEL):
+            # wait=False because building an index takes longer on a real
+            # server than the client's default timeout allows, and blocking
+            # the first write of a project on an optimization is wrong: Qdrant
+            # answers with a full scan until the index is ready.
             self.client.create_payload_index(
                 collection_name=self.collection,
                 field_name=key,
-                field_schema=rest.PayloadSchemaType.KEYWORD
+                field_schema=rest.PayloadSchemaType.KEYWORD,
+                wait=False
             )
 
     def _collection_exists(self) -> bool:

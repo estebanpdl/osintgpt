@@ -11,3 +11,6 @@ from .qdrant import Qdrant
 
 # choosing one from a project's settings
 from .factory import BACKENDS, store_for
+
+# PgVectorStore is deliberately not imported here: its drivers are optional,
+# and importing this package must not require them.

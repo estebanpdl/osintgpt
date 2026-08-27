@@ -22,6 +22,7 @@ from osintgpt.config import Settings
 from osintgpt.exceptions.errors import MissingEnvironmentVariableError
 
 # import Qdrant
+from osintgpt.vector_store.connection import TIMEOUT_SECONDS
 from osintgpt.vector_store.qdrant import Qdrant
 
 LOCAL = Settings(qdrant_host='localhost', qdrant_port=6333)
@@ -43,14 +44,25 @@ class TestConnection:
     def test_local_settings_connect_by_host_and_port(self, client):
         Qdrant(LOCAL)
 
-        client.assert_called_once_with(host='localhost', port=6333)
+        client.assert_called_once_with(
+            host='localhost', port=6333, timeout=TIMEOUT_SECONDS
+        )
 
     def test_remote_settings_connect_by_url(self, client):
         Qdrant(REMOTE)
 
         client.assert_called_once_with(
-            url='https://example.invalid', api_key='qdrant-key', https=True
+            url='https://example.invalid', api_key='qdrant-key', https=True,
+            timeout=TIMEOUT_SECONDS
         )
+
+    def test_the_timeout_outlasts_creating_a_collection(self, client):
+        '''
+        The client defaults to five seconds, tuned for search. Creating a
+        collection takes longer than that on a real server, so the first write
+        of a project would time out — measured against one, not guessed.
+        '''
+        assert TIMEOUT_SECONDS >= 30
 
     def test_remote_wins_when_both_pairs_are_present(self, client):
         Qdrant(Settings(

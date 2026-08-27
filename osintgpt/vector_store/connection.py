@@ -25,6 +25,11 @@ from osintgpt.exceptions.errors import MissingEnvironmentVariableError
 REMOTE = 'remote'
 LOCAL = 'local'
 
+# The client defaults to five seconds, which is tuned for search. Creating a
+# collection takes longer than that on a real server, so the first write of a
+# project would time out — measured, not guessed.
+TIMEOUT_SECONDS = 60
+
 UNREACHABLE = (
     'Unable to establish a connection to the Qdrant server. Please ensure '
     'that the Qdrant server is up and running. If you are using this '
@@ -65,12 +70,15 @@ def connect(settings: Settings) -> Tuple['qdrant_client.QdrantClient', str]:
         client = qdrant_client.QdrantClient(
             url=settings.qdrant_url,
             api_key=settings.qdrant_api_key,
-            https=True
+            https=True,
+            timeout=TIMEOUT_SECONDS
         )
         kind = REMOTE
     else:
         client = qdrant_client.QdrantClient(
-            host=settings.qdrant_host, port=settings.qdrant_port
+            host=settings.qdrant_host,
+            port=settings.qdrant_port,
+            timeout=TIMEOUT_SECONDS
         )
         kind = LOCAL
 

@@ -62,8 +62,14 @@ dependencies = [
 local = [
     "sentence-transformers>=3,<6"
 ]
+# For operators who already run Postgres. Never the thing an error message
+# tells someone to go set up: the default store needs no server at all.
+postgres = [
+    "psycopg[binary]>=3.1,<4",
+    "pgvector>=0.3,<1"
+]
 all = [
-    "osintgpt[local]"
+    "osintgpt[local,postgres]"
 ]
 dev = [
     "pytest>=8",

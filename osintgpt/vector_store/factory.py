@@ -22,8 +22,9 @@ from .sqlite_store import SQLiteVectorStore
 
 SQLITE = 'sqlite'
 QDRANT = 'qdrant'
+POSTGRES = 'postgres'
 
-BACKENDS = (SQLITE, QDRANT)
+BACKENDS = (SQLITE, QDRANT, POSTGRES)
 
 
 # open the store a project is configured to use
@@ -56,6 +57,16 @@ def store_for(
             resolve_settings(config) if config is not None else Settings(),
             # The project's own slug, so two projects on one server stay
             # separate the way two project files do.
+            collection=project.slug
+        )
+
+    if backend == POSTGRES:
+        # Imported here rather than at module scope: the drivers are optional,
+        # and a project using the default store must not need them installed.
+        from .pgvector_store import PgVectorStore
+
+        return PgVectorStore(
+            resolve_settings(config) if config is not None else Settings(),
             collection=project.slug
         )
 

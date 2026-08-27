@@ -46,7 +46,8 @@ ENV_VARS = {
     'qdrant_api_key': 'QDRANT_API_KEY',
     'qdrant_url': 'QDRANT_URL',
     'qdrant_host': 'QDRANT_HOST',
-    'qdrant_port': 'QDRANT_PORT'
+    'qdrant_port': 'QDRANT_PORT',
+    'postgres_dsn': 'POSTGRES_DSN'
 }
 
 # Settings class
@@ -73,6 +74,10 @@ class Settings:
     qdrant_url: str = ''
     qdrant_host: str = ''
     qdrant_port: Optional[int] = None
+    # One connection string rather than five fields: libpq already defines
+    # this format, operators who run Postgres already have one, and splitting
+    # it would mean re-deciding how sslmode and a socket path are spelled.
+    postgres_dsn: str = ''
 
     # build settings from the environment
     @classmethod
