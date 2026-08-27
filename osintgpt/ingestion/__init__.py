@@ -1,6 +1,12 @@
 # import class methods
 from .chunking import MAX_CHARS, Chunk, chunk_document, chunk_text
 from .documents import Document, FieldMapping, document_from_record, value_at
+from .images import (
+    IMAGE_SUFFIXES,
+    is_image,
+    marker_for,
+    read_image
+)
 from .indexing import (
     IndexPlan,
     IndexState,

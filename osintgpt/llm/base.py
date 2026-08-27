@@ -60,6 +60,28 @@ class EmbeddingProvider(ABC):
             f'the {type(self).__name__} backend cannot list its models'
         )
 
+    def embed_images(self, images: List[bytes]) -> List[List[float]]:
+        '''
+        Embed images into the same vector space as text.
+
+        Not abstract: most embedding models are text-only, and requiring every
+        provider to implement a refusal would be ceremony. `supports_images`
+        is what a caller checks; this is what it calls afterwards.
+
+        Args:
+            images (List[bytes]): Image files as stored.
+
+        Raises:
+            NotImplementedError: If the configured model embeds text only.
+
+        Returns:
+            List[List[float]]: One vector per image, in the order given.
+        '''
+        raise NotImplementedError(
+            f'{self.model} embeds text only; use a multimodal embedding '
+            'model to index images'
+        )
+
     @abstractmethod
     def embed(self, texts: List[str]) -> List[List[float]]:
         '''

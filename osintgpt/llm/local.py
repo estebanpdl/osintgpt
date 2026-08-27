@@ -63,6 +63,59 @@ class SentenceTransformerEmbedding(EmbeddingProvider):
 
         self.encoder = SentenceTransformer(model, device=device)
 
+    @property
+    def supports_images(self) -> bool:
+        '''
+        Whether the loaded model shares one vector space with images.
+
+        Asked of the model rather than looked up in a list of names, which
+        would be wrong the week after it was written. Older
+        sentence-transformers does not declare its modalities, and a model
+        that cannot say is taken at text-only: refusing an image the operator
+        can then enable is recoverable, and embedding one into a text-only
+        space silently is not.
+        '''
+        modalities = getattr(self.encoder, 'modalities', None)
+
+        return bool(modalities) and 'image' in modalities
+
+    def embed_images(self, images: List[bytes]) -> List[List[float]]:
+        if not images:
+            return []
+
+        if not self.supports_images:
+            # The base class message names the model, which is what an
+            # operator needs to change.
+            return super().embed_images(images)
+
+        import io
+
+        try:
+            from PIL import Image
+        except ImportError as error:
+            raise ImportError(
+                'embedding images needs pillow: pip install osintgpt[local]'
+            ) from error
+
+        opened = [Image.open(io.BytesIO(data)) for data in images]
+        try:
+            vectors = self.encoder.encode(opened)
+        finally:
+            for image in opened:
+                image.close()
+
+        self._record(Usage(
+            provider='sentence-transformers',
+            model=self.model,
+            billable=False,
+            counted=False
+        ))
+
+        return [
+            vector.tolist() if hasattr(vector, 'tolist') else list(vector)
+            for vector in vectors
+        ]
+
     def embed(self, texts: List[str]) -> List[List[float]]:
         if not texts:
             return []

@@ -18,6 +18,7 @@ from typing import List, Optional, Union
 
 from .documents import Document, FieldMapping
 from .fallback import FALLBACK_SUFFIXES, can_convert, convert
+from .images import IMAGE_SUFFIXES, is_image
 from .office import extract_docx
 from .pdf import Transcriber, extract_pdf
 from .tabular import load_records
@@ -36,9 +37,10 @@ SUPPORTED_SUFFIXES = (
 )
 
 # What osintgpt can read at all, including formats only the optional converter
-# reaches. Kept apart from SUPPORTED_SUFFIXES so a dry run can distinguish
-# "read by a reader chosen for it" from "converted as a last resort".
-READABLE_SUFFIXES = SUPPORTED_SUFFIXES | FALLBACK_SUFFIXES
+# reaches and images, which are embedded rather than read. Kept apart from
+# SUPPORTED_SUFFIXES so a dry run can distinguish "read by a reader chosen for
+# it" from "converted as a last resort" from "not text at all".
+READABLE_SUFFIXES = SUPPORTED_SUFFIXES | FALLBACK_SUFFIXES | IMAGE_SUFFIXES
 
 
 # does osintgpt read this file
@@ -108,6 +110,15 @@ def load_documents(
 
     if suffix in TEXT_SUFFIXES | HTML_SUFFIXES:
         return load_text(path, mapping)
+
+    if is_image(path):
+        # An image carries no text to load. It is corpus, and it is indexed
+        # through the embedding provider rather than through a reader, so
+        # this path has nothing to return rather than nothing to say.
+        raise ValueError(
+            f'{path.name} is an image; images are embedded directly and have '
+            'no text to load'
+        )
 
     # Last resort, and only for formats with no reader of their own. Where a
     # reader exists it is better: it was chosen for that format, and a general

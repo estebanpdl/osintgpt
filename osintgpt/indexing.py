@@ -25,8 +25,12 @@ from osintgpt.ingestion import (
     Corpus,
     IndexState,
     chunk_document,
-    load_documents
+    is_image,
+    load_documents,
+    marker_for,
+    read_image
 )
+from osintgpt.ingestion.images import NO_IMAGE_SUPPORT
 
 # import osintgpt llm
 from osintgpt.llm.base import EmbeddingProvider
@@ -69,6 +73,9 @@ class IndexReport:
     '''
     indexed: List[DocumentResult] = field(default_factory=list)
     failed: List[DocumentResult] = field(default_factory=list)
+    # Files a pass declined to index, each with the reason. Separate from
+    # failures: nothing went wrong, the configuration cannot hold them.
+    skipped: List[DocumentResult] = field(default_factory=list)
     unchanged: int = 0
     removed: int = 0
     # Chunks dropped because they were embedded by a model no longer in use.
@@ -90,10 +97,20 @@ class IndexReport:
             parts.append(f'{self.removed} removed')
         if self.purged:
             parts.append(f'{self.purged} chunks purged from other models')
+        if self.skipped:
+            parts.append(f'{len(self.skipped)} skipped')
         if self.failed:
             parts.append(f'{len(self.failed)} unreadable')
 
         return ', '.join(parts) if parts else 'nothing to do'
+
+    @property
+    def notices(self) -> List[str]:
+        '''
+        Returns:
+            List[str]: Why each skipped file was skipped. A file that cannot                 be indexed is reported rather than dropped, so an operator                 learns it from a run instead of from an answer that was                 missing something.
+        '''
+        return [result.problem for result in self.skipped]
 
 
 # index a project
@@ -162,11 +179,23 @@ def _run(
     plan = state.plan(corpus.files(root), root, force=force)
     indexed: List[DocumentResult] = []
     failed: List[DocumentResult] = []
+    skipped: List[DocumentResult] = []
 
     for position, path in enumerate(plan.work, 1):
         ref = _ref_for(path, root)
         if on_progress:
             on_progress(ref, position, len(plan.work))
+
+        if is_image(path) and not embedder.supports_images:
+            # Declined, not failed, and recorded either way. A registered file
+            # that quietly never reaches the index is the worst outcome here:
+            # the corpus looks complete and answers are missing a source.
+            notice = NO_IMAGE_SUPPORT.format(
+                name=ref, model=embedder.model
+            )
+            log.info('%s', notice)
+            skipped.append(DocumentResult(ref=ref, problem=notice))
+            continue
 
         try:
             stored = _index_document(path, ref, root, corpus, embedder, store)
@@ -194,6 +223,7 @@ def _run(
     return IndexReport(
         indexed=indexed,
         failed=failed,
+        skipped=skipped,
         unchanged=len(plan.unchanged),
         removed=removed,
         purged=purged,
@@ -212,6 +242,24 @@ def _index_document(
     '''
     Read, chunk, embed and store one document. Returns the chunks stored.
     '''
+    if is_image(path):
+        # One image is one chunk: there is nothing to split, and the stored
+        # text is a marker rather than a caption, because nothing was
+        # extracted and inventing a description would put words in the index
+        # that no model produced.
+        vector = embedder.embed_images([read_image(path)])[0]
+
+        return store.upsert(
+            ref,
+            [StoredChunk(
+                ref=ref,
+                sequence=0,
+                text=marker_for(path),
+                embedding_model=embedder.model
+            )],
+            [vector]
+        )
+
     documents = load_documents(path, corpus.mapping_for(path, root))
 
     chunks: List[StoredChunk] = []

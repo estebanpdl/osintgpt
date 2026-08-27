@@ -14,6 +14,9 @@
 import builtins
 import pytest
 
+# import submodules
+from types import SimpleNamespace
+
 # import osintgpt config
 from osintgpt.config import DEFAULT_EMBEDDING_MODEL, Settings
 
@@ -173,3 +176,48 @@ class TestMissingPackage:
 
         assert 'sentence-transformers' in message
         assert 'osintgpt[local]' in message
+
+
+class TestImageSupport:
+    '''
+    Whether a local model can embed images is a property of the model, and it
+    is worth asking rather than inferring: a wrong yes embeds an image into a
+    text-only space and reports success.
+    '''
+
+    def test_a_model_declaring_text_only_refuses_images(self):
+        encoder = SimpleNamespace(modalities=['text'])
+        provider = SentenceTransformerEmbedding(encoder=encoder)
+
+        assert provider.supports_images is False
+
+    def test_a_model_declaring_images_accepts_them(self):
+        encoder = SimpleNamespace(modalities=['text', 'image'])
+        provider = SentenceTransformerEmbedding(encoder=encoder)
+
+        assert provider.supports_images is True
+
+    def test_a_model_that_does_not_say_is_taken_at_text_only(self):
+        '''
+        Older sentence-transformers declares nothing. Refusing an image the
+        operator can then enable is recoverable; embedding one into a
+        text-only space silently is not.
+        '''
+        provider = SentenceTransformerEmbedding(encoder=SimpleNamespace())
+
+        assert provider.supports_images is False
+
+    def test_refusing_names_the_model_that_has_to_change(self):
+        provider = SentenceTransformerEmbedding(
+            model='some-text-model', encoder=SimpleNamespace(modalities=['text'])
+        )
+
+        with pytest.raises(NotImplementedError, match='some-text-model'):
+            provider.embed_images([b'bytes'])
+
+    def test_no_images_is_not_a_provider_call(self):
+        provider = SentenceTransformerEmbedding(
+            encoder=SimpleNamespace(modalities=['text'])
+        )
+
+        assert provider.embed_images([]) == []

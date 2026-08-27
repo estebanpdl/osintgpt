@@ -28,6 +28,7 @@ from osintgpt.utils import count_tokens
 
 from .chunking import MAX_CHARS, chunk_text
 from .documents import FieldMapping
+from .images import is_image, marker_for
 from .loaders import READABLE_SUFFIXES, load_documents, needs_mapping
 from .pdf import extract_pdf
 from .tabular import UnmappedSourceError, describe_fields
@@ -56,6 +57,9 @@ class FilePreview:
     # this is the expensive half of ingestion, and nothing else in a dry run
     # costs a generation call.
     vision_pages: int = 0
+    # True when the file is an image, which is embedded whole rather than
+    # chunked and needs a multimodal model to be indexed at all.
+    is_image: bool = False
     # Why this file would contribute nothing, if it would not.
     problem: str = ''
 
@@ -82,6 +86,16 @@ class DryRun:
     @property
     def readable(self) -> List[FilePreview]:
         return [f for f in self.files if f.is_readable]
+
+    @property
+    def images(self) -> List[FilePreview]:
+        '''
+        Returns:
+            List[FilePreview]: Images in the corpus. Reported separately \
+                because whether they can be indexed depends on the embedding \
+                model rather than on the file.
+        '''
+        return [f for f in self.files if f.is_image]
 
     @property
     def unconfigured(self) -> List[FilePreview]:
@@ -146,6 +160,11 @@ class DryRun:
                 f'{self.vision_pages} pages need a vision model, at one '
                 'generation call each'
             )
+        if self.images:
+            parts.append(
+                f'{len(self.images)} images, indexable only with a '
+                'multimodal embedding model'
+            )
         if self.unconfigured:
             parts.append(f'{len(self.unconfigured)} need field mapping')
         if self.failed:
@@ -177,6 +196,14 @@ def preview_file(
         FilePreview: Counts, or the fields awaiting a role, or the problem.
     '''
     path = Path(path)
+
+    if is_image(path):
+        # One image is one chunk and there is nothing to tokenize. It counts
+        # as a document so a corpus total is honest about what is in it.
+        return FilePreview(
+            path=path, documents=1, chunks=1,
+            characters=len(marker_for(path)), is_image=True
+        )
 
     if needs_mapping(path) and (mapping is None or not mapping.is_set):
         try:
