@@ -22,8 +22,7 @@ from typing import List, Optional, Union
 # import osintgpt config
 from osintgpt.config import Settings, resolve_settings
 
-# import exceptions
-from osintgpt.exceptions.errors import MissingEnvironmentVariableError
+from .connection import REMOTE, connect
 
 # Not a BaseVectorEngine yet: this class predates the widened interface and
 # still speaks in collections rather than documents. Adapting it is its own
@@ -78,53 +77,16 @@ class Qdrant(object):
             use_remote: use remote
             use_local: use local
         '''
-        # set required settings
         settings = self.settings
-        use_remote = settings.qdrant_api_key and settings.qdrant_url
-        use_local = settings.qdrant_port and settings.qdrant_host
+        self.qdrant, kind = connect(settings)
 
-        if not (use_remote or use_local):
-            raise MissingEnvironmentVariableError(
-                'QDRANT_API_KEY or QDRANT_URL or QDRANT_HOST or QDRANT_PORT',
-                hint='a remote Qdrant needs an api key and a url; a local one '
-                     'needs a host and a port'
-            )
-
-        # set connection settings
-        if use_remote:
+        # Kept as attributes because callers read them.
+        if kind == REMOTE:
             self.api_key = settings.qdrant_api_key
             self.url = settings.qdrant_url
-
-            # connect
-            self.qdrant = qdrant_client.QdrantClient(
-                url=self.url,
-                api_key=self.api_key,
-                https=True
-            )
         else:
             self.host = settings.qdrant_host
             self.port = settings.qdrant_port
-
-            # connect
-            self.qdrant = qdrant_client.QdrantClient(
-                host=self.host,
-                port=self.port
-            )
-
-        '''
-
-        Ensure if is indeed connected
-        '''
-        # Perform a simple operation to check connectivity
-        try:
-            collections = self.get_collections()
-        except Exception as e:
-            m = f'''
-            Unable to establish a connection to the Qdrant server. Please ensure
-            that the Qdrant server is up and running. If you're using this locally,
-            make sure to start the Qdrant server before using this feature.
-            '''
-            raise ConnectionError(' '.join(m.split()).strip()) from None
     
     # get client
     def get_client(self):

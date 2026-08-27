@@ -35,7 +35,7 @@ from osintgpt.llm.base import EmbeddingProvider
 from osintgpt.projects import Project
 
 # import osintgpt vector store
-from osintgpt.vector_store import BaseVectorEngine, SQLiteVectorStore, StoredChunk
+from osintgpt.vector_store import BaseVectorEngine, StoredChunk, store_for
 
 log = logging.getLogger('osintgpt.indexing')
 
@@ -103,7 +103,8 @@ def index_project(
     store: Optional[BaseVectorEngine] = None,
     force: bool = False,
     purge_other_models: bool = False,
-    on_progress: Optional[Progress] = None
+    on_progress: Optional[Progress] = None,
+    config=None
 ) -> IndexReport:
     '''
     Bring a project's index up to date with its registered corpus.
@@ -117,8 +118,8 @@ def index_project(
         project (Project): The project to index.
         embedder (EmbeddingProvider): Produces the vectors. Its `model` is \
             stored with every chunk and filtered on every search.
-        store (BaseVectorEngine, optional): Where vectors go. Defaults to the \
-            project's own SQLite file.
+        store (BaseVectorEngine, optional): Where vectors go. Defaults to \
+            whichever backend the project's settings name.
         force (bool): Re-embed everything. The escape hatch for a chunker \
             change, which alters output without altering any document.
         purge_other_models (bool): Drop chunks left by a previous embedding \
@@ -126,12 +127,14 @@ def index_project(
             costs nothing.
         on_progress (Progress, optional): Called per document with the ref, \
             its position and the total.
+        config (Settings, optional): Connection settings, needed only by a \
+            backend that reaches a server.
 
     Returns:
         IndexReport: What the pass did, per document.
     '''
     owned = store is None
-    store = store or SQLiteVectorStore(project.paths.store)
+    store = store or store_for(project, config)
 
     try:
         return _run(

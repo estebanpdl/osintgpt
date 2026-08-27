@@ -28,7 +28,7 @@ from osintgpt.projects.cross_project import (
 from osintgpt.projects.settings import ProjectSettings
 
 # import osintgpt vector store
-from osintgpt.vector_store import BaseVectorEngine, SearchResult, SQLiteVectorStore
+from osintgpt.vector_store import BaseVectorEngine, SearchResult, store_for
 
 
 # search one project
@@ -121,7 +121,7 @@ def _store_for(project: Project, store: Optional[BaseVectorEngine]):
 
         return
 
-    engine = SQLiteVectorStore(project.paths.store)
+    engine = store_for(project)
     try:
         yield engine
     finally:
