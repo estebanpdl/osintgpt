@@ -11,10 +11,10 @@
 # ===============================================================================
 
 # import modules
+import numpy as np
 import pandas as pd
 
 # import submodules
-from scipy import spatial
 from ast import literal_eval
 
 # type hints
@@ -174,7 +174,14 @@ class SearchMixin(object):
         Returns:
             float: Relatedness. 1.0 is most similar, 0.0 is least similar.
         '''
-        return 1 - spatial.distance.cosine(x, y)
+        first = np.asarray(x, dtype=float)
+        second = np.asarray(y, dtype=float)
+        norm = np.linalg.norm(first) * np.linalg.norm(second)
+
+        if norm == 0:
+            return 0.0
+
+        return float((first @ second) / norm)
 
     # load search top k results from dataframe
     def search_results_from_dataframe(self, df: pd.DataFrame,
@@ -220,19 +227,28 @@ class SearchMixin(object):
         else:
             query_embedding = embeddings
         
-        strings_and_relatednesses = [
-            (
-                row[embeddings_target_column],
-                row[text_target_column],
-                self._relatedness_fn(query_embedding, row[embeddings_target_column])
-            )
-            for _, row in df.iterrows()
-        ]
+        embedding_values = df[embeddings_target_column].tolist()
+        if not embedding_values:
+            return {
+                'query': query,
+                'query_embedding': query_embedding,
+                'results': []
+            }
 
-        strings_and_relatednesses.sort(key=lambda x: x[2], reverse=True)
+        matrix = np.stack(embedding_values).astype(np.float32, copy=False)
+        target = np.asarray(query_embedding, dtype=np.float32)
+        norms = np.linalg.norm(matrix, axis=1) * np.linalg.norm(target)
+        norms[norms == 0] = np.inf
+        scores = (matrix @ target) / norms
+        best = np.argsort(-scores, kind='stable')[:top_k]
+        text_values = df[text_target_column].tolist()
+        strings_and_relatednesses = [
+            (embedding_values[i], text_values[i], float(scores[i]))
+            for i in best
+        ]
         
         return {
             'query': query,
             'query_embedding': query_embedding,
-            'results': strings_and_relatednesses[:top_k]
+            'results': strings_and_relatednesses
         }
