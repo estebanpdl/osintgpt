@@ -43,6 +43,9 @@ def extract_docx(path: Union[str, Path]) -> str:
     '''
     try:
         import docx
+        from docx.oxml.ns import qn
+        from docx.table import Table
+        from docx.text.paragraph import Paragraph
     except ImportError as error:
         raise ImportError(
             "reading Word documents needs the 'python-docx' package, which "
@@ -53,18 +56,19 @@ def extract_docx(path: Union[str, Path]) -> str:
     document = docx.Document(str(path))
     blocks: List[str] = []
 
-    for paragraph in document.paragraphs:
-        text = paragraph.text.strip()
-        if not text:
-            continue
+    for element in document.element.body:
+        if element.tag == qn('w:p'):
+            paragraph = Paragraph(element, document)
+            text = paragraph.text.strip()
+            if not text:
+                continue
 
-        level = _heading_level(paragraph)
-        blocks.append(f'{"#" * level} {text}' if level else text)
-
-    for table in document.tables:
-        rendered = _render_table(table)
-        if rendered:
-            blocks.append(rendered)
+            level = _heading_level(paragraph)
+            blocks.append(f'{"#" * level} {text}' if level else text)
+        elif element.tag == qn('w:tbl'):
+            rendered = _render_table(Table(element, document))
+            if rendered:
+                blocks.append(rendered)
 
     return '\n\n'.join(blocks)
 

@@ -79,13 +79,66 @@ class TestStructure:
 
 
 class TestTables:
-    def build_table(self, doc):
-        table = doc.add_table(rows=3, cols=2)
-        table.rows[0].cells[0].text = 'Layer'
+    def build_table(self, doc, name='Layer', rows=3):
+        table = doc.add_table(rows=rows, cols=2)
+        table.rows[0].cells[0].text = name
         table.rows[0].cells[1].text = 'Description'
-        for index in range(1, 3):
-            table.rows[index].cells[0].text = f'Layer {index}'
+        for index in range(1, rows):
+            table.rows[index].cells[0].text = f'{name} {index}'
             table.rows[index].cells[1].text = f'Detail {index}'
+
+        return table
+
+    def test_a_mixed_document_renders_in_author_order(self, document):
+        def build(doc):
+            doc.add_paragraph('Actors assessed:')
+            self.build_table(doc, name='Actor', rows=2)
+            doc.add_paragraph('Each is assessed below.')
+
+        assert extract_docx(document(build)) == (
+            'Actors assessed:\n\n'
+            '| Actor | Description |\n'
+            '|---|---|\n'
+            '| Actor 1 | Detail 1 |\n\n'
+            'Each is assessed below.'
+        )
+
+    def test_several_tables_stay_interleaved_with_prose(self, document):
+        def build(doc):
+            doc.add_paragraph('Before first')
+            self.build_table(doc, name='First', rows=2)
+            doc.add_paragraph('Between tables')
+            self.build_table(doc, name='Second', rows=2)
+            doc.add_paragraph('After second')
+
+        text = extract_docx(document(build))
+        positions = [
+            text.index(value)
+            for value in (
+                'Before first', '| First |', 'Between tables',
+                '| Second |', 'After second'
+            )
+        ]
+
+        assert positions == sorted(positions)
+
+    def test_a_document_without_tables_is_unchanged(self, document):
+        def build(doc):
+            doc.add_paragraph('First paragraph')
+            doc.add_paragraph('Second paragraph')
+
+        assert extract_docx(document(build)) == (
+            'First paragraph\n\nSecond paragraph'
+        )
+
+    def test_a_table_as_the_first_element_stays_first(self, document):
+        def build(doc):
+            self.build_table(doc, rows=2)
+            doc.add_paragraph('Following prose')
+
+        assert extract_docx(document(build)).startswith(
+            '| Layer | Description |\n|---|---|\n| Layer 1 | Detail 1 |'
+        )
 
     def test_a_table_becomes_pipe_rows(self, document):
         text = extract_docx(document(self.build_table))
@@ -111,6 +164,16 @@ class TestTables:
 
         assert len(holding) == 1
         assert 'Layer 2' in holding[0].text
+
+    def test_a_split_table_repeats_its_header(self, document):
+        def build(doc):
+            self.build_table(doc, rows=80)
+
+        chunks = chunk_document(extract_docx(document(build)))
+        header = '| Layer | Description |\n|---|---|'
+
+        assert len(chunks) > 1
+        assert all(chunk.text.startswith(header) for chunk in chunks)
 
     def test_a_cell_spanning_lines_stays_on_one_row(self, document):
         def build(doc):

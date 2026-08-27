@@ -13,6 +13,7 @@
 
 # import modules
 import logging
+import re
 
 # import submodules
 from dataclasses import dataclass, field
@@ -20,6 +21,8 @@ from pathlib import Path
 
 # type hints
 from typing import Callable, List, Optional, Union
+
+from .chunking import _SENTENCE_END
 
 log = logging.getLogger('osintgpt.ingestion')
 
@@ -43,6 +46,10 @@ FAILED = '[Page {page}: transcription failed]'
 # than constructed here, so extraction is testable without a provider and the
 # ingestion model stays the caller's choice.
 Transcriber = Callable[[bytes], str]
+
+_PDF_EXTRACTION_NOISE = re.compile(
+    r'[\x0c\uE000-\uF8FF\U000F0000-\U000FFFFD\U00100000-\U0010FFFD]'
+)
 
 
 # PageExtraction class
@@ -69,7 +76,7 @@ class PdfExtraction:
 
     @property
     def markdown(self) -> str:
-        return '\n\n'.join(page.text for page in self.pages if page.text)
+        return join_page_texts([page.text for page in self.pages])
 
     @property
     def transcribed_pages(self) -> int:
@@ -88,6 +95,43 @@ class PdfExtraction:
         pays for it: this is the expensive half of reading a PDF.
         '''
         return sum(1 for page in self.pages if page.transcribed or page.empty)
+
+
+def join_page_texts(page_texts: List[str]) -> str:
+    '''Join PDF pages without inventing paragraph breaks inside sentences.'''
+    pages = [text for text in page_texts if text]
+    if not pages:
+        return ''
+
+    joined = pages[0]
+    for previous, current in zip(pages, pages[1:]):
+        separator = ' ' if _continues_sentence(previous, current) else '\n\n'
+        joined += separator + current
+
+    return joined
+
+
+def _continues_sentence(previous: str, current: str) -> bool:
+    previous = previous.rstrip()
+    current = current.lstrip()
+    if not previous or not current:
+        return False
+
+    ends_sentence = any(
+        match.end() == len(previous)
+        for match in _SENTENCE_END.finditer(previous)
+    )
+    first = current[0]
+    starts_continuation = (
+        first.islower()
+        or first.isalpha() and not first.isupper() and not first.istitle()
+    )
+
+    return not ends_sentence and starts_continuation
+
+
+def _clean_extracted_text(text: str) -> str:
+    return _PDF_EXTRACTION_NOISE.sub('', text).strip()
 
 
 # read the text a PDF carries directly
@@ -115,7 +159,10 @@ def extract_page_texts(path: Union[str, Path]) -> List[str]:
 
     reader = PdfReader(str(path))
 
-    return [(page.extract_text() or '').strip() for page in reader.pages]
+    return [
+        _clean_extracted_text(page.extract_text() or '')
+        for page in reader.pages
+    ]
 
 
 # rasterize one page
