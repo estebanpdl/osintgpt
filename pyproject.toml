@@ -49,10 +49,15 @@ dependencies = [
     "python-docx>=1,<2",
     "python-dotenv",
     "qdrant-client>=1.10,<2",
+    "rich>=13,<15",
     "tiktoken",
     "tomli-w",
-    "tomli; python_version < '3.11'"
+    "tomli; python_version < '3.11'",
+    "typer>=0.12,<1"
 ]
+
+[project.scripts]
+osintgpt = "osintgpt.cli.main:main"
 
 [project.optional-dependencies]
 # sentence-transformers pulls torch: ~650 MB against ~120 MB for everything

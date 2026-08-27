@@ -81,7 +81,14 @@ class TestMetadata:
             for dependency in pyproject['project']['dependencies']
         }
 
-        assert {'openai', 'tiktoken', 'python-dotenv'} <= names
+        assert {
+            'openai', 'python-dotenv', 'rich', 'tiktoken', 'typer'
+        } <= names
+
+    def test_installs_the_console_script(self, pyproject):
+        assert pyproject['project']['scripts']['osintgpt'] == (
+            'osintgpt.cli.main:main'
+        )
 
     def test_pins_openai_below_the_next_major(self, pyproject):
         openai = next(
