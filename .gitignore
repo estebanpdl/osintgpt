@@ -15,6 +15,7 @@ rules/
 .agents/
 .claude/
 references/
+codex-support/
 .human-read-only/
 CLAUDE.md
 resources.txt
