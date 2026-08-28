@@ -4,6 +4,9 @@ from .build import GraphReport, build_graph
 # reading entities and relationships out of a document
 from .extraction import Extraction, extract_document
 
+# interchange formats
+from .export import export_graph, to_cypherl, to_json
+
 # what the graph holds
 from .store import Edge, Entity, GraphStore, graph_for, merge_key
 

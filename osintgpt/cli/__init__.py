@@ -10,6 +10,7 @@ from osintgpt.projects import default_home
 from .config import config_app
 from .corpus import register_corpus_commands
 from .doctor import doctor as doctor_command
+from .graph import graph_app
 from .projects import project_app
 from .retrieval import register_retrieval_commands
 from .selection import CliState
@@ -32,6 +33,7 @@ def configure(
 
 app.add_typer(project_app, name='project')
 app.add_typer(config_app, name='config')
+app.add_typer(graph_app, name='graph')
 register_corpus_commands(app)
 register_retrieval_commands(app)
 app.command('doctor')(doctor_command)
