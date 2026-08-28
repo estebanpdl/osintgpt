@@ -1,0 +1,33 @@
+Pick the literal strings worth searching for, character by character, to
+answer the question below.
+
+This is exact-match search, not semantic search. Something else already
+handles paraphrase. What you choose here is what a `find in page` would be
+given, so it earns its place only if the exact characters plausibly appear in
+a document.
+
+Choose:
+
+- identifiers as they are written — handles, usernames, account ids, hashes,
+  URLs, domains, file names, error codes, case numbers
+- proper names of people, organizations, places, operations, products
+- fixed phrases a document would repeat verbatim
+- numbers that identify something: dates as written, amounts, article or
+  section numbers
+
+Do not choose:
+
+- common words, or words that merely describe the topic
+- your own paraphrase of the question
+- a translation of a term into another language — search the characters the
+  question used, in the script it used them
+- anything shorter than two characters
+
+Take terms from the question itself wherever you can. If the question names
+nothing exact, return an empty list; a bad term is worse than no term,
+because it matches everything and buries what matters.
+
+Return at most {{ max_terms }} terms as a JSON array of strings, and nothing
+else. Example shape, not content:
+
+["a-literal-string", "another"]

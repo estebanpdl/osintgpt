@@ -36,6 +36,10 @@ TABLE_PREFIX = 'osintgpt_'
 # operator class, matching the distance every backend reports.
 INDEX_SUFFIX = '_vector_idx'
 
+# Named explicitly so a term containing it is doubled rather than silently
+# escaping the character after it.
+LIKE_ESCAPE = chr(92)
+
 
 # PgVectorStore class
 class PgVectorStore(BaseVectorEngine):
@@ -178,6 +182,46 @@ class PgVectorStore(BaseVectorEngine):
             SearchResult(chunk=_to_chunk(row), score=float(row[8]))
             for row in rows
         ]
+
+    def match_text(
+        self,
+        term: str,
+        embedding_model: Optional[str] = None,
+        limit: int = 100,
+        refs: Optional[Iterable[str]] = None
+    ) -> List[StoredChunk]:
+        if not term or not self._table_exists():
+            return []
+
+        # ILIKE folds case per the database collation, which is Unicode-aware
+        # on any modern install. LOWER() on both sides would be the same
+        # comparison with an extra function call.
+        clauses = ['text ILIKE %s ESCAPE %s']
+        parameters: List[object] = [f'%{_escape_like(term)}%', LIKE_ESCAPE]
+
+        if embedding_model is not None:
+            clauses.append('embedding_model = %s')
+            parameters.append(embedding_model)
+
+        if refs is not None:
+            wanted = list(refs)
+            if not wanted:
+                return []
+            clauses.append('ref = ANY(%s)')
+            parameters.append(wanted)
+
+        query = self._sql(
+            'SELECT ref, sequence, text, path, "timestamp", author,'
+            '       metadata, embedding_model '
+            'FROM {} WHERE ' + ' AND '.join(clauses) +
+            ' ORDER BY ref, sequence LIMIT %s'
+        )
+        parameters.append(limit)
+
+        with self.connection.cursor() as cursor:
+            cursor.execute(query, parameters)
+
+            return [_to_chunk(row) for row in cursor.fetchall()]
 
     def delete(self, refs: Iterable[str]) -> int:
         wanted = list(refs)
@@ -356,6 +400,17 @@ def _import_drivers():
         ) from error
 
     return psycopg, register_vector
+
+
+def _escape_like(term: str) -> str:
+    '''
+    A term containing % or _ is ordinary text. Without this a search for `50%`
+    matches every row.
+    '''
+    for character in (LIKE_ESCAPE, '%', '_'):
+        term = term.replace(character, LIKE_ESCAPE + character)
+
+    return term
 
 
 def _identifier(name: str) -> str:

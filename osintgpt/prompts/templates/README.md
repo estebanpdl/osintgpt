@@ -25,6 +25,7 @@ contains literal `{` and `}` and `.format` would require doubling every one.
 | `topic_modeling` | `prompts.topic_modeling_summarization` | — |
 | `sentence_details` | `OpenAIGPT.analyze_sentence_details` (deprecated) | — |
 | `answer` | `answering.build_prompt` → `answer_question` | `question`, `passages` |
+| `search_terms` | `lexical.derive_search_terms` | `max_terms` |
 
 ## Two kinds of prompt
 
@@ -47,6 +48,12 @@ cites nothing and reads exactly like the grounded version.
 
 If per-project prompt overrides are ever built, only voice prompts are safe to
 expose.
+
+`search_terms` is a **contract** prompt: `derive_search_terms` parses a JSON
+array out of the reply. Its failure is soft — an unparseable reply means the
+lexical leg sits out and the semantic leg still answers — but a reworded
+prompt that stops returning an array turns the exact-match leg off silently,
+which looks like retrieval getting slightly worse.
 
 ## What is on its way out
 

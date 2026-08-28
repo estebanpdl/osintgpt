@@ -376,3 +376,82 @@ class TestRealisticVectors:
         assert store.search(vector, MODEL)[0].score == pytest.approx(
             1.0, abs=1e-4
         )
+
+
+class TestMatchText:
+    '''
+    The exact leg's floor. Every backend matches substrings the same way, or
+    swapping one silently changes what an analyst can find.
+    '''
+
+    @pytest.fixture
+    def populated(self, store):
+        store.upsert('a.md', [chunk('a.md', 0, 'contacted @acct_1 twice')],
+                     [unit(1, 0)])
+        store.upsert('b.md', [chunk('b.md', 0, 'Анализ НАРРАТИВОВ в сети')],
+                     [unit(0, 1)])
+        store.upsert('c.md', [chunk('c.md', 0, 'margin was 50% overall')],
+                     [unit(1, 1)])
+
+        return store
+
+    def test_a_substring_inside_a_sentence_is_found(self, populated):
+        assert [c.ref for c in populated.match_text('@acct_1')] == ['a.md']
+
+    def test_matching_folds_case_beyond_ascii(self, populated):
+        '''
+        The place an English-only assumption gets reintroduced. A term in
+        Cyrillic must match text stored in another casing, as it would in
+        Latin script.
+        '''
+        assert [c.ref for c in populated.match_text('нарративов')] == ['b.md']
+
+    def test_pattern_characters_are_literal(self, populated):
+        assert [c.ref for c in populated.match_text('50%')] == ['c.md']
+
+    def test_an_empty_term_matches_nothing(self, populated):
+        assert populated.match_text('') == []
+
+    def test_a_term_nothing_holds_matches_nothing(self, populated):
+        assert populated.match_text('never-written') == []
+
+    def test_an_empty_store_matches_nothing(self, store):
+        assert store.match_text('anything') == []
+
+    def test_it_can_be_restricted_to_a_model(self, store):
+        store.upsert('a.md', [chunk('a.md', 0, 'shared text', model=MODEL)],
+                     [unit(1, 0)])
+        store.upsert('b.md',
+                     [chunk('b.md', 0, 'shared text', model=OTHER_MODEL)],
+                     [unit(1, 0)])
+
+        found = store.match_text('shared text', embedding_model=MODEL)
+
+        assert [c.ref for c in found] == ['a.md']
+
+    def test_it_can_be_restricted_to_documents(self, populated):
+        found = populated.match_text('a', refs=['b.md'])
+
+        assert all(c.ref == 'b.md' for c in found)
+
+    def test_an_empty_restriction_returns_nothing(self, populated):
+        assert populated.match_text('a', refs=[]) == []
+
+    def test_the_limit_is_respected(self, store):
+        store.upsert(
+            'a.md',
+            [chunk('a.md', i, f'record {i} mentions nimbus') for i in range(10)],
+            [unit(1, i) for i in range(10)]
+        )
+
+        assert len(store.match_text('nimbus', limit=3)) == 3
+
+    def test_results_come_back_in_reading_order(self, store):
+        store.upsert(
+            'a.md',
+            [chunk('a.md', i, f'part {i} nimbus') for i in range(5)],
+            [unit(1, i) for i in range(5)]
+        )
+        found = store.match_text('nimbus')
+
+        assert [c.sequence for c in found] == [0, 1, 2, 3, 4]

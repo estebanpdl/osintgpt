@@ -30,8 +30,9 @@ from osintgpt.evaluation import (
 # import osintgpt answering
 from osintgpt.answering import Answer, answer_question
 
-# import osintgpt indexing and search
+# import osintgpt indexing, lexical search and semantic search
 from osintgpt.indexing import IndexReport, index_project
+from osintgpt.lexical import derive_search_terms, lexical_search
 from osintgpt.search import search_across_projects, search_project
 
 # define package-level variables and constants
@@ -53,8 +54,10 @@ __all__ = [
     'ProjectSettings',
     'Settings',
     'answer_question',
+    'derive_search_terms',
     'evaluate',
     'index_project',
+    'lexical_search',
     'load_questions',
     'save_questions',
     'search_across_projects',
