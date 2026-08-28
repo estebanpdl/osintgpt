@@ -257,7 +257,15 @@ def index_corpus(
 
 
 def register_corpus_commands(app: typer.Typer) -> None:
-    app.command('add')(add_source)
-    app.command('sources')(list_sources)
-    app.command('remove')(remove_source)
-    app.command('index')(index_corpus)
+    app.command(
+        'add', help='Register a file or folder as material to index.'
+    )(add_source)
+    app.command(
+        'sources', help='Show what is registered and what has been indexed.'
+    )(list_sources)
+    app.command(
+        'remove', help='Unregister a source. The files stay on disk.'
+    )(remove_source)
+    app.command(
+        'index', help='Index new and changed documents.'
+    )(index_corpus)

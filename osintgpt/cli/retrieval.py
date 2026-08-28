@@ -271,5 +271,9 @@ def search(
 
 
 def register_retrieval_commands(app: typer.Typer) -> None:
-    app.command('ask')(ask)
-    app.command('search')(search)
+    app.command(
+        'ask', help='Answer a question from the project, with sources.'
+    )(ask)
+    app.command(
+        'search', help='Show the passages matching a query, unanswered.'
+    )(search)

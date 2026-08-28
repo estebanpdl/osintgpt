@@ -36,6 +36,8 @@ app.add_typer(config_app, name='config')
 app.add_typer(graph_app, name='graph')
 register_corpus_commands(app)
 register_retrieval_commands(app)
-app.command('doctor')(doctor_command)
+app.command(
+    'doctor', help='Report how this project is configured and what is wrong.'
+)(doctor_command)
 
 __all__ = ['app']

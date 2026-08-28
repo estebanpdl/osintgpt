@@ -32,6 +32,30 @@ def invoke(runner, home, *arguments):
     return runner.invoke(app, ['--home', str(home), *arguments])
 
 
+def test_every_top_level_command_describes_itself(runner):
+    """
+    --help is the first thing an operator reads. A command listed with no
+    description is one they have to run to find out about.
+    """
+    import re
+
+    from osintgpt.cli import app
+
+    output = runner.invoke(app, ['--help']).output
+    block = output.split('Commands', 1)[1]
+    rows = [
+        line for line in block.splitlines()
+        if re.search(r'\w', line) and not line.strip().startswith('└')
+    ]
+
+    undescribed = [
+        line for line in rows
+        if re.match(r'^\W*[a-z-]+\W*$', line.strip())
+    ]
+
+    assert undescribed == []
+
+
 def test_create_then_list_shows_the_project(runner, home):
     created = invoke(runner, home, 'project', 'create', 'Caso Norte')
     listed = invoke(runner, home, 'project', 'list')
