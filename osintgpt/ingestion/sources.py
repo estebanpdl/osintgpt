@@ -146,6 +146,19 @@ class Corpus:
             header=SOURCES_HEADER
         )
 
+    def _key_for(self, path: Union[str, Path]) -> str:
+        root = self.path.parent.resolve()
+        candidate = Path(path)
+        if not candidate.is_absolute():
+            candidate = root / candidate
+        resolved = candidate.resolve()
+        try:
+            stored = resolved.relative_to(root)
+        except ValueError:
+            stored = resolved
+
+        return stored.as_posix()
+
     # register a file or folder
     def register(
         self,
@@ -157,7 +170,8 @@ class Corpus:
         Add a source, or replace what was registered at the same path.
 
         Args:
-            path (Union[str, Path]): Path relative to the project root.
+            path (Union[str, Path]): File or folder to register. Project-local \
+                paths are stored relative to the project root.
             mapping (FieldMapping, optional): Field roles for structured \
                 formats.
             note (str): A line describing where the material came from.
@@ -165,11 +179,15 @@ class Corpus:
         Returns:
             Source: The registered source.
         '''
-        key = Path(path).as_posix()
+        key = self._key_for(path)
         source = Source(
             path=key, mapping=mapping or FieldMapping(), note=note
         )
-        self.sources = [s for s in self.sources if s.path != key] + [source]
+        self.sources = [
+            registered
+            for registered in self.sources
+            if self._key_for(registered.path) != key
+        ] + [source]
         self.save()
 
         return source
@@ -185,8 +203,12 @@ class Corpus:
         Returns:
             bool: True when something was removed.
         '''
-        key = Path(path).as_posix()
-        remaining = [s for s in self.sources if s.path != key]
+        key = self._key_for(path)
+        remaining = [
+            source
+            for source in self.sources
+            if self._key_for(source.path) != key
+        ]
         removed = len(remaining) != len(self.sources)
         if removed:
             self.sources = remaining
@@ -195,9 +217,9 @@ class Corpus:
         return removed
 
     def find(self, path: Union[str, Path]) -> Optional[Source]:
-        key = Path(path).as_posix()
+        key = self._key_for(path)
         for source in self.sources:
-            if source.path == key:
+            if self._key_for(source.path) == key:
                 return source
 
         return None

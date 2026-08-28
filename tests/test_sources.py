@@ -11,6 +11,9 @@
 # =================================================================================
 
 # import modules
+import shutil
+from pathlib import Path
+
 import pytest
 
 # import osintgpt ingestion
@@ -134,6 +137,95 @@ class TestRegistration:
 
         assert text.lstrip().startswith('#')
         assert 'happened to be on disk' in text
+
+
+class TestPortableSourcePaths:
+    def test_a_project_local_absolute_path_is_stored_relative(
+        self, corpus, project
+    ):
+        source = corpus.register(project / 'collected')
+        reloaded = Corpus.load(project / 'sources.toml')
+
+        assert source.path == 'collected'
+        assert reloaded.sources[0].path == 'collected'
+
+    def test_an_external_path_stays_absolute_and_resolves(
+        self, corpus, project
+    ):
+        external = project.parent / f'{project.name}-external.md'
+        external.write_text('External material.', encoding='utf-8')
+
+        source = corpus.register(external)
+
+        assert Path(source.path).is_absolute()
+        assert corpus.files(project) == [external.resolve()]
+
+    def test_a_moved_project_keeps_its_registered_files(
+        self, corpus, project
+    ):
+        corpus.register(project / 'collected')
+        moved = project.parent / f'{project.name}-moved'
+
+        shutil.move(project, moved)
+        reloaded = Corpus.load(moved / 'sources.toml')
+
+        assert {path.name for path in reloaded.files(moved)} == {
+            'first.md', 'second.md'
+        }
+
+    def test_an_existing_absolute_source_still_loads(
+        self, project
+    ):
+        absolute = (project / 'collected').resolve().as_posix()
+        Corpus(
+            path=project / 'sources.toml',
+            sources=[Source(path=absolute)]
+        ).save()
+
+        reloaded = Corpus.load(project / 'sources.toml')
+
+        assert reloaded.sources[0].path == absolute
+        assert {path.name for path in reloaded.files(project)} == {
+            'first.md', 'second.md'
+        }
+
+    def test_relative_and_absolute_registration_do_not_duplicate(
+        self, corpus, project
+    ):
+        corpus.register('collected')
+        corpus.register(project / 'collected')
+
+        assert len(corpus) == 1
+        assert corpus.sources[0].path == 'collected'
+
+    def test_absolute_lookup_and_removal_match_relative_storage(
+        self, corpus, project
+    ):
+        source = corpus.register(project / 'collected')
+
+        assert corpus.find(project / 'collected') == source
+        assert corpus.unregister(project / 'collected') is True
+
+    def test_parent_segments_are_resolved_before_comparison(
+        self, corpus, project
+    ):
+        nested = project / 'nested'
+        nested.mkdir()
+
+        source = corpus.register(nested / '..' / 'collected')
+
+        assert source.path == 'collected'
+
+    def test_mapping_survives_a_project_move(self, corpus, project):
+        corpus.register(project / 'records.csv', MAPPING)
+        moved = project.parent / f'{project.name}-moved'
+
+        shutil.move(project, moved)
+        reloaded = Corpus.load(moved / 'sources.toml')
+
+        mapping = reloaded.mapping_for(moved / 'records.csv', moved)
+
+        assert mapping == MAPPING
 
 
 class TestOverlap:
