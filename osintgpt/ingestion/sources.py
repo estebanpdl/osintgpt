@@ -6,8 +6,7 @@
 # Author: @estebanpdl
 #
 # File: sources.py
-# Description: What a project has been told to index. Registration is the only
-#   gate: a file nobody registered is not corpus, wherever it sits on disk.
+# Description: Registered project sources plus the canon that osintgpt owns.
 # =================================================================================
 
 # import submodules
@@ -22,6 +21,7 @@ from .documents import FieldMapping
 from .loaders import READABLE_SUFFIXES
 
 # import osintgpt projects
+from osintgpt.projects.paths import CANON_DIR
 from osintgpt.projects.toml_io import read_toml, write_toml
 
 # A folder registration should not be able to swallow a home directory by
@@ -37,6 +37,8 @@ SOURCES_HEADER = '''\
 # Structured formats must name which of their fields carry content.
 
 '''
+
+CANON_NOTE = 'Curated project knowledge maintained by osintgpt.'
 
 
 # Source class
@@ -116,8 +118,7 @@ class Source:
 @dataclass
 class Corpus:
     '''
-    A project's registered sources. Mutable and written to disk, because
-    registering is something an operator does repeatedly.
+    A project's corpus: analyst registrations and its tool-owned canon.
     '''
     path: Path
     sources: List[Source] = field(default_factory=list)
@@ -158,6 +159,19 @@ class Corpus:
             stored = resolved
 
         return stored.as_posix()
+
+    # Canon is the only automatic source because osintgpt writes it itself;
+    # analyst registrations remain the gate for everything else on disk.
+    def _index_sources(self) -> List[Source]:
+        sources = list(self.sources)
+        canon = self.path.parent / CANON_DIR
+        if canon.is_dir() and not any(
+            self._key_for(source.path) == CANON_DIR
+            for source in sources
+        ):
+            sources.append(Source(path=CANON_DIR, note=CANON_NOTE))
+
+        return sources
 
     # register a file or folder
     def register(
@@ -218,7 +232,7 @@ class Corpus:
 
     def find(self, path: Union[str, Path]) -> Optional[Source]:
         key = self._key_for(path)
-        for source in self.sources:
+        for source in self._index_sources():
             if self._key_for(source.path) == key:
                 return source
 
@@ -227,7 +241,7 @@ class Corpus:
     # every file the corpus covers
     def files(self, root: Union[str, Path]) -> List[Path]:
         '''
-        Files across every source, deduplicated in registration order.
+        Files across every source, deduplicated in corpus order.
 
         Overlapping sources are ordinary — a folder and a file inside it — and
         the first registration wins, so a file is read once with one mapping.
@@ -240,7 +254,7 @@ class Corpus:
         '''
         seen = set()
         found: List[Path] = []
-        for source in self.sources:
+        for source in self._index_sources():
             for candidate in source.resolve(root):
                 resolved = candidate.resolve()
                 if resolved in seen:
@@ -271,7 +285,7 @@ class Corpus:
 
         direct = None
         folder = None
-        for source in self.sources:
+        for source in self._index_sources():
             covered = {p.resolve() for p in source.resolve(root)}
             if target not in covered:
                 continue
@@ -285,7 +299,7 @@ class Corpus:
         return chosen.mapping if chosen else FieldMapping()
 
     def __iter__(self) -> Iterator[Source]:
-        return iter(self.sources)
+        return iter(self._index_sources())
 
     def __len__(self) -> int:
-        return len(self.sources)
+        return len(self._index_sources())

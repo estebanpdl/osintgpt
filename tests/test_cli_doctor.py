@@ -70,7 +70,7 @@ def test_doctor_reports_embedding_model_mismatch(runner, home):
     assert 'stored-model' in result.output
 
 
-def test_doctor_reports_registered_source_coverage(runner, home):
+def test_doctor_reports_registered_and_managed_source_coverage(runner, home):
     project = create_project(runner, home)
     evidence = project.paths.root / 'evidence'
     evidence.mkdir()
@@ -84,7 +84,8 @@ def test_doctor_reports_registered_source_coverage(runner, home):
 
     payload = json.loads(result.output)
     assert payload['sources'] == [
-        {'path': 'evidence', 'files': 2, 'problem': None}
+        {'path': 'evidence', 'files': 2, 'problem': None},
+        {'path': 'canon', 'files': 0, 'problem': None}
     ]
 
 

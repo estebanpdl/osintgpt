@@ -16,6 +16,7 @@ import pytest
 
 # import osintgpt
 from osintgpt import Project, index_project, search_project
+from osintgpt.canon import is_canon_ref, write_page
 from osintgpt.ingestion import Corpus, FieldMapping
 from osintgpt.llm.base import EmbeddingProvider
 from osintgpt.vector_store import SQLiteVectorStore
@@ -136,6 +137,60 @@ class TestFirstPass:
 
     def test_the_summary_says_what_happened(self, project, embedder):
         assert 'documents' in index_project(project, embedder).summary
+
+
+class TestCanon:
+    def test_a_project_without_a_canon_directory_indexes_as_before(
+        self, project, embedder
+    ):
+        project.paths.canon.rmdir()
+
+        report = index_project(project, embedder)
+
+        assert len(report.indexed) == 3
+        assert all(not is_canon_ref(result.ref) for result in report.indexed)
+
+    def test_canon_pages_index_without_registration(self, project, embedder):
+        page = write_page(
+            project.paths.canon, 'entities', 'Synthesis',
+            'A curated synthesis about a distinctive subject.'
+        )
+
+        report = index_project(project, embedder)
+
+        assert Corpus.load(project.paths.sources).find('canon') is not None
+        assert page.relative_to(project.paths.root).as_posix() in {
+            result.ref for result in report.indexed
+        }
+
+    def test_removing_every_registration_leaves_canon_indexable(
+        self, project, embedder
+    ):
+        corpus = Corpus.load(project.paths.sources)
+        for source in list(corpus.sources):
+            assert corpus.unregister(source.path) is True
+        write_page(
+            project.paths.canon, 'narratives', 'Only synthesis',
+            'The canon remains searchable without primary material.'
+        )
+
+        index_project(project, embedder)
+
+        with SQLiteVectorStore(project.paths.store) as store:
+            assert store.refs()
+            assert all(is_canon_ref(ref) for ref in store.refs())
+
+    def test_a_search_result_identifies_canon_synthesis(
+        self, project, embedder
+    ):
+        text = 'Quizzical xenolith synthesis with a vexing provenance.'
+        write_page(project.paths.canon, 'decisions', 'Finding', text)
+        index_project(project, embedder)
+
+        result = search_project(project, text, embedder, top_k=1)[0]
+
+        assert result.ref == 'canon/decisions/finding.md'
+        assert is_canon_ref(result.ref) is True
 
 
 class TestSecondPass:
