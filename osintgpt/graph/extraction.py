@@ -19,7 +19,7 @@ import re
 from dataclasses import dataclass, field
 
 # type hints
-from typing import List, Optional, Sequence
+from typing import List, Sequence
 
 # import osintgpt llm
 from osintgpt.llm.base import GenerationProvider

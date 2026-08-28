@@ -139,9 +139,8 @@ def build_graph(
 
     try:
         if incremental and not graph.is_built:
-            # The hard no-op the roadmap asks for. Without it, "keep it
-            # current" would become "build it", and an operator would pay for
-            # a corpus-wide pass they never chose.
+            # Without this, "keep it current" would become "build it", and an
+            # operator would pay for a corpus-wide pass they never chose.
             return GraphReport(refused=NOT_BUILT.format(slug=project.slug))
 
         return _run(project, generator, graph, incremental, rebuild,

@@ -20,7 +20,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 # type hints
-from typing import Iterable, List, Optional, Sequence, Union
+from typing import Iterable, List, Optional, Sequence
 
 # The graph is relational data and lives in SQLite whatever backend holds the
 # vectors. A vector database has no relational query and traversing a graph
