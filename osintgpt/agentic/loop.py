@@ -102,6 +102,18 @@ def agentic_answer(
         project=project, embedder=embedder, generator=generator, store=store
     )
 
+    if _nothing_indexed(project, store):
+        # No call is made, of any kind. A corpus with nothing in it cannot
+        # ground an answer, and a model given tools that can only return
+        # nothing would answer from its training instead.
+        from osintgpt.answering import NOTHING_RETRIEVED
+
+        trace.degraded = 'the project has nothing indexed'
+
+        return AgenticAnswer(
+            question=question, text=NOTHING_RETRIEVED, trace=trace
+        )
+
     if not generator.supports_tools:
         return _static(project, question, embedder, generator, trace, store,
                        'the model does not support tool calling')
@@ -154,6 +166,26 @@ def agentic_answer(
     return AgenticAnswer(
         question=question, text=text, trace=trace, sources=sources
     )
+
+
+def _nothing_indexed(project, store) -> bool:
+    '''
+    Whether the project holds any vectors at all.
+
+    Checked before the generator is touched, so an unindexed project costs
+    nothing rather than a model call that could only be answered ungrounded.
+    '''
+    from osintgpt.vector_store import store_for
+
+    owned = store is None
+    engine = store or store_for(project)
+    try:
+        return engine.count() == 0
+    except Exception:  # noqa: BLE001 — a guard, not the answer
+        return False
+    finally:
+        if owned and hasattr(engine, 'close'):
+            engine.close()
 
 
 def _run_calls(context, turn, trace, round_number, sources) -> Dict[str, str]:

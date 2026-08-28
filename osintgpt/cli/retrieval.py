@@ -5,7 +5,12 @@ from typing import Dict, Optional
 
 import typer
 
-from osintgpt import Settings, answer_question, search_project
+from osintgpt import (
+    Settings,
+    agentic_answer,
+    answer_question,
+    search_project
+)
 from osintgpt.answering import DEFAULT_PASSAGES
 from osintgpt.exceptions.errors import MissingEnvironmentVariableError
 from osintgpt.llm import (
@@ -46,20 +51,43 @@ def _embedder(effective, config, json_output: bool):
 
 
 class _LazyGenerator:
-    '''Build the generator only if grounded retrieval found a passage.'''
+    '''
+    Builds the real provider on first use, so a question that needs no model
+    never costs a credential check.
+    '''
 
     def __init__(self, effective, config) -> None:
         self.effective = effective
         self.config = config
+        self._built = None
+
+    @property
+    def provider(self):
+        if self._built is None:
+            self._built = build_generation_provider(
+                self.effective.generation_provider,
+                self.config,
+                model=self.effective.generation_model or None
+            )
+
+        return self._built
+
+    @property
+    def model(self) -> str:
+        return self.effective.generation_model or self.provider.model
+
+    @property
+    def supports_tools(self) -> bool:
+        # A provider that does not declare it cannot be assumed to have it.
+        # Guessing yes would fail the round; guessing no degrades to an
+        # answer, which is the direction that still serves the analyst.
+        return getattr(self.provider, 'supports_tools', False)
 
     def generate(self, system: str, user: str) -> str:
-        generator = build_generation_provider(
-            self.effective.generation_provider,
-            self.config,
-            model=self.effective.generation_model or None
-        )
+        return self.provider.generate(system, user)
 
-        return generator.generate(system, user)
+    def generate_with_tools(self, system, user, tools, history=None):
+        return self.provider.generate_with_tools(system, user, tools, history)
 
 
 @contextmanager
@@ -96,6 +124,13 @@ def ask(
     project_slug: Optional[str] = typer.Option(
         None, '--project', help='Project slug or id; overrides selection.'
     ),
+    static: bool = typer.Option(
+        False, '--static',
+        help='Retrieve once and answer, instead of letting the model search.'
+    ),
+    trace: bool = typer.Option(
+        False, '--trace', help='Show what the model did to reach the answer.'
+    ),
     json_output: bool = typer.Option(False, '--json', help='Print JSON only.')
 ) -> None:
     project, effective, config = _runtime(
@@ -103,16 +138,43 @@ def ask(
     )
     embedder = _embedder(effective, config, json_output)
     generator = _LazyGenerator(effective, config)
+
     try:
         with _store(project, config) as engine:
-            answer = answer_question(
-                project, question, embedder, generator, passages=passages,
-                store=engine
-            )
+            if static:
+                answer = answer_question(
+                    project, question, embedder, generator,
+                    passages=passages, store=engine
+                )
+                data, lines = _static_payload(answer), []
+            else:
+                answer = agentic_answer(
+                    project, question, embedder, generator, store=engine
+                )
+                data = _agentic_payload(answer)
+                lines = answer.trace.lines() + answer.trace.reading
     except Exception as error:  # noqa: BLE001 — provider and store boundary
         fail(str(error), json_output)
 
-    data = {
+    def render(target) -> None:
+        target.print(answer.text, soft_wrap=True)
+        target.print('')
+        target.print('Sources', style='bold')
+        if not answer.sources:
+            target.print('None')
+        for source in answer.sources:
+            target.print(f'• {source}', soft_wrap=True)
+        if trace and lines:
+            target.print('')
+            target.print('Trace', style='bold')
+            for line in lines:
+                target.print(line, soft_wrap=True)
+
+    emit(data, json_output, render)
+
+
+def _static_payload(answer) -> Dict[str, object]:
+    return {
         'answer': answer.text,
         'passages': [
             {
@@ -124,15 +186,34 @@ def ask(
         ]
     }
 
-    def render(target) -> None:
-        target.print(answer.text, soft_wrap=True)
-        target.print('\nSources', style='bold')
-        if not answer.sources:
-            target.print('None')
-        for source in answer.sources:
-            target.print(f'• {source}', soft_wrap=True)
 
-    emit(data, json_output, render)
+def _agentic_payload(answer) -> Dict[str, object]:
+    '''
+    The trace travels with the answer in JSON always, never behind a flag.
+    Reading traces is how retrieval gets tuned, and a script collecting
+    answers should be collecting the reasoning with them.
+    '''
+    return {
+        'answer': answer.text,
+        'sources': answer.sources,
+        'degraded': answer.trace.degraded,
+        'trace': {
+            'rounds': answer.trace.rounds,
+            'calls': [
+                {
+                    'round': entry.round,
+                    'tool': entry.tool,
+                    'arguments': entry.arguments,
+                    'results': entry.count,
+                    'seconds': round(entry.seconds, 3),
+                    'error': entry.error
+                }
+                for entry in answer.trace.entries
+            ],
+            'narration': answer.trace.narration,
+            'reading': answer.trace.reading
+        }
+    }
 
 
 def search(

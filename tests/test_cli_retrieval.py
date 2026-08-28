@@ -86,22 +86,43 @@ def test_ask_prints_answer_and_sources(runner, home, monkeypatch):
     assert 'doc-0.md' in result.output
 
 
-def test_ask_json_contains_only_answer_and_passages(
+def test_ask_json_carries_the_answer_and_the_trace(
     runner, home, monkeypatch
 ):
+    '''
+    The trace is not behind a flag in JSON. A script collecting answers should
+    be collecting the reasoning that produced them.
+    '''
     project_with_chunks(runner, home)
     stub_providers(monkeypatch)
 
     result = invoke(
         runner, home, 'ask', 'What is alpha?', '--project', 'case-search',
-        '--passages', '2', '--json'
+        '--json'
+    )
+
+    payload = json.loads(result.output)
+    assert set(payload) == {'answer', 'sources', 'degraded', 'trace'}
+    assert set(payload['trace']) == {'rounds', 'calls', 'narration', 'reading'}
+    assert '\x1b[' not in result.output
+
+
+def test_static_json_keeps_the_passage_shape(runner, home, monkeypatch):
+    '''
+    --static is the single-retrieval path, and it reports what it retrieved.
+    '''
+    project_with_chunks(runner, home)
+    stub_providers(monkeypatch)
+
+    result = invoke(
+        runner, home, 'ask', 'What is alpha?', '--project', 'case-search',
+        '--passages', '2', '--static', '--json'
     )
 
     payload = json.loads(result.output)
     assert set(payload) == {'answer', 'passages'}
     assert len(payload['passages']) == 2
     assert set(payload['passages'][0]) == {'text', 'score', 'citation'}
-    assert '\x1b[' not in result.output
 
 
 def test_ask_unindexed_exits_zero_without_building_generator(
