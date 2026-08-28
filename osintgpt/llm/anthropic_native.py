@@ -14,6 +14,7 @@
 from typing import List, Optional
 
 from .base import GenerationProvider
+from .calling import ModelTurn, ToolCall
 from .usage import Usage, UsageRecorder
 
 # The API requires an explicit ceiling. Too low truncates a reply mid-thought
@@ -67,6 +68,75 @@ class AnthropicGeneration(GenerationProvider):
             ) from error
 
         self.client = Anthropic(api_key=api_key)
+
+    supports_tools = True
+
+    def generate_with_tools(self, system, user, tools, history=None):
+        messages = [{'role': 'user', 'content': user}]
+
+        for exchange in history or []:
+            content = []
+            if exchange.turn.text:
+                content.append({'type': 'text', 'text': exchange.turn.text})
+            content += [
+                {
+                    'type': 'tool_use',
+                    'id': call.id,
+                    'name': call.name,
+                    'input': call.arguments
+                }
+                for call in exchange.turn.calls
+            ]
+            messages.append({'role': 'assistant', 'content': content})
+
+            # Results come back as a user turn here, not a role of their own.
+            # This is the shape the two vendors disagree about, and the reason
+            # each provider builds its own messages rather than sharing them.
+            messages.append({
+                'role': 'user',
+                'content': [
+                    {
+                        'type': 'tool_result',
+                        'tool_use_id': call.id,
+                        'content': exchange.results.get(call.id, '')
+                    }
+                    for call in exchange.turn.calls
+                ]
+            })
+
+        request = {
+            'model': self.model,
+            'max_tokens': self.max_tokens,
+            'system': system,
+            'messages': messages
+        }
+        if tools:
+            request['tools'] = [
+                {
+                    'name': tool.name,
+                    'description': tool.description,
+                    'input_schema': tool.schema()
+                }
+                for tool in tools
+            ]
+
+        response = self.client.messages.create(**request)
+
+        text = ''.join(
+            block.text for block in response.content
+            if getattr(block, 'type', None) == 'text'
+        )
+        calls = [
+            ToolCall(
+                id=block.id,
+                name=block.name,
+                arguments=dict(getattr(block, 'input', None) or {})
+            )
+            for block in response.content
+            if getattr(block, 'type', None) == 'tool_use'
+        ]
+
+        return ModelTurn(text=text, calls=calls)
 
     def generate(self, system: str, user: str) -> str:
         # The system prompt is its own parameter here rather than a message,

@@ -10,6 +10,9 @@
 #   Gemini's compatibility endpoint, Voyage and Ollama differ only by base URL.
 # =================================================================================
 
+# import modules
+import json
+
 # import submodules
 from openai import OpenAI
 
@@ -17,6 +20,7 @@ from openai import OpenAI
 from typing import List, Optional
 
 from .base import EmbeddingProvider, GenerationProvider
+from .calling import ModelTurn, ToolCall
 from .usage import Usage, UsageRecorder
 
 
@@ -107,6 +111,11 @@ class OpenAICompatGeneration(GenerationProvider):
     '''
     Chat completions over any OpenAI-compatible endpoint.
     '''
+    # The endpoint accepts tools. Whether the model behind it uses them well
+    # is a different question, and the loop answers it by degrading when a
+    # round comes back unusable rather than by trusting this flag.
+    supports_tools = True
+
     def __init__(
         self,
         model: str,
@@ -153,5 +162,93 @@ class OpenAICompatGeneration(GenerationProvider):
 
         return response.choices[0].message.content or ''
 
+    def generate_with_tools(self, system, user, tools, history=None):
+        messages = [
+            {'role': 'system', 'content': system},
+            {'role': 'user', 'content': user}
+        ]
+
+        for exchange in history or []:
+            # The assistant turn has to carry the calls it made, or the
+            # results that follow refer to nothing and the request is refused.
+            messages.append({
+                'role': 'assistant',
+                'content': exchange.turn.text or None,
+                'tool_calls': [
+                    {
+                        'id': call.id,
+                        'type': 'function',
+                        'function': {
+                            'name': call.name,
+                            'arguments': json.dumps(call.arguments)
+                        }
+                    }
+                    for call in exchange.turn.calls
+                ]
+            })
+            for call in exchange.turn.calls:
+                messages.append({
+                    'role': 'tool',
+                    'tool_call_id': call.id,
+                    'content': exchange.results.get(call.id, '')
+                })
+
+        request = {'model': self.model, 'messages': messages}
+        if tools:
+            request['tools'] = [
+                {
+                    'type': 'function',
+                    'function': {
+                        'name': tool.name,
+                        'description': tool.description,
+                        'parameters': tool.schema()
+                    }
+                }
+                for tool in tools
+            ]
+
+        response = self.client.chat.completions.create(**request)
+
+        usage = getattr(response, 'usage', None)
+        self._record(Usage(
+            provider=self.provider,
+            model=self.model,
+            input_tokens=getattr(usage, 'prompt_tokens', 0) or 0,
+            output_tokens=getattr(usage, 'completion_tokens', 0) or 0,
+            billable=self.billable,
+            counted=usage is not None
+        ))
+
+        message = response.choices[0].message
+
+        return ModelTurn(
+            text=getattr(message, 'content', None) or '',
+            calls=[
+                ToolCall(
+                    id=call.id,
+                    name=call.function.name,
+                    arguments=_arguments(call.function.arguments)
+                )
+                for call in (getattr(message, 'tool_calls', None) or [])
+            ]
+        )
+
     def list_models(self) -> List[str]:
         return _list_models(self.client)
+
+
+def _arguments(raw) -> dict:
+    '''
+    A model's arguments are a JSON string, and a malformed one is the model's
+    mistake rather than a reason to fail the round: an empty mapping lets the
+    tool report what it needed, which the model can then correct.
+    '''
+    if isinstance(raw, dict):
+        return raw
+
+    try:
+        parsed = json.loads(raw or '{}')
+    except ValueError:
+        return {}
+
+    return parsed if isinstance(parsed, dict) else {}
