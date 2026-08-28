@@ -11,6 +11,8 @@
 # =================================================================================
 
 # import modules
+from pathlib import Path
+
 import pytest
 
 # import osintgpt ingestion
@@ -60,7 +62,7 @@ def write_pdf(path, pages):
 
 def extracted_text(monkeypatch, text):
     class Page:
-        def extract_text(self):
+        def extract_text(self, **kwargs):
             return text
 
     class Reader:
@@ -129,6 +131,71 @@ class TestPageJoins:
         assert join_page_texts(['The sentence continues', continuation]) == (
             f'The sentence continues {continuation}'
         )
+
+
+class TestReadingOrder:
+    def test_layout_mode_is_requested(self, monkeypatch):
+        modes = []
+
+        class Page:
+            def extract_text(self, **kwargs):
+                modes.append(kwargs.get('extraction_mode'))
+
+                return 'Page text.'
+
+        class Reader:
+            pages = [Page()]
+
+        monkeypatch.setattr('pypdf.PdfReader', lambda path: Reader())
+
+        assert extract_page_texts('unused.pdf') == ['Page text.']
+        assert modes == ['layout']
+
+    def test_multiple_spaces_are_collapsed(self, monkeypatch):
+        assert extracted_text(monkeypatch, 'alpha    beta') == 'alpha beta'
+
+    def test_a_single_space_is_untouched(self, monkeypatch):
+        assert extracted_text(monkeypatch, 'alpha beta') == 'alpha beta'
+
+    def test_newlines_and_blank_lines_survive(self, monkeypatch):
+        text = 'alpha    beta\n\ncharlie    delta'
+
+        assert extracted_text(monkeypatch, text) == (
+            'alpha beta\n\ncharlie delta'
+        )
+
+    def test_a_tab_between_words_becomes_one_space(self, monkeypatch):
+        assert extracted_text(monkeypatch, 'alpha\tbeta') == 'alpha beta'
+
+    def test_table_rows_stay_at_line_starts(self, monkeypatch):
+        text = '| Field    | Value |\n| Alpha\t| Beta |'
+
+        cleaned = extracted_text(monkeypatch, text)
+
+        assert cleaned == '| Field | Value |\n| Alpha | Beta |'
+        assert all(line.startswith('|') for line in cleaned.splitlines())
+
+    def test_an_older_pypdf_falls_back_to_plain_extraction(self, monkeypatch):
+        calls = []
+
+        class Page:
+            def extract_text(self, **kwargs):
+                calls.append(kwargs)
+                if kwargs:
+                    raise TypeError('unexpected keyword argument')
+
+                return 'Fallback text.'
+
+        class Reader:
+            pages = [Page()]
+
+        monkeypatch.setattr('pypdf.PdfReader', lambda path: Reader())
+
+        assert extract_page_texts('unused.pdf') == ['Fallback text.']
+        assert calls == [{'extraction_mode': 'layout'}, {}]
+
+    def test_a_page_without_text_stays_empty(self, monkeypatch):
+        assert extracted_text(monkeypatch, None) == ''
 
 
 class TestExtractionNoise:
@@ -269,3 +336,22 @@ class TestEmptyExtraction:
 
     def test_an_extraction_with_no_pages_has_empty_markdown(self):
         assert PdfExtraction().markdown == ''
+
+
+class TestRealArticle:
+    def test_layout_extraction_repairs_the_page_seam(self):
+        matches = list(Path('references/material').glob(
+            'Anatomy of an Info-War*.pdf'
+        ))
+        if not matches:
+            pytest.skip('the gitignored real-corpus material is unavailable')
+
+        pages = extract_page_texts(matches[0])
+        markdown = extract_pdf(matches[0]).markdown
+
+        assert pages[0].startswith('Anatomy of an Info-War')
+        assert (
+            'is justifiable, have entered the mainstream media'
+            in markdown
+        )
+        assert '    ' not in '\n'.join(pages)

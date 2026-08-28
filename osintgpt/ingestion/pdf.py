@@ -50,6 +50,7 @@ Transcriber = Callable[[bytes], str]
 _PDF_EXTRACTION_NOISE = re.compile(
     r'[\x0c\uE000-\uF8FF\U000F0000-\U000FFFFD\U00100000-\U0010FFFD]'
 )
+_LAYOUT_PADDING = re.compile(r'[ \t]+')
 
 
 # PageExtraction class
@@ -131,7 +132,21 @@ def _continues_sentence(previous: str, current: str) -> bool:
 
 
 def _clean_extracted_text(text: str) -> str:
-    return _PDF_EXTRACTION_NOISE.sub('', text).strip()
+    collapsed = _LAYOUT_PADDING.sub(' ', text)
+    return _PDF_EXTRACTION_NOISE.sub('', collapsed).strip()
+
+
+def _extract_page_text(page) -> str:
+    try:
+        return page.extract_text(extraction_mode='layout') or ''
+    except TypeError:
+        return page.extract_text() or ''
+    except KeyError as error:
+        # Layout mode indexes /Contents directly, which blank pages may omit.
+        if error.args != ('/Contents',):
+            raise
+
+        return page.extract_text() or ''
 
 
 # read the text a PDF carries directly
@@ -160,7 +175,7 @@ def extract_page_texts(path: Union[str, Path]) -> List[str]:
     reader = PdfReader(str(path))
 
     return [
-        _clean_extracted_text(page.extract_text() or '')
+        _clean_extracted_text(_extract_page_text(page))
         for page in reader.pages
     ]
 
