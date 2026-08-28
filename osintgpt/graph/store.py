@@ -169,6 +169,22 @@ class GraphStore:
 
             stored = 0
             for edge in edges:
+                # An edge endpoint is an entity by definition. Recording it
+                # keeps its written form: without this a name the extraction
+                # did not list separately comes back as its merge key, which
+                # is case-folded, and an analyst reads `beta ltd` where the
+                # document said `Beta Ltd`. Mentions stay at zero — appearing
+                # in a relationship is not the same as being counted.
+                for endpoint in (edge.source, edge.target):
+                    self.connection.execute(
+                        '''
+                        INSERT INTO entities (key, name, type, mentions)
+                        VALUES (?, ?, '', 0)
+                        ON CONFLICT(key) DO NOTHING
+                        ''',
+                        (merge_key(endpoint), endpoint.strip())
+                    )
+
                 cursor = self.connection.execute(
                     '''
                     INSERT OR IGNORE INTO edges

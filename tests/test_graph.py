@@ -451,3 +451,59 @@ class TestFailures:
         )
 
         assert extract_document(generator, 'a.md', 'x').entities
+
+
+class TestEndpointNames:
+    def test_an_endpoint_keeps_the_form_the_document_used(self, store):
+        '''
+        Without recording endpoints as entities, a name the extraction did not
+        list separately comes back as its merge key — an analyst reads
+        `beta ltd` where the document said `Beta Ltd`.
+        '''
+        store.add([], [edge('Alpha Corp', 'Beta Ltd')])
+
+        stored = store.edges()[0]
+
+        assert stored.source == 'Alpha Corp'
+        assert stored.target == 'Beta Ltd'
+
+    def test_an_endpoint_does_not_inflate_mention_counts(self, store):
+        '''
+        Appearing in a relationship is not the same as being counted as a
+        mention, and conflating them would make the most-mentioned list wrong.
+        '''
+        store.add([], [edge('Alpha', 'Beta')])
+
+        assert {e.name: e.mentions for e in store.entities()} == {
+            'Alpha': 0, 'Beta': 0
+        }
+
+    def test_an_extracted_entity_keeps_its_own_count(self, store):
+        store.add(
+            [Entity(key=merge_key('Alpha'), name='Alpha', type='org',
+                    mentions=5)],
+            [edge('Alpha', 'Beta')]
+        )
+
+        counts = {e.name: e.mentions for e in store.entities()}
+
+        assert counts['Alpha'] == 5
+
+    def test_an_endpoint_does_not_overwrite_a_known_type(self, store):
+        store.add(
+            [Entity(key=merge_key('Alpha'), name='Alpha', type='organization',
+                    mentions=1)],
+            []
+        )
+        store.add([], [edge('Alpha', 'Beta')])
+
+        types = {e.name: e.type for e in store.entities()}
+
+        assert types['Alpha'] == 'organization'
+
+    def test_endpoints_in_another_script_keep_their_form(self, store):
+        store.add([], [edge('Альфа', 'Бета')])
+
+        stored = store.edges()[0]
+
+        assert (stored.source, stored.target) == ('Альфа', 'Бета')
