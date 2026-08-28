@@ -6,8 +6,8 @@
 # Author: @estebanpdl
 #
 # File: test_sources.py
-# Description: The corpus registry — the only gate on what gets indexed — and
-#   the hash comparison that keeps a re-index cheap.
+# Description: Registered sources, tool-owned canon, and the hash comparison
+#   that keeps a re-index cheap.
 # =================================================================================
 
 # import modules
@@ -99,6 +99,37 @@ class TestTheGate:
         One registration must not be able to swallow a home directory.
         '''
         assert 0 < MAX_FOLDER_FILES <= 100_000
+
+
+class TestManagedCanon:
+    def test_canon_is_an_effective_source_without_registration(
+        self, corpus, project
+    ):
+        canon = project / 'canon'
+        canon.mkdir()
+        page = canon / 'index.md'
+        page.write_text('Curated synthesis.', encoding='utf-8')
+
+        assert [source.path for source in corpus] == ['canon']
+        assert corpus.find('canon').note
+        assert corpus.files(project) == [page]
+        assert corpus.sources == []
+
+    def test_canon_cannot_be_unregistered(self, corpus, project):
+        canon = project / 'canon'
+        canon.mkdir()
+        page = canon / 'index.md'
+        page.write_text('Curated synthesis.', encoding='utf-8')
+
+        assert corpus.unregister('canon') is False
+        assert corpus.files(project) == [page]
+
+    def test_no_canon_directory_preserves_the_registered_only_behavior(
+        self, corpus, project
+    ):
+        corpus.register('collected')
+
+        assert [source.path for source in corpus] == ['collected']
 
 
 class TestRegistration:

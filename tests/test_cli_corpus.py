@@ -128,7 +128,9 @@ def test_remove_drops_registration_and_leaves_the_file(runner, home, records):
 
     assert removed.exit_code == 0
     assert records.exists()
-    assert len(Corpus.load(project.paths.sources)) == 0
+    corpus = Corpus.load(project.paths.sources)
+    assert len(corpus) == 1
+    assert corpus.find('canon') is not None
 
 
 def test_explicit_project_overrides_the_selection(runner, home, records):
@@ -142,8 +144,8 @@ def test_explicit_project_overrides_the_selection(runner, home, records):
     )
 
     assert result.exit_code == 0
-    assert len(Corpus.load(first.paths.sources)) == 0
-    assert len(Corpus.load(second.paths.sources)) == 1
+    assert len(Corpus.load(first.paths.sources)) == 1
+    assert len(Corpus.load(second.paths.sources)) == 2
 
 
 def test_index_prints_progress_and_passes_maintenance_flags(
