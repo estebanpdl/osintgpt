@@ -36,8 +36,9 @@ sentence-transformers and torch:
 pip install osintgpt[local]
 ```
 
-See [osintgpt on PyPI](https://pypi.org/project/osintgpt/) for package
-metadata and release history.
+The current release is 0.3.0. See
+[osintgpt on PyPI](https://pypi.org/project/osintgpt/) for package metadata
+and release history.
 
 ## Quickstart
 
@@ -48,25 +49,44 @@ By default, embeddings and answers use OpenAI. Set `OPENAI_API_KEY` and
 ```bash
 osintgpt project create "Research notes"
 osintgpt project use research-notes
-osintgpt add ./documents
+osintgpt add ./material
 osintgpt index
-osintgpt ask "When is the launch date?"
+osintgpt ask "Who did Alpha Corp fund?"
 ```
 
-A real run ends like this, with the temporary paths shortened:
+A real `ask` ends like this:
 
 ```text
-1/1 …/documents/brief.md
-1 documents, 1 chunks
-
-The launch date is 14 March. [1]
+Alpha Corp funded Beta Ltd in March. [1]
 
 Sources
-• …/documents/brief.md
+• material/alpha.md
+
+Ask next
+1. Who else did Alpha Corp fund?
+2. What happened after March?
 ```
 
 An unindexed project is also a valid state: `ask` explains that nothing was
 retrieved and does not call the generation model.
+
+## How it searches
+
+`ask` can draw from semantic similarity, exact text matches, and sourced graph
+relationships. By default the model surveys the project, chooses which tools
+to use, reads the relevant material, and then answers. Use `--trace` to see
+that work, or `--static` when you want the earlier one-pass retrieval behavior.
+Graph edges retain their source document and quoted evidence;
+`osintgpt graph verify` checks those quotes, while
+`osintgpt graph export graph.cypherl` writes CYPHERL for Memgraph or Neo4j
+(`.json` is also supported).
+
+## Canon
+
+Every project has a `canon/` directory for plain Markdown synthesis. Pages in
+it are indexed automatically alongside primary material, and `[[wiki links]]`
+work in Obsidian. `osintgpt` does not yet populate those pages; today it
+provides the directory, indexing, and link structure.
 
 ## Keep data local
 
