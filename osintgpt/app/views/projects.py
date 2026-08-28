@@ -20,6 +20,7 @@ from osintgpt import Project
 from osintgpt.vector_store import store_for
 
 from ..session import list_projects, select_project
+from ..styles import badge
 
 
 # what a project currently holds
@@ -127,7 +128,9 @@ def render(st, home, state) -> None:
         # Two models' vectors in one store means a switch left the old ones
         # behind. Search filters by model, so they are invisible and still
         # occupying the store.
-        st.warning(
-            'This store holds vectors from more than one embedding model: '
-            f'{", ".join(stored)}. Only the configured one is searched.'
+        st.markdown(
+            badge('model mismatch', 'problem')
+            + ' This store holds vectors from more than one embedding model: '
+            + f'{", ".join(stored)}. Only the configured one is searched.',
+            unsafe_allow_html=True
         )

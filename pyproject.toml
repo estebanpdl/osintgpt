@@ -58,7 +58,6 @@ dependencies = [
 
 [project.scripts]
 osintgpt = "osintgpt.cli.main:main"
-osintgpt-app = "osintgpt.app.launch:main"
 
 [project.optional-dependencies]
 # sentence-transformers pulls torch: ~650 MB against ~120 MB for everything

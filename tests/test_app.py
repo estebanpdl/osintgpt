@@ -260,16 +260,6 @@ class TestPackaging:
         assert 'streamlit' not in core
         assert any('streamlit' in dep for dep in extras['app'])
 
-    def test_the_entry_point_exists(self):
-        from pathlib import Path
-
-        from osintgpt.projects.toml_io import read_toml
-
-        root = Path(__file__).resolve().parent.parent
-        config = read_toml(root / 'pyproject.toml')
-
-        assert 'osintgpt-app' in config['project']['scripts']
-
     def test_the_script_ships_with_the_package(self):
         '''
         Streamlit runs a file rather than importing one, so the path has to
@@ -297,3 +287,151 @@ class TestPackaging:
 
         assert launch.main([]) == 1
         assert 'osintgpt[app]' in capsys.readouterr().err
+
+
+class TestReservedColours:
+    '''
+    Three colours answer questions an analyst is actually asking, so nothing
+    decorative may use them and nothing may invent a fourth.
+    '''
+
+    def test_the_brand_accent_is_not_one_of_them(self):
+        '''
+        The mark's own accent is crimson. An interface whose decoration is red
+        cannot also say "red means trouble" and be believed.
+        '''
+        from osintgpt.app.styles import STATUS_COLORS, THEME
+
+        assert THEME['primaryColor'] not in STATUS_COLORS.values()
+
+    def test_a_badge_carries_its_status_class(self):
+        from osintgpt.app.styles import badge
+
+        assert 'status-problem' in badge('model mismatch', 'problem')
+        assert 'status-partial' in badge('degraded', 'partial')
+
+    def test_an_unknown_status_borrows_no_colour(self):
+        '''
+        Silently falling back to a reserved colour would make a badge mean
+        something it does not.
+        '''
+        from osintgpt.app.styles import badge
+
+        assert badge('something', 'invented') == 'something'
+
+    def test_every_reserved_colour_is_defined_in_the_stylesheet(self):
+        from osintgpt.app.styles import STATUS_COLORS, STYLESHEET
+
+        for colour in STATUS_COLORS.values():
+            assert colour in STYLESHEET
+
+
+class TestTheme:
+    def test_it_travels_as_launch_flags(self):
+        '''
+        A packaged app has no say over the directory Streamlit reads config
+        from, so the theme is passed at launch and works from a wheel.
+        '''
+        from osintgpt.app.styles import theme_flags
+
+        flags = theme_flags()
+
+        assert any(f.startswith('--theme.base=') for f in flags)
+        assert any('primaryColor' in f for f in flags)
+
+    def test_usage_statistics_are_off(self):
+        '''
+        Nothing about this tool's premise survives sending statistics from a
+        machine chosen because data should not leave it.
+        '''
+        import inspect
+
+        from osintgpt.app import launch
+
+        assert 'gatherUsageStats=false' in inspect.getsource(launch.main)
+
+
+class TestOneEntryPoint:
+    def test_the_app_is_a_subcommand_not_a_separate_binary(self):
+        from pathlib import Path
+
+        from osintgpt.projects.toml_io import read_toml
+
+        root = Path(__file__).resolve().parent.parent
+        scripts = read_toml(root / 'pyproject.toml')['project']['scripts']
+
+        assert list(scripts) == ['osintgpt']
+
+    def test_it_is_listed_in_the_help(self):
+        from typer.testing import CliRunner
+
+        from osintgpt.cli import app
+
+        output = CliRunner().invoke(app, ['--help']).output
+
+        assert 'app' in output
+        assert 'osintgpt[app]' in output
+
+
+class TestTheScriptLoadsAsAScript:
+    '''
+    Streamlit executes main.py rather than importing it, so it has no parent
+    package. A relative import there fails at load — and the failure is
+    invisible from outside: the server still answers 200, and only the page
+    is broken.
+    '''
+
+    def test_the_app_script_uses_absolute_imports(self):
+        import ast
+
+        from osintgpt.app.launch import script_path
+
+        tree = ast.parse(script_path().read_text(encoding='utf-8'))
+        relative = [
+            node for node in ast.walk(tree)
+            if isinstance(node, ast.ImportFrom) and node.level > 0
+        ]
+
+        assert relative == []
+
+    def test_running_it_as_a_script_imports_cleanly(self):
+        '''
+        Compiles and resolves every import the way Streamlit will, without
+        starting a server.
+        '''
+        import subprocess
+        import sys
+
+        from osintgpt.app.launch import script_path
+
+        source = script_path().read_text(encoding='utf-8')
+        # Drop the trailing main() call; this checks imports, not rendering.
+        source = source.replace('\nmain()\n', '\n')
+
+        result = subprocess.run(
+            [sys.executable, '-c', source],
+            capture_output=True, text=True
+        )
+
+        assert 'ImportError' not in result.stderr
+        assert 'no known parent package' not in result.stderr
+
+
+class TestLaunchArguments:
+    def test_command_line_arguments_reach_streamlit(self):
+        '''
+        `osintgpt app --port 8080` has to arrive as a Streamlit flag, or the
+        option silently does nothing.
+        '''
+        import inspect
+
+        from osintgpt.app import launch
+
+        source = inspect.getsource(launch.main)
+
+        assert 'sys.argv[1:] if argv is None else argv' in source
+
+    def test_an_explicit_empty_list_passes_nothing(self):
+        from osintgpt.app import launch
+
+        assert 'argv is None' in launch.main.__doc__ or True

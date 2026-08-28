@@ -19,8 +19,17 @@ from pathlib import Path
 # import osintgpt projects
 from osintgpt.projects import default_home
 
-from .session import Runtime, cache_key, runtime_for, selected_project
-from .views import chat, ingest, projects
+# Absolute, not relative: Streamlit executes this file as a script rather
+# than importing it as a module, so it has no parent package to resolve
+# against and a relative import fails at load.
+from osintgpt.app.session import (
+    Runtime,
+    cache_key,
+    runtime_for,
+    selected_project
+)
+from osintgpt.app.styles import load_css
+from osintgpt.app.views import chat, ingest, projects
 
 
 # providers for a project, built once per project
@@ -39,9 +48,14 @@ def _cached_runtime(project_id: str, project_path: str, home: str) -> Runtime:
 
 def main() -> None:
     st.set_page_config(page_title='osintgpt', layout='wide')
+    load_css(st)
     home = default_home()
 
-    st.sidebar.title('osintgpt')
+    st.sidebar.markdown(
+        '<div class="osintgpt-title">osintgpt</div>'
+        '<div class="osintgpt-subtitle">Ask your own documents</div>',
+        unsafe_allow_html=True
+    )
     view = st.sidebar.radio('View', ['Projects', 'Material', 'Ask'])
 
     project = selected_project(st.session_state, home)

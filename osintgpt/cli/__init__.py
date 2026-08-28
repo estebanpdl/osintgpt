@@ -7,6 +7,7 @@ import typer
 
 from osintgpt.projects import default_home
 
+from .app_command import register_app_command
 from .config import config_app
 from .corpus import register_corpus_commands
 from .doctor import doctor as doctor_command
@@ -39,5 +40,7 @@ register_retrieval_commands(app)
 app.command(
     'doctor', help='Report how this project is configured and what is wrong.'
 )(doctor_command)
+
+register_app_command(app)
 
 __all__ = ['app']

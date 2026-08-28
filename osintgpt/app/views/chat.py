@@ -17,6 +17,7 @@ from typing import Any, Dict, List
 from osintgpt import agentic_answer
 
 from ..session import queue_question, remember, take_pending
+from ..styles import badge
 
 # Enough of a passage to judge it without the chip becoming the page.
 PREVIEW_CHARS = 900
@@ -92,8 +93,13 @@ def _turn(st, question, answer, state, replayed: bool) -> None:
 
         if getattr(answer, 'degraded', ''):
             # An answer from the static path is still an answer, and which
-            # one the analyst got changes how much weight it carries.
-            st.caption(f'Answered without tools: {answer.degraded}')
+            # one the analyst got changes how much weight it carries. Amber,
+            # not red: it worked, just not the way it should have.
+            st.markdown(
+                badge('answered without tools', 'partial')
+                + f' <span class="citation-chip">{answer.degraded}</span>',
+                unsafe_allow_html=True
+            )
 
         _sources(st, answer)
         _trace(st, answer)
@@ -136,6 +142,7 @@ def _followups(st, answer, state) -> None:
         return
 
     st.caption('Ask next')
+    st.markdown('<div class="followup-row">', unsafe_allow_html=True)
     for index, suggestion in enumerate(answer.followups):
         st.button(
             suggestion,
@@ -143,3 +150,4 @@ def _followups(st, answer, state) -> None:
             on_click=queue_question,
             args=(state, suggestion)
         )
+    st.markdown('</div>', unsafe_allow_html=True)
