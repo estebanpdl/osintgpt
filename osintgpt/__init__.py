@@ -30,6 +30,9 @@ from osintgpt.evaluation import (
 # import osintgpt answering
 from osintgpt.answering import Answer, answer_question
 
+# import osintgpt graph
+from osintgpt.graph import GraphReport, build_graph, graph_for
+
 # import osintgpt indexing, lexical search and semantic search
 from osintgpt.indexing import IndexReport, index_project
 from osintgpt.lexical import derive_search_terms, lexical_search
@@ -53,6 +56,7 @@ __name__ = 'osintgpt'
 __all__ = [
     'Answer',
     'FusedResult',
+    'GraphReport',
     'EvaluationReport',
     'IndexReport',
     'Question',
@@ -60,8 +64,10 @@ __all__ = [
     'ProjectSettings',
     'Settings',
     'answer_question',
+    'build_graph',
     'derive_search_terms',
     'evaluate',
+    'graph_for',
     'hybrid_search',
     'index_project',
     'lexical_search',

@@ -26,6 +26,7 @@ contains literal `{` and `}` and `.format` would require doubling every one.
 | `sentence_details` | `OpenAIGPT.analyze_sentence_details` (deprecated) | — |
 | `answer` | `answering.build_prompt` → `answer_question` | `question`, `passages` |
 | `search_terms` | `lexical.derive_search_terms` | `max_terms` |
+| `graph_extraction` | `graph.extract_document` | `ref`, `text`, `known_entities`, `part` |
 
 ## Two kinds of prompt
 
@@ -48,6 +49,14 @@ cites nothing and reads exactly like the grounded version.
 
 If per-project prompt overrides are ever built, only voice prompts are safe to
 expose.
+
+`graph_extraction` is a **contract** prompt, and the one where the contract
+carries the most weight. Its reply is parsed into entities and edges, and the
+rule that every edge quote its own sentence is what makes a graph edge a
+sourced claim rather than a model assertion. An edge arriving without evidence
+is dropped rather than stored — weaken that instruction and the graph fills
+with plausible relationships nobody can check, which is worse than an empty
+graph.
 
 `search_terms` is a **contract** prompt: `derive_search_terms` parses a JSON
 array out of the reply. Its failure is soft — an unparseable reply means the
