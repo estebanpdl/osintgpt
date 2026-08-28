@@ -31,6 +31,10 @@ from .records import SearchResult, StoredChunk
 # better answer — the interface is what makes that a configuration change.
 BRUTE_FORCE_CEILING = 50_000
 
+# SQLite has no default LIKE escape character, so one is named explicitly and
+# every occurrence of it in a term is doubled.
+LIKE_ESCAPE = chr(92)
+
 SCHEMA = '''
 CREATE TABLE IF NOT EXISTS chunks (
     id              INTEGER PRIMARY KEY,
@@ -73,6 +77,10 @@ class SQLiteVectorStore(BaseVectorEngine):
             str(self.path), check_same_thread=False
         )
         self.connection.row_factory = sqlite3.Row
+        # SQLite's own LOWER() folds ASCII only, so a term in Cyrillic, Greek
+        # or Turkish would match just its stored casing. Python's str.lower is
+        # Unicode-aware, and an OSINT corpus is not written in one alphabet.
+        self.connection.create_function('unicode_lower', 1, _lower)
         self.connection.executescript(SCHEMA)
         self.connection.commit()
 
@@ -171,6 +179,41 @@ class SQLiteVectorStore(BaseVectorEngine):
             for i in best
         ]
 
+    def match_text(
+        self,
+        term: str,
+        embedding_model: Optional[str] = None,
+        limit: int = 100,
+        refs: Optional[Iterable[str]] = None
+    ) -> List[StoredChunk]:
+        if not term:
+            return []
+
+        query = (
+            'SELECT * FROM chunks WHERE unicode_lower(text) LIKE ? ESCAPE ?'
+        )
+        parameters: List[object] = [
+            f'%{_escape_like(term.lower())}%', LIKE_ESCAPE
+        ]
+
+        if embedding_model is not None:
+            query += ' AND embedding_model = ?'
+            parameters.append(embedding_model)
+
+        if refs is not None:
+            wanted = list(refs)
+            if not wanted:
+                return []
+            query += f' AND ref IN ({",".join("?" * len(wanted))})'
+            parameters += wanted
+
+        query += ' ORDER BY ref, sequence LIMIT ?'
+        parameters.append(limit)
+
+        rows = self.connection.execute(query, parameters).fetchall()
+
+        return [_to_chunk(row) for row in rows]
+
     def delete(self, refs: Iterable[str]) -> int:
         wanted = list(refs)
         if not wanted:
@@ -250,6 +293,21 @@ class SQLiteVectorStore(BaseVectorEngine):
                 answer for. It still works; a dedicated backend is better.
         '''
         return self.count() > BRUTE_FORCE_CEILING
+
+
+def _lower(value) -> str:
+    return value.lower() if isinstance(value, str) else value
+
+
+def _escape_like(term: str) -> str:
+    '''
+    A term containing % or _ is ordinary text, not a pattern. Without this a
+    search for `50%` matches every chunk in the store.
+    '''
+    for character in (LIKE_ESCAPE, '%', '_'):
+        term = term.replace(character, LIKE_ESCAPE + character)
+
+    return term
 
 
 def _pack(vector: Sequence[float]) -> bytes:

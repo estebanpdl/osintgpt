@@ -80,6 +80,33 @@ class BaseVectorEngine(ABC):
                 store holds fewer matching chunks.
         '''
 
+    # find chunks containing a term
+    @abstractmethod
+    def match_text(
+        self,
+        term: str,
+        embedding_model: Optional[str] = None,
+        limit: int = 100,
+        refs: Optional[Iterable[str]] = None
+    ) -> List[StoredChunk]:
+        '''
+        Chunks whose text contains `term`, matched case-insensitively.
+
+        Substring rather than token matching, because the tokens this exists
+        to catch — handles, hashes, URLs, account ids — are the ones a
+        tokenizer splits and an embedding blurs. `@acct_1` must be findable
+        inside `contacted @acct_1 twice`.
+
+        Args:
+            term (str): Literal text to find. Not a pattern; a caller wanting                 regex filters the results.
+            embedding_model (str, optional): Restrict to one model's chunks.                 Text does not depend on the model, but a store holding two                 models' vectors holds every chunk twice.
+            limit (int): Most chunks to return.
+            refs (Iterable[str], optional): Restrict to these documents.
+
+        Returns:
+            List[StoredChunk]: Matching chunks, in document and reading order.
+        '''
+
     # forget documents
     @abstractmethod
     def delete(self, refs: Iterable[str]) -> int:

@@ -17,7 +17,10 @@ from contextlib import contextmanager
 from typing import Iterable, List, Optional, Sequence
 
 # import osintgpt llm
-from osintgpt.llm.base import EmbeddingProvider
+from osintgpt.llm.base import EmbeddingProvider, GenerationProvider
+
+# import osintgpt fusion
+from osintgpt.fusion import FusedResult, reciprocal_rank_fusion
 
 # import osintgpt projects
 from osintgpt.projects import Project
@@ -63,6 +66,62 @@ def search_project(
         return engine.search(
             vector, embedding_model=embedder.model, top_k=top_k, refs=refs
         )
+
+
+# run both retrieval legs and combine them
+def hybrid_search(
+    project: Project,
+    query: str,
+    embedder: EmbeddingProvider,
+    generator: Optional[GenerationProvider] = None,
+    top_k: int = 10,
+    terms: Optional[Sequence[str]] = None,
+    refs: Optional[Iterable[str]] = None,
+    store: Optional[BaseVectorEngine] = None
+) -> List[FusedResult]:
+    '''
+    Search semantically and lexically, then fuse by rank.
+
+    The legs are complementary rather than redundant: semantic finds a passage
+    that means the same thing in different words, lexical finds the exact
+    identifier that means nothing to an embedding. A passage both legs return
+    outranks one either found deeply.
+
+    The lexical leg needs terms. Given a generator it derives them; given
+    neither terms nor a generator it sits out, and this degrades to semantic
+    search rather than failing.
+
+    Args:
+        project (Project): The project to search.
+        query (str): The question, as asked.
+        embedder (EmbeddingProvider): Must be the model the project was             indexed with.
+        generator (GenerationProvider, optional): Derives exact-match terms.
+        top_k (int): How many fused results to return.
+        terms (Sequence[str], optional): Exact terms, when the caller already             has them. Skips derivation, and an empty sequence sits the             lexical leg out deliberately.
+        refs (Iterable[str], optional): Restrict to these documents.
+        store (BaseVectorEngine, optional): Defaults to the project's own.
+
+    Returns:
+        List[FusedResult]: Best first, each carrying the rank every leg gave it.
+    '''
+    from osintgpt.lexical import derive_search_terms, lexical_search
+
+    legs = {
+        'semantic': search_project(
+            project, query, embedder, top_k=top_k, refs=refs, store=store
+        )
+    }
+
+    if terms is None and generator is not None:
+        terms = derive_search_terms(generator, query)
+
+    if terms:
+        legs['lexical'] = lexical_search(
+            project, terms, embedding_model=embedder.model, refs=refs,
+            store=store
+        )
+
+    return reciprocal_rank_fusion(legs, limit=top_k)
 
 
 # search several projects at once

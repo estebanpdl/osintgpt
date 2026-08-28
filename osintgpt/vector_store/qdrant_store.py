@@ -155,6 +155,43 @@ class QdrantVectorStore(BaseVectorEngine):
             for point in response.points
         ]
 
+    def match_text(
+        self,
+        term: str,
+        embedding_model: Optional[str] = None,
+        limit: int = 100,
+        refs: Optional[Iterable[str]] = None
+    ) -> List[StoredChunk]:
+        if not term or not self._collection_exists():
+            return []
+
+        conditions = []
+        if embedding_model is not None:
+            conditions.append(_match(EMBEDDING_MODEL, embedding_model))
+        if refs is not None:
+            wanted = list(refs)
+            if not wanted:
+                return []
+            conditions.append(
+                rest.FieldCondition(key=REF, match=rest.MatchAny(any=wanted))
+            )
+
+        # Qdrant's own MatchText is token-based: it would find `acct` and miss
+        # `@acct_1` inside a sentence, which is precisely the token this leg
+        # exists to catch. So the filter narrows and the substring test runs
+        # here, over payloads read without their vectors.
+        needle = term.lower()
+        found: List[StoredChunk] = []
+        for payload in self._scroll(
+            rest.Filter(must=conditions) if conditions else None
+        ):
+            if needle in str(payload.get(TEXT, '')).lower():
+                found.append(_from_payload(payload))
+                if len(found) >= limit:
+                    break
+
+        return sorted(found, key=lambda chunk: (chunk.ref, chunk.sequence))
+
     def delete(self, refs: Iterable[str]) -> int:
         wanted = list(refs)
         if not wanted or not self._collection_exists():
