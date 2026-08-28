@@ -28,6 +28,7 @@ from osintgpt.evaluation import (
 )
 
 # import osintgpt answering
+from osintgpt.agentic import AgenticAnswer, agentic_answer
 from osintgpt.answering import Answer, answer_question
 
 # import osintgpt graph
@@ -54,6 +55,7 @@ except PackageNotFoundError:
 
 __name__ = 'osintgpt'
 __all__ = [
+    'AgenticAnswer',
     'Answer',
     'FusedResult',
     'GraphReport',
@@ -63,6 +65,7 @@ __all__ = [
     'Project',
     'ProjectSettings',
     'Settings',
+    'agentic_answer',
     'answer_question',
     'build_graph',
     'derive_search_terms',

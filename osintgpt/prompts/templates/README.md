@@ -27,6 +27,7 @@ contains literal `{` and `}` and `.format` would require doubling every one.
 | `answer` | `answering.build_prompt` → `answer_question` | `question`, `passages` |
 | `search_terms` | `lexical.derive_search_terms` | `max_terms` |
 | `graph_extraction` | `graph.extract_document` | `ref`, `text`, `known_entities`, `part` |
+| `agentic` | `agentic.agentic_answer` | `today` |
 
 ## Two kinds of prompt
 
@@ -41,6 +42,12 @@ failure looks like "search results got worse", not like an exception.
 **Voice prompts** shape tone and behaviour with nothing parsing them.
 `summarize` and `topic_modeling` are read by a person, so they are safe to
 edit freely.
+
+`agentic` is a voice prompt too, and the highest-leverage one here. Nothing
+parses it, but it is where the survey-before-drill habit is taught — the tools
+enforce no order, so the wording is the only thing making a cheap survey the
+obvious first move. It also carries today's date, which is how the model
+resolves "last week" without anything here parsing a phrase.
 
 `answer` is a voice prompt by that test — nothing parses the reply — but it
 is the one where editing carries real cost. Its rules are what keep an answer

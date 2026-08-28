@@ -18,6 +18,14 @@ from osintgpt.config import Settings
 
 from .anthropic_native import AnthropicGeneration
 from .base import EmbeddingProvider, GenerationProvider
+from .calling import (
+    Exchange,
+    ModelTurn,
+    ToolCall,
+    ToolCallingUnsupported,
+    ToolSpec,
+    tool_spec
+)
 from .local import SentenceTransformerEmbedding
 from .locality import LocalityReport, ProviderLocality, audit_locality
 from .usage import Usage, UsageRecorder

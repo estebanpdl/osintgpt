@@ -16,6 +16,7 @@ from abc import ABC, abstractmethod
 # type hints
 from typing import List, Optional
 
+from .calling import Exchange, ModelTurn, ToolCallingUnsupported, ToolSpec
 from .usage import Usage, UsageRecorder
 
 # EmbeddingProvider class
@@ -126,6 +127,11 @@ class GenerationProvider(ABC):
             f'the {type(self).__name__} backend cannot list its models'
         )
 
+    # True when this backend can be given tools and asked to call them. A
+    # property of the model as much as the vendor: a small local model served
+    # by an endpoint that supports tools may still not use them well.
+    supports_tools: bool = False
+
     @abstractmethod
     def generate(self, system: str, user: str) -> str:
         '''
@@ -138,3 +144,38 @@ class GenerationProvider(ABC):
         Returns:
             str: The model's reply, empty when it produced none.
         '''
+
+    def generate_with_tools(
+        self,
+        system: str,
+        user: str,
+        tools: List['ToolSpec'],
+        history: Optional[List['Exchange']] = None
+    ) -> 'ModelTurn':
+        '''
+        One round of a tool-calling conversation.
+
+        Not abstract: a backend that cannot call tools should say so by
+        raising, and requiring every provider to implement a refusal would be
+        ceremony. `supports_tools` is what a caller checks first.
+
+        Passing an empty `tools` list is how the caller says *answer now* —
+        the model is given no way to ask for more, so it must reply from what
+        it already has.
+
+        Args:
+            system (str): System instruction.
+            user (str): The question, unchanged across rounds.
+            tools (List[ToolSpec]): Tools the model may call this round.
+            history (List[Exchange], optional): Completed rounds, in order.
+
+        Raises:
+            ToolCallingUnsupported: If this backend cannot call tools.
+
+        Returns:
+            ModelTurn: What it said, what it wants to run, or both.
+        '''
+        raise ToolCallingUnsupported(
+            f'{self.model} cannot call tools; the static pipeline answers '
+            'instead'
+        )
