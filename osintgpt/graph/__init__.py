@@ -10,5 +10,8 @@ from .export import export_graph, to_cypherl, to_json
 # what the graph holds
 from .store import Edge, Entity, GraphStore, graph_for, merge_key
 
+# checking sourced claims
+from .verify import EvidenceReport, EvidenceResult, verify_evidence
+
 # walking it
 from .traversal import GraphHit, GraphPath, neighborhood, neighbors, path_between

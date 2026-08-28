@@ -23,14 +23,22 @@ def _relationship_type(relation: str) -> str:
     )
     sanitized = re.sub(r'[^A-Za-z0-9_]+', '_', ascii_parts)
     sanitized = re.sub(r'_+', '_', sanitized).strip('_').upper()
+    needs_quoting = '`' in relation or any(
+        character.isalnum() and ord(character) >= 128
+        for character in normalized
+        if not unicodedata.combining(character)
+    )
+    if needs_quoting and any(character.isalnum() for character in relation):
+        escaped = relation.replace('`', '``')
+
+        return f'`{escaped}`'
     if sanitized and not sanitized[0].isdigit():
         return sanitized
     if sanitized:
         return f'RELATED_{sanitized}'
 
-    # A shared RELATED fallback would collapse the type distinction for every
-    # predicate written outside ASCII. The original remains a property, while
-    # this stable suffix keeps its database type distinct and reproducible.
+    # Punctuation alone cannot make a useful quoted identifier. A stable
+    # suffix keeps even these unusual predicates valid and distinct.
     digest = hashlib.sha256((relation or '').encode('utf-8')).hexdigest()[:12]
 
     return f'RELATED_{digest.upper()}'
@@ -114,7 +122,7 @@ def to_cypherl(
         + [_edge_line(edge) for edge in edges]
     )
 
-    return '\n'.join(lines) + '\n' if lines else ''
+    return '\n'.join(f'{line};' for line in lines) + '\n' if lines else ''
 
 
 def to_json(

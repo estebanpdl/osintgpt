@@ -19,13 +19,13 @@ from osintgpt.graph import (
 STRING = r'"(?:\\.|[^"\\])*"'
 NODE_STATEMENT = re.compile(
     rf'MERGE \(n:Entity \{{key: {STRING}\}}\) '
-    rf'SET n\.name = {STRING}, n\.type = {STRING}, n\.mentions = \d+'
+    rf'SET n\.name = {STRING}, n\.type = {STRING}, n\.mentions = \d+;'
 )
 EDGE_STATEMENT = re.compile(
     rf'MATCH \(a:Entity \{{key: {STRING}\}}\), '
     rf'\(b:Entity \{{key: {STRING}\}}\) '
-    rf'MERGE \(a\)-\[r:[A-Za-z_][A-Za-z0-9_]* '
-    rf'\{{relation: {STRING}, ref: {STRING}, evidence: {STRING}\}}\]->\(b\)'
+    rf'MERGE \(a\)-\[r:(?:[A-Za-z_][A-Za-z0-9_]*|`(?:``|[^`])+`) '
+    rf'\{{relation: {STRING}, ref: {STRING}, evidence: {STRING}\}}\]->\(b\);'
 )
 
 
@@ -120,6 +120,7 @@ def test_cypherl_has_valid_standalone_statements_and_escaped_values(graph):
 
     assert len(lines) == graph.entity_count + graph.edge_count
     assert all('MERGE ' in line for line in lines)
+    assert all(line.endswith(';') for line in lines)
     for line in lines:
         assert_parses(line)
 
@@ -140,25 +141,79 @@ def test_cypherl_has_valid_standalone_statements_and_escaped_values(graph):
     assert any("O'Brien" in line for line in lines)
 
 
-def test_non_latin_relations_get_distinct_valid_types_and_keep_wording(graph):
+def test_non_latin_relations_are_readable_types_and_keep_wording(graph):
     add_claims(graph)
 
     edge_lines = [
         line for line in to_cypherl(graph).splitlines()
         if line.startswith('MATCH ')
     ]
-    non_latin = [line for line in edge_lines if 'RELATED_' in line]
-    types = [re.search(r'\[r:([A-Za-z_][A-Za-z0-9_]*) ', line).group(1)
+    non_latin = [line for line in edge_lines if '[r:`' in line]
+    types = [re.search(r'\[r:(`(?:``|[^`])+`) ', line).group(1)
              for line in non_latin]
 
     assert len(non_latin) == 2
     assert len(set(types)) == 2
-    assert all(
-        re.fullmatch(r'[A-Za-z_][A-Za-z0-9_]*', item) for item in types
-    )
+    assert set(types) == {'`финансировал`', '`دعم`'}
     assert {property_string(line, 'relation') for line in non_latin} == {
         'финансировал', 'دعم'
     }
+
+
+@pytest.mark.parametrize('relation', [
+    'финансировал',
+    'دعم',
+    'χρηματοδότησε',
+    '资助'
+])
+def test_non_latin_scripts_keep_their_original_type(graph, relation):
+    graph.add([], [Edge(
+        source='Alpha', target='Beta', relation=relation,
+        ref='claim.md', evidence='A claim.'
+    )])
+
+    line = next(
+        item for item in to_cypherl(graph).splitlines()
+        if item.startswith('MATCH ')
+    )
+
+    assert f'[r:`{relation}` ' in line
+    assert property_string(line, 'relation') == relation
+    assert_parses(line)
+
+
+def test_a_backtick_in_a_type_is_doubled(graph):
+    relation = 'linked `object`'
+    graph.add([], [Edge(
+        source='Alpha', target='Beta', relation=relation,
+        ref='claim.md', evidence='A claim.'
+    )])
+
+    line = next(
+        item for item in to_cypherl(graph).splitlines()
+        if item.startswith('MATCH ')
+    )
+
+    assert '[r:`linked ``object``` ' in line
+    assert property_string(line, 'relation') == relation
+    assert_parses(line)
+
+
+@pytest.mark.parametrize('relation', ['', '   ', '?!...'])
+def test_punctuation_only_relations_still_have_a_valid_type(graph, relation):
+    graph.add([], [Edge(
+        source='Alpha', target='Beta', relation=relation,
+        ref='claim.md', evidence='A claim.'
+    )])
+
+    line = next(
+        item for item in to_cypherl(graph).splitlines()
+        if item.startswith('MATCH ')
+    )
+
+    assert re.search(r'\[r:RELATED_[A-F0-9]{12} ', line)
+    assert property_string(line, 'relation') == relation
+    assert_parses(line)
 
 
 def test_json_is_unicode_and_round_trips_graph_records(graph):

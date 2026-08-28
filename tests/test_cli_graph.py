@@ -106,3 +106,68 @@ def test_graph_export_requires_a_selected_project(runner, home, tmp_path):
 
     assert result.exit_code != 0
     assert 'project use <slug>' in result.output
+
+
+def test_graph_verify_reports_counts_as_json(runner, home):
+    project = create_project(runner, home)
+    (project.paths.root / 'evidence.md').write_text(
+        'Alpha supports Beta.', encoding='utf-8'
+    )
+    build_graph(project)
+
+    result = invoke(
+        runner, home, 'graph', 'verify',
+        '--project', 'case-graph', '--json'
+    )
+
+    payload = json.loads(result.output)
+    assert result.exit_code == 0
+    assert payload['summary'] == '1 verified'
+    assert payload['total'] == 1
+    assert payload['found'] == 1
+    assert payload['failures'] == []
+
+
+def test_graph_verify_findings_exit_zero_unless_strict(runner, home):
+    project = create_project(runner, home)
+    (project.paths.root / 'evidence.md').write_text(
+        'Something else.', encoding='utf-8'
+    )
+    build_graph(project)
+
+    ordinary = invoke(
+        runner, home, 'graph', 'verify',
+        '--project', 'case-graph', '--json'
+    )
+    strict = invoke(
+        runner, home, 'graph', 'verify',
+        '--project', 'case-graph', '--json', '--strict'
+    )
+
+    payload = json.loads(ordinary.output)
+    assert ordinary.exit_code == 0
+    assert strict.exit_code == 1
+    assert payload['not_found'] == 1
+    assert payload['failures'][0]['ref'] == 'evidence.md'
+    assert payload['failures'][0]['status'] == 'not_found'
+
+
+def test_graph_verify_an_unbuilt_graph_reports_nothing(runner, home):
+    create_project(runner, home)
+
+    result = invoke(
+        runner, home, 'graph', 'verify',
+        '--project', 'case-graph', '--json'
+    )
+
+    payload = json.loads(result.output)
+    assert result.exit_code == 0
+    assert payload['summary'] == 'nothing to verify'
+    assert payload['total'] == 0
+
+
+def test_graph_verify_requires_a_selected_project(runner, home):
+    result = invoke(runner, home, 'graph', 'verify')
+
+    assert result.exit_code != 0
+    assert 'project use <slug>' in result.output
