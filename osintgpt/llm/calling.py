@@ -70,12 +70,9 @@ class ModelTurn:
 @dataclass(frozen=True)
 class Exchange:
     '''
-    A completed round: what the model asked for, and what it got back.
-
-    Kept in neutral terms because the two vendors disagree about how a tool
-    result is carried — a `tool` role against a `tool_result` block — so each
-    provider rebuilds its own messages from this rather than sharing a format
-    neither actually uses.
+    A completed round: what the model asked for, and what it got back. Kept
+    neutral because the vendors disagree about how a tool result travels, so
+    each provider rebuilds its own messages rather than sharing a format.
     '''
     turn: ModelTurn
     # Call id to the result, already serialized. What the model reads.
@@ -84,11 +81,9 @@ class Exchange:
 
 class ToolCallingUnsupported(NotImplementedError):
     '''
-    Raised when a backend cannot call tools.
-
-    A distinct type rather than a bare NotImplementedError, because the loop
-    catches exactly this to fall back to the static pipeline, and swallowing
-    every NotImplementedError would hide real bugs.
+    Raised when a backend cannot call tools. A distinct type because the loop
+    catches exactly this to degrade, and catching every NotImplementedError
+    would hide real bugs.
     '''
 
 

@@ -112,9 +112,9 @@ class Trace:
         '''
         Observations an operator would otherwise have to derive by eye.
 
-        These are the patterns the roadmap names as how retrieval gets tuned:
-        counts pinned at the limit mean truncation, and a tool that exists but
-        is never called is a model-choice problem rather than a tool problem.
+        Counts pinned at the limit mean truncation, and a tool that exists
+        but is never called is a model-choice problem rather than a tool
+        problem — the things an operator would otherwise derive by eye.
 
         Returns:
             List[str]: Plain-language notes, empty when nothing stands out.

@@ -20,7 +20,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 # type hints
-from typing import List, Optional, Union
+from typing import List, Optional
 
 log = logging.getLogger('osintgpt.projects')
 

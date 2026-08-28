@@ -18,7 +18,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 # type hints
-from typing import Any, Dict, List, Optional, Sequence
+from typing import Any, Dict, Optional, Sequence
 
 # import osintgpt graph
 from osintgpt.graph import graph_for, neighbors, path_between
@@ -43,8 +43,7 @@ from .support import (
 log = logging.getLogger('osintgpt.agentic')
 
 # Content costs context; a count does not. This is what lets a survey range
-# wider than a fetch — the difference the roadmap records as measurably
-# improving answer quality.
+# wider than a fetch, which is where most of the answer quality comes from.
 SNIPPETS = 'snippets'
 REFS = 'refs'
 
