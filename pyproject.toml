@@ -58,11 +58,18 @@ dependencies = [
 
 [project.scripts]
 osintgpt = "osintgpt.cli.main:main"
+osintgpt-app = "osintgpt.app.launch:main"
 
 [project.optional-dependencies]
 # sentence-transformers pulls torch: ~650 MB against ~120 MB for everything
 # else. Offline embedding stays first-class as a capability and opt-in as a
 # download.
+# Streamlit is a web framework, and a library that pulls one into every
+# dependency tree is a library nobody embeds. The CLI is core because a hidden
+# CLI helps nobody; an app is a different decision.
+app = [
+    "streamlit>=1.36,<2"
+]
 local = [
     "sentence-transformers>=3,<6"
 ]
@@ -73,7 +80,7 @@ postgres = [
     "pgvector>=0.3,<1"
 ]
 all = [
-    "osintgpt[local,postgres]"
+    "osintgpt[app,local,postgres]"
 ]
 dev = [
     "pytest>=8",
