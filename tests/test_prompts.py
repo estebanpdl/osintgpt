@@ -24,11 +24,31 @@ from osintgpt.prompts import (
     basic_summarization,
     prompt,
     static_prompt,
-    topic_modeling_summarization
+    topic_modeling_summarization,
+    variables_of
 )
 from osintgpt.prompts.templates import SUFFIX, TEMPLATE_DIR
 
 README = TEMPLATE_DIR / 'README.md'
+
+
+def render(name):
+    '''
+    Render any template, with placeholders for whatever it asks for.
+
+    Variables are discovered from the template rather than listed here, so a
+    new prompt is covered by these checks the moment it exists.
+    '''
+    needed = variables_of(name)
+    if not needed:
+        return static_prompt(name)
+
+    return prompt(name, **{
+        # A list satisfies both a loop and a truth test; a string would break
+        # the first, and a scalar the second.
+        variable: [{'citation': 'a.md', 'text': 'placeholder'}]
+        for variable in needed
+    })
 
 
 class TestEnvironment:
@@ -65,11 +85,11 @@ class TestEnvironment:
 class TestTemplates:
     def test_every_template_has_content(self):
         for name in available():
-            assert len(static_prompt(name)) > 50, name
+            assert len(render(name)) > 50, name
 
     def test_none_is_empty_or_whitespace(self):
         for name in available():
-            assert static_prompt(name).strip(), name
+            assert render(name).strip(), name
 
     def test_literal_braces_survive(self):
         '''
@@ -83,7 +103,7 @@ class TestTemplates:
 
     def test_no_template_carries_an_unrendered_placeholder(self):
         for name in available():
-            text = static_prompt(name)
+            text = render(name)
 
             assert '{{' not in text, name
             assert '{%' not in text, name

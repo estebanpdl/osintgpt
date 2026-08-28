@@ -27,6 +27,9 @@ from osintgpt.evaluation import (
     save_questions
 )
 
+# import osintgpt answering
+from osintgpt.answering import Answer, answer_question
+
 # import osintgpt indexing and search
 from osintgpt.indexing import IndexReport, index_project
 from osintgpt.search import search_across_projects, search_project
@@ -42,12 +45,14 @@ except PackageNotFoundError:
 
 __name__ = 'osintgpt'
 __all__ = [
+    'Answer',
     'EvaluationReport',
     'IndexReport',
     'Question',
     'Project',
     'ProjectSettings',
     'Settings',
+    'answer_question',
     'evaluate',
     'index_project',
     'load_questions',

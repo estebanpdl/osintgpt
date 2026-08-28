@@ -24,6 +24,7 @@ contains literal `{` and `}` and `.format` would require doubling every one.
 | `summarize` | `prompts.basic_summarization` → `SemanticOperations.summarize_content` | — |
 | `topic_modeling` | `prompts.topic_modeling_summarization` | — |
 | `sentence_details` | `OpenAIGPT.analyze_sentence_details` (deprecated) | — |
+| `answer` | `answering.build_prompt` → `answer_question` | `question`, `passages` |
 
 ## Two kinds of prompt
 
@@ -38,6 +39,11 @@ failure looks like "search results got worse", not like an exception.
 **Voice prompts** shape tone and behaviour with nothing parsing them.
 `summarize` and `topic_modeling` are read by a person, so they are safe to
 edit freely.
+
+`answer` is a voice prompt by that test — nothing parses the reply — but it
+is the one where editing carries real cost. Its rules are what keep an answer
+inside the retrieved passages, and weakening them produces confident text that
+cites nothing and reads exactly like the grounded version.
 
 If per-project prompt overrides are ever built, only voice prompts are safe to
 expose.

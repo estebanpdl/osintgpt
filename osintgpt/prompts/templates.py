@@ -72,6 +72,27 @@ def static_prompt(name: str) -> str:
     return prompt(name)
 
 
+# what a template expects
+def variables_of(name: str) -> List[str]:
+    '''
+    The variables a template references.
+
+    Asked of the template rather than tracked in a list, so a test can render
+    every prompt without a catalogue that drifts from the files.
+
+    Args:
+        name (str): Template name, without the suffix.
+
+    Returns:
+        List[str]: Variable names, sorted.
+    '''
+    from jinja2 import meta
+
+    source = _environment.loader.get_source(_environment, f'{name}{SUFFIX}')[0]
+
+    return sorted(meta.find_undeclared_variables(_environment.parse(source)))
+
+
 # every template that exists
 def available() -> List[str]:
     '''

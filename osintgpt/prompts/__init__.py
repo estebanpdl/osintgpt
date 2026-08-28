@@ -1,3 +1,3 @@
 # import functions
 from .summarizing import *
-from .templates import available, prompt, static_prompt
+from .templates import available, prompt, static_prompt, variables_of
