@@ -35,6 +35,10 @@ class ProjectSettings:
     # One generation call per document to build, so opting in is a decision an
     # operator makes for a case rather than a default they inherit.
     graph_enabled: bool = False
+    # One extra generation call after each answer. On by default: it is small
+    # against the answer it follows, and it surfaces connections an analyst
+    # did not know to ask about, which is where findings usually are.
+    suggest_followups: bool = True
     storage_backend: str = 'sqlite'
     cost_ceiling_usd: Optional[float] = None
 

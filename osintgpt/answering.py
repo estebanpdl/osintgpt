@@ -20,8 +20,12 @@ from typing import Iterable, List, Optional, Sequence
 # import osintgpt llm
 from osintgpt.llm.base import EmbeddingProvider, GenerationProvider
 
+# import osintgpt followups
+from osintgpt.followups import suggest_followups
+
 # import osintgpt projects
 from osintgpt.projects import Project
+from osintgpt.projects.questions import RECENT, asked_questions, record_question
 
 # import osintgpt prompts
 from osintgpt.prompts import prompt
@@ -57,6 +61,8 @@ class Answer:
     passages: List[SearchResult] = field(default_factory=list)
     # False when retrieval found nothing and no model was called.
     generated: bool = False
+    # What to ask next, each self-contained so it can be sent as written.
+    followups: List[str] = field(default_factory=list)
 
     @property
     def sources(self) -> List[str]:
@@ -93,7 +99,8 @@ def answer_question(
     generator: GenerationProvider,
     passages: int = DEFAULT_PASSAGES,
     refs: Optional[Iterable[str]] = None,
-    store: Optional[BaseVectorEngine] = None
+    store: Optional[BaseVectorEngine] = None,
+    record: bool = True
 ) -> Answer:
     '''
     Retrieve, then answer from what was retrieved and nothing else.
@@ -115,6 +122,9 @@ def answer_question(
     Returns:
         Answer: The answer and the passages behind it.
     '''
+    if record:
+        record_question(project, question)
+
     found = search_project(
         project, question, embedder, top_k=passages, refs=refs, store=store
     )
@@ -124,13 +134,34 @@ def answer_question(
         # training, which is exactly what grounding is for.
         return Answer(question=question, text=NOTHING_RETRIEVED)
 
+    text = generator.generate(build_prompt(question, found), question).strip()
+
     return Answer(
         question=question,
-        text=generator.generate(
-            build_prompt(question, found), question
-        ).strip(),
+        text=text,
         passages=list(found),
-        generated=True
+        generated=True,
+        followups=followups_for(project, generator, question, text, found)
+    )
+
+
+# suggest what to ask next, when the project wants it
+def followups_for(project, generator, question, answer, passages):
+    '''
+    Suggestions, or nothing, without ever raising.
+
+    Gated on the project rather than on a flag per question: an operator who
+    does not want the extra call says so once, and every path honours it.
+
+    Returns:
+        List[str]: Self-contained questions, possibly empty.
+    '''
+    if not getattr(project.settings, 'suggest_followups', False):
+        return []
+
+    return suggest_followups(
+        generator, question, answer, passages,
+        asked=[q.text for q in asked_questions(project, limit=RECENT)]
     )
 
 

@@ -59,6 +59,8 @@ class AgenticAnswer:
     # Refs the tools actually returned, in the order they were first seen.
     # What a reader opens to check the answer.
     sources: List[str] = field(default_factory=list)
+    # What to ask next, each self-contained so it can be sent as written.
+    followups: List[str] = field(default_factory=list)
 
     @property
     def degraded(self) -> bool:
@@ -97,6 +99,10 @@ def agentic_answer(
     Returns:
         AgenticAnswer: The answer, its sources, and the trace.
     '''
+    from osintgpt.projects.questions import record_question
+
+    record_question(project, question)
+
     trace = Trace()
     context = ToolContext(
         project=project, embedder=embedder, generator=generator, store=store
@@ -121,6 +127,9 @@ def agentic_answer(
     system = prompt('agentic', today=date.today().isoformat())
     history: List[Exchange] = []
     sources: List[str] = []
+    # Passages the tools actually returned, so a suggestion is grounded in
+    # what the model read rather than in what it might have read.
+    gathered: List[dict] = []
 
     for round_number in range(1, max(int(max_rounds), 1) + 1):
         try:
@@ -142,12 +151,14 @@ def agentic_answer(
 
         if not turn.wants_tools:
             # It answered. Nothing here decides it should have kept looking.
-            return AgenticAnswer(
-                question=question, text=turn.text.strip(), trace=trace,
-                sources=sources
+            return _answered(
+                project, generator, question, turn.text.strip(), trace,
+                sources, gathered
             )
 
-        results = _run_calls(context, turn, trace, round_number, sources)
+        results = _run_calls(
+            context, turn, trace, round_number, sources, gathered
+        )
         history.append(Exchange(turn=turn, results=results))
 
     # Rounds exhausted. One more request with no tools offered, so the model
@@ -163,8 +174,22 @@ def agentic_answer(
         return _static(project, question, embedder, generator, trace, store,
                        'the model gathered material but produced no answer')
 
+    return _answered(
+        project, generator, question, text, trace, sources, gathered
+    )
+
+
+def _answered(project, generator, question, text, trace, sources, gathered):
+    '''
+    Attach suggestions to an answer the model produced itself.
+    '''
+    from osintgpt.answering import followups_for
+
     return AgenticAnswer(
-        question=question, text=text, trace=trace, sources=sources
+        question=question, text=text, trace=trace, sources=sources,
+        followups=followups_for(
+            project, generator, question, text, gathered
+        )
     )
 
 
@@ -188,7 +213,9 @@ def _nothing_indexed(project, store) -> bool:
             engine.close()
 
 
-def _run_calls(context, turn, trace, round_number, sources) -> Dict[str, str]:
+def _run_calls(
+    context, turn, trace, round_number, sources, gathered
+) -> Dict[str, str]:
     '''
     Run everything the model asked for this round, recording each.
     '''
@@ -213,6 +240,8 @@ def _run_calls(context, turn, trace, round_number, sources) -> Dict[str, str]:
         for ref in _refs_in(payload):
             if ref not in sources:
                 sources.append(ref)
+
+        gathered.extend(payload.get('passages') or [])
 
         results[call.id] = json.dumps(
             {'error': error} if error else payload,
@@ -252,11 +281,14 @@ def _static(project, question, embedder, generator, trace, store, reason):
     trace.degraded = reason
     log.info('falling back to the static pipeline: %s', reason)
 
+    # record=False: the question was logged before the loop began, and
+    # degrading is not asking again.
     answer = answer_question(
-        project, question, embedder, generator, store=store
+        project, question, embedder, generator, store=store, record=False
     )
 
     return AgenticAnswer(
         question=question, text=answer.text, trace=trace,
-        sources=[r.ref for r in answer.passages]
+        sources=[r.ref for r in answer.passages],
+        followups=answer.followups
     )

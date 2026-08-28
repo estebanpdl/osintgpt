@@ -30,6 +30,7 @@ from osintgpt.evaluation import (
 # import osintgpt answering
 from osintgpt.agentic import AgenticAnswer, agentic_answer
 from osintgpt.answering import Answer, answer_question
+from osintgpt.followups import suggest_followups
 
 # import osintgpt graph
 from osintgpt.graph import GraphReport, build_graph, graph_for
@@ -78,7 +79,8 @@ __all__ = [
     'load_questions',
     'save_questions',
     'search_across_projects',
-    'search_project'
+    'search_project',
+    'suggest_followups'
 ]
 
 # describition variables

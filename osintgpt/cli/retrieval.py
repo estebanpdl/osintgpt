@@ -164,6 +164,11 @@ def ask(
             target.print('None')
         for source in answer.sources:
             target.print(f'• {source}', soft_wrap=True)
+        if answer.followups:
+            target.print('')
+            target.print('Ask next', style='bold')
+            for number, suggestion in enumerate(answer.followups, 1):
+                target.print(f'{number}. {suggestion}', soft_wrap=True)
         if trace and lines:
             target.print('')
             target.print('Trace', style='bold')
@@ -183,7 +188,8 @@ def _static_payload(answer) -> Dict[str, object]:
                 'citation': result.chunk.citation
             }
             for result in answer.passages
-        ]
+        ],
+        'followups': answer.followups
     }
 
 
@@ -196,6 +202,9 @@ def _agentic_payload(answer) -> Dict[str, object]:
     return {
         'answer': answer.text,
         'sources': answer.sources,
+        # Each is a complete question, so an interface can send one as
+        # written — a numbered line in a terminal, a button in an app.
+        'followups': answer.followups,
         'degraded': answer.trace.degraded,
         'trace': {
             'rounds': answer.trace.rounds,

@@ -102,7 +102,9 @@ def test_ask_json_carries_the_answer_and_the_trace(
     )
 
     payload = json.loads(result.output)
-    assert set(payload) == {'answer', 'sources', 'degraded', 'trace'}
+    assert set(payload) == {
+        'answer', 'sources', 'followups', 'degraded', 'trace'
+    }
     assert set(payload['trace']) == {'rounds', 'calls', 'narration', 'reading'}
     assert '\x1b[' not in result.output
 
@@ -120,7 +122,7 @@ def test_static_json_keeps_the_passage_shape(runner, home, monkeypatch):
     )
 
     payload = json.loads(result.output)
-    assert set(payload) == {'answer', 'passages'}
+    assert set(payload) == {'answer', 'passages', 'followups'}
     assert len(payload['passages']) == 2
     assert set(payload['passages'][0]) == {'text', 'score', 'citation'}
 

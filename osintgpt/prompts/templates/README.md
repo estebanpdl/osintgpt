@@ -28,6 +28,7 @@ contains literal `{` and `}` and `.format` would require doubling every one.
 | `search_terms` | `lexical.derive_search_terms` | `max_terms` |
 | `graph_extraction` | `graph.extract_document` | `ref`, `text`, `known_entities`, `part` |
 | `agentic` | `agentic.agentic_answer` | `today` |
+| `followups` | `followups.suggest_followups` | `n`, `question`, `answer`, `passages`, `asked` |
 
 ## Two kinds of prompt
 
@@ -64,6 +65,13 @@ sourced claim rather than a model assertion. An edge arriving without evidence
 is dropped rather than stored — weaken that instruction and the graph fills
 with plausible relationships nobody can check, which is worse than an empty
 graph.
+
+`followups` is a **contract** prompt — the reply is parsed as a JSON array —
+and its instructions carry a second contract nothing can check: every
+suggestion must stand alone. A CLI prints them numbered and an interface makes
+each a button, so a question containing "it" or "that answer" arrives
+meaningless when the analyst sends it. Weakening that line produces
+suggestions that read well and cannot be used.
 
 `search_terms` is a **contract** prompt: `derive_search_terms` parses a JSON
 array out of the reply. Its failure is soft — an unparseable reply means the
