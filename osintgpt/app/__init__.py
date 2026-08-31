@@ -14,5 +14,8 @@ from .session import (
     take_pending
 )
 
+# choosing a directory
+from .browse import can_browse, directory_input, select_directory
+
 # launching it
 from .launch import main, script_path

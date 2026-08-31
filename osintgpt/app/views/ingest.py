@@ -20,6 +20,8 @@ from osintgpt import index_project
 from osintgpt.ingestion import Corpus, FieldMapping, describe_fields, dry_run
 from osintgpt.ingestion.loaders import needs_mapping
 
+from ..browse import directory_input
+
 
 # what a folder would contribute
 def preview(folder) -> Dict[str, Any]:
@@ -79,9 +81,16 @@ def render(st, runtime, state) -> None:
     project = runtime.project
     st.subheader(f'Material — {project.name}')
 
-    folder = st.text_input('Folder to register', key='ingest-folder')
-    if folder and Path(folder).is_dir():
-        _register(st, project, Path(folder))
+    folder = directory_input(
+        st, 'Folder to register', 'ingest-folder', state,
+        help_text='A directory of documents. Everything readable beneath it '
+                  'is tracked, including files added later.'
+    )
+    if folder:
+        if Path(folder).is_dir():
+            _register(st, project, Path(folder))
+        else:
+            st.error(f'{folder} is not a directory.')
 
     corpus = Corpus.load(project.paths.sources)
     if len(corpus):

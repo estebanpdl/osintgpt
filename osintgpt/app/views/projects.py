@@ -19,6 +19,7 @@ from osintgpt import Project
 # import osintgpt vector store
 from osintgpt.vector_store import store_for
 
+from ..browse import directory_input
 from ..session import list_projects, select_project
 from ..styles import badge
 
@@ -111,21 +112,25 @@ def render(st, home, state) -> None:
     '''
     st.subheader('Projects')
 
-    with st.form('create-project'):
-        name = st.text_input('Name a new project')
-        location = st.text_input(
-            'Location (optional)',
-            help='A directory to keep this project in. Leave empty to use '
-                 f'{home}. Useful for keeping a case beside its material, or '
-                 'on another drive.'
+    # Not a form: a form cannot hold a button that does anything but submit,
+    # and the picker has to open a dialog and rerun.
+    with st.expander('New project', expanded=not list_projects(home)):
+        name = st.text_input('Name', key='new-project-name')
+        location = directory_input(
+            st, 'Location (optional)', 'new-project-location', state,
+            help_text='Where to keep this project. Leave empty for '
+                      f'{home}. Useful for keeping a case beside the material '
+                      'it indexes, or on another drive.',
+            placeholder=str(home)
         )
-        if st.form_submit_button('Create') and name.strip():
+        if st.button('Create', type='primary') and name.strip():
             try:
-                project = _create(name.strip(), location.strip(), home)
+                project = _create(name.strip(), location, home)
             except Exception as error:  # noqa: BLE001 — the operator's to fix
                 st.error(str(error))
             else:
                 select_project(state, project.slug)
+                state.pop('new-project-location', None)
                 st.rerun()
 
     entries = list_projects(home)

@@ -543,3 +543,125 @@ class TestProjectsCanLiveAnywhere:
         first, _ = projects
 
         assert describe(first)['root'] == str(first.paths.root)
+
+
+class TestDirectoryPicker:
+    '''
+    Typing a path always works. The picker is the convenience on top, and a
+    machine that cannot open a dialog must still be able to use the app.
+    '''
+
+    def test_the_button_is_hidden_when_no_dialog_can_open(self, monkeypatch):
+        '''
+        A control that does nothing is worse than no control.
+        '''
+        import builtins
+
+        from osintgpt.app import browse
+
+        real = builtins.__import__
+
+        def refuse(name, *args, **kwargs):
+            if name == 'tkinter':
+                raise ImportError('no tkinter here')
+
+            return real(name, *args, **kwargs)
+
+        monkeypatch.setattr(builtins, '__import__', refuse)
+
+        assert browse.can_browse() is False
+
+    def test_selecting_returns_nothing_when_unavailable(self, monkeypatch):
+        import builtins
+
+        from osintgpt.app import browse
+
+        real = builtins.__import__
+
+        def refuse(name, *args, **kwargs):
+            if name == 'tkinter':
+                raise ImportError('no tkinter here')
+
+            return real(name, *args, **kwargs)
+
+        monkeypatch.setattr(builtins, '__import__', refuse)
+
+        assert browse.select_directory() is None
+
+    def test_a_cancelled_dialog_returns_nothing(self, monkeypatch):
+        '''
+        Cancelling is ordinary, and must leave what was typed untouched.
+        '''
+        from osintgpt.app import browse
+
+        monkeypatch.setattr(
+            browse, 'select_directory', lambda initial=None: None
+        )
+
+        assert browse.select_directory('/somewhere') is None
+
+    def test_typing_a_path_needs_no_dialog(self):
+        '''
+        The field is the interface; the button is the shortcut.
+        '''
+        from osintgpt.app.browse import directory_input
+
+        state = {}
+        st = _StubStreamlit(typed='D:/cases/alpha')
+
+        assert directory_input(st, 'Folder', 'k', state) == 'D:/cases/alpha'
+        assert state['k'] == 'D:/cases/alpha'
+
+    def test_whitespace_is_trimmed(self):
+        from osintgpt.app.browse import directory_input
+
+        state = {}
+        st = _StubStreamlit(typed='  D:/cases/alpha  ')
+
+        assert directory_input(st, 'Folder', 'k', state) == 'D:/cases/alpha'
+
+    def test_it_never_raises_when_a_dialog_fails(self, monkeypatch):
+        '''
+        A picker that explodes must not take the app with it — the operator
+        can still type.
+        '''
+        from osintgpt.app import browse
+
+        class Exploding:
+            def __init__(self, *a, **k):
+                raise RuntimeError('no display')
+
+        import tkinter
+
+        monkeypatch.setattr(tkinter, 'Tk', Exploding)
+
+        assert browse.select_directory() is None
+
+
+class _StubStreamlit:
+    '''Enough Streamlit to drive directory_input without a browser.'''
+
+    def __init__(self, typed=''):
+        self.typed = typed
+
+    def columns(self, spec):
+        return [self, self]
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exception):
+        return False
+
+    def text_input(self, label, value='', key=None, help=None,
+                   placeholder=None):
+        return self.typed
+
+    def markdown(self, *args, **kwargs):
+        return None
+
+    def button(self, *args, **kwargs):
+        return False
+
+    def rerun(self):
+        raise AssertionError('should not rerun without a selection')
