@@ -28,6 +28,21 @@ from osintgpt.exceptions.errors import MissingEnvironmentVariableError
 # Current, cheap, and available to every account.
 DEFAULT_EMBEDDING_MODEL = 'text-embedding-3-small'
 
+# Settings that must never be printed, logged, or written into a project file.
+# Derived from the field names rather than listed, so a credential added later
+# is covered without anyone remembering to add it here.
+def secret_fields() -> set:
+    '''
+    Returns:
+        set: Names of settings holding a credential.
+    '''
+    from dataclasses import fields as _fields
+
+    return {
+        field.name for field in _fields(Settings)
+        if field.name.endswith('_api_key') or field.name.endswith('_dsn')
+    }
+
 # Ollama's own default. Applied where the value is used, not as a field
 # default, so an unset base URL stays distinguishable from a chosen one.
 DEFAULT_OLLAMA_BASE_URL = 'http://localhost:11434'

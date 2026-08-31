@@ -435,3 +435,111 @@ class TestLaunchArguments:
         from osintgpt.app import launch
 
         assert 'argv is None' in launch.main.__doc__ or True
+
+
+class TestSettingsNeverLeakACredential:
+    '''
+    A settings screen that prints a key is a settings screen that leaks one
+    into a screenshot.
+    '''
+
+    def test_it_reports_presence_not_value(self):
+        from osintgpt.app.views.settings import credential_status
+        from osintgpt.config import Settings
+
+        rows = credential_status(Settings(openai_api_key='sk-do-not-print'))
+
+        assert any(r['set'] for r in rows)
+        assert all('sk-do-not-print' not in str(r) for r in rows)
+
+    def test_it_names_the_variable_to_set(self, ):
+        from osintgpt.app.views.settings import credential_status
+        from osintgpt.config import Settings
+
+        rows = credential_status(Settings())
+        variables = {r['variable'] for r in rows}
+
+        assert 'OPENAI_API_KEY' in variables
+
+    def test_a_credential_added_later_is_covered_automatically(self):
+        '''
+        Derived from the field names rather than listed, so nobody has to
+        remember to add one.
+        '''
+        from osintgpt.config import Settings, secret_fields
+
+        from dataclasses import fields
+
+        expected = {
+            f.name for f in fields(Settings)
+            if f.name.endswith('_api_key') or f.name.endswith('_dsn')
+        }
+
+        assert secret_fields() == expected
+
+    def test_the_library_owns_what_a_secret_is(self):
+        '''
+        Not the CLI. The app needs the same answer, and importing it from a
+        sibling surface is how two surfaces disagree.
+        '''
+        import inspect
+
+        from osintgpt.app.views import settings
+
+        source = inspect.getsource(settings)
+
+        assert 'from osintgpt.config import' in source
+        assert 'osintgpt.cli' not in source
+
+
+class TestProjectsCanLiveAnywhere:
+    def test_a_project_created_elsewhere_is_registered(self, home, tmp_path):
+        '''
+        A scan of the home will never find it, and without the entry it would
+        not appear in any listing — which looks exactly like creation failing.
+        '''
+        from osintgpt.app.views.projects import _create
+
+        elsewhere = tmp_path / 'another-drive' / 'case'
+        project = _create('Elsewhere', str(elsewhere), home)
+
+        assert project.paths.root == elsewhere
+        assert any(e.slug == project.slug for e in list_projects(home))
+
+    def test_a_rebuild_keeps_it(self, home, tmp_path):
+        '''
+        list_projects rebuilds on every render, so a project outside the home
+        would appear once and then vanish.
+        '''
+        from osintgpt.app.views.projects import _create
+
+        _create('Elsewhere', str(tmp_path / 'other' / 'case'), home)
+        Project.create('Inside', home=home)
+
+        slugs = {e.slug for e in list_projects(home)}
+        slugs_again = {e.slug for e in list_projects(home)}
+
+        assert slugs == slugs_again == {'elsewhere', 'inside'}
+
+    def test_a_deleted_project_is_dropped_on_rebuild(self, home, tmp_path):
+        import shutil
+
+        from osintgpt.app.views.projects import _create
+
+        elsewhere = tmp_path / 'gone' / 'case'
+        _create('Gone', str(elsewhere), home)
+        shutil.rmtree(elsewhere)
+
+        assert list_projects(home) == []
+
+    def test_an_empty_location_uses_the_home(self, home):
+        from osintgpt.app.views.projects import _create
+
+        project = _create('Default', '', home)
+
+        assert home in project.paths.root.parents
+
+    def test_describe_says_where_a_project_lives(self, projects):
+        first, _ = projects
+
+        assert describe(first)['root'] == str(first.paths.root)

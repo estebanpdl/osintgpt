@@ -7,7 +7,7 @@ from typing import Optional, Union, get_args, get_origin
 import typer
 
 from osintgpt import Settings
-from osintgpt.config import ENV_VARS
+from osintgpt.config import ENV_VARS, secret_fields
 from osintgpt.projects import (
     ProjectSettings,
     Registry,
@@ -20,10 +20,7 @@ from .selection import ProjectSelectionError, resolve_project, state_from
 
 config_app = typer.Typer(help='Read and update project settings.')
 PROJECT_FIELDS = {field.name: field for field in fields(ProjectSettings)}
-SECRET_FIELDS = {
-    field.name for field in fields(Settings)
-    if field.name.endswith('_api_key') or field.name.endswith('_dsn')
-}
+SECRET_FIELDS = secret_fields()
 
 
 def _context(context: typer.Context, explicit: Optional[str], json_output: bool):

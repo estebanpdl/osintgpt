@@ -29,7 +29,7 @@ from osintgpt.app.session import (
     selected_project
 )
 from osintgpt.app.styles import load_css
-from osintgpt.app.views import chat, ingest, projects
+from osintgpt.app.views import chat, ingest, projects, settings
 
 
 # providers for a project, built once per project
@@ -56,7 +56,9 @@ def main() -> None:
         '<div class="osintgpt-subtitle">Ask your own documents</div>',
         unsafe_allow_html=True
     )
-    view = st.sidebar.radio('View', ['Projects', 'Material', 'Ask'])
+    view = st.sidebar.radio(
+        'View', ['Projects', 'Material', 'Ask', 'Settings']
+    )
 
     project = selected_project(st.session_state, home)
 
@@ -81,6 +83,8 @@ def main() -> None:
 
     if view == 'Material':
         ingest.render(st, runtime, st.session_state)
+    elif view == 'Settings':
+        settings.render(st, runtime, home, st.session_state)
     else:
         chat.render(st, runtime, st.session_state)
 

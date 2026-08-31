@@ -119,10 +119,13 @@ class Registry:
     @classmethod
     def rebuild(cls, home: Union[str, Path]):
         '''
-        Rescan the projects directory and replace the index with what is there.
+        Rescan the projects directory, keeping what a scan cannot find.
 
-        Projects created outside the conventional location are not found by a
-        scan; re-register those explicitly.
+        A project kept outside the home — on another drive, beside the
+        material it indexes — is invisible to a scan but was registered
+        deliberately. Dropping it would mean an operator who chose their own
+        location loses the project from every listing, which is a silent
+        failure the scan has no business causing.
 
         Args:
             home (Union[str, Path]): The osintgpt home.
@@ -138,6 +141,15 @@ class Registry:
                 if not ProjectPaths(candidate).config.is_file():
                     continue
                 entries.append(RegistryEntry.of(Project.load(candidate)))
+
+        found = {entry.id for entry in entries}
+        for entry in cls.load(home):
+            # Kept only if it is still on disk: an entry pointing at a deleted
+            # directory is stale, and a rebuild is exactly when to notice.
+            if entry.id in found:
+                continue
+            if ProjectPaths(Path(entry.path)).config.is_file():
+                entries.append(entry)
 
         registry = cls(home=home, entries=entries)
         registry.save()

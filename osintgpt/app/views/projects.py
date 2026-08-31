@@ -45,6 +45,7 @@ def describe(project) -> Dict[str, Any]:
     described = {
         'name': project.name,
         'slug': project.slug,
+        'root': str(project.paths.root),
         'embedding_model': settings.embedding_model or '(default)',
         'backend': settings.storage_backend,
         'legs': [
@@ -70,6 +71,36 @@ def describe(project) -> Dict[str, Any]:
     return described
 
 
+# create a project, wherever the operator wants it
+def _create(name: str, location: str, home):
+    '''
+    A project under the home, or at a path the operator chose.
+
+    A project kept elsewhere is registered explicitly, because a scan of the
+    home will never find it — and without that entry it would not appear in
+    any listing, which looks exactly like the creation having failed.
+
+    Args:
+        name (str): Project name.
+        location (str): A directory, or empty for the home.
+        home (Path): The osintgpt home.
+
+    Returns:
+        Project: The created project.
+    '''
+    from pathlib import Path
+
+    from osintgpt.projects import Registry
+
+    if not location:
+        return Project.create(name, home=home)
+
+    project = Project.create(name, path=Path(location).expanduser())
+    Registry.load(home).register(project)
+
+    return project
+
+
 # render the projects view
 def render(st, home, state) -> None:
     '''
@@ -82,10 +113,20 @@ def render(st, home, state) -> None:
 
     with st.form('create-project'):
         name = st.text_input('Name a new project')
+        location = st.text_input(
+            'Location (optional)',
+            help='A directory to keep this project in. Leave empty to use '
+                 f'{home}. Useful for keeping a case beside its material, or '
+                 'on another drive.'
+        )
         if st.form_submit_button('Create') and name.strip():
-            project = Project.create(name.strip(), home=home)
-            select_project(state, project.slug)
-            st.rerun()
+            try:
+                project = _create(name.strip(), location.strip(), home)
+            except Exception as error:  # noqa: BLE001 — the operator's to fix
+                st.error(str(error))
+            else:
+                select_project(state, project.slug)
+                st.rerun()
 
     entries = list_projects(home)
     if not entries:
@@ -121,6 +162,10 @@ def render(st, home, state) -> None:
     st.caption(
         f'Embedding model: {facts["embedding_model"]} · '
         f'Legs on: {", ".join(facts["legs"]) or "none"}'
+    )
+    st.markdown(
+        f'<span class="citation-chip">{facts["root"]}</span>',
+        unsafe_allow_html=True
     )
 
     stored = facts.get('stored_models') or []
