@@ -1,28 +1,46 @@
 # Exact and semantic retrieval
 
-`search` returns raw semantic matches without asking a generation model to
-write an answer. It is the direct choice when you want passages ranked by
-meaning and intend to read them yourself.
+`search` returns passages without asking a generation model to write an
+answer. With no retrieval flags it keeps the semantic-only default:
 
 ```bash
 osintgpt search "acknowledged transmission" --top-k 5
 ```
 
-`ask` is model-directed. The model may survey documents, use semantic search
-for concepts, use exact search for literal identifiers, query a built graph,
-and read a source before answering. `--trace` prints those choices and result
-counts so you can see whether the retrieval path fits the question.
+Use repeatable `--exact` flags for literal identifiers. This path reads the
+indexed text and needs no API key or embedding provider. The query argument is
+optional when exact matching is the only leg:
+
+```bash
+osintgpt search --exact LX-204 --exact QN-88 --full
+```
+
+Add `--semantic` to fuse semantic and exact ranks. `--derive-terms` instead
+asks the generation model to choose literal terms, costing one generation
+call, and then fuses them with semantic results:
+
+```bash
+osintgpt search "Which node acknowledged the sequence?" \
+  --exact LX-204 --semantic
+osintgpt search "Which node acknowledged the sequence?" --derive-terms
+```
+
+Each result names the leg or legs that found it. This keyless JSON output was
+rerun against an indexed scratch project with all provider keys unset:
+
+```bash
+osintgpt search --exact LX-204 --project walkthrough --json
+```
+
+```json
+{"results": [{"rank": 1, "score": 1.0, "citation": "dispatches.txt › Dispatch 4", "ref": "dispatches.txt", "text": "Operator Neral-7 acknowledged transmission LX-204.", "path": "Dispatch 4", "timestamp": "", "author": "", "legs": ["lexical"], "ranks": {"lexical": 1}}, {"rank": 2, "score": 1.0, "citation": "ledger.txt › Ledger", "ref": "ledger.txt", "text": "Account LX-204 was assigned to relay Delta.", "path": "Ledger", "timestamp": "", "author": "", "legs": ["lexical"], "ranks": {"lexical": 2}}]}
+```
+
+`ask` remains model-directed. It may use exact, semantic, and graph tools and
+can show those decisions with `--trace`; `--static` deliberately uses one
+semantic retrieval pass.
 
 ```bash
 osintgpt ask "Where does identifier LX-204 appear?" --trace
 osintgpt ask "Where does identifier LX-204 appear?" --static --passages 5
-```
-
-The second command deliberately uses the one-pass semantic path. For direct
-library access to both semantic and exact legs without generating an answer,
-run:
-
-```bash
-python examples/library/search_without_answering.py \
-  PROJECT_PATH "acknowledged transmission" --term LX-204 --top-k 5
 ```

@@ -1,7 +1,7 @@
-'''Grounded answers and raw semantic hits from the selected project.'''
+'''Grounded answers and raw passage retrieval from the selected project.'''
 
 from contextlib import contextmanager
-from typing import Dict, Optional
+from typing import Dict, List, Optional
 
 import typer
 
@@ -9,10 +9,13 @@ from osintgpt import (
     Settings,
     agentic_answer,
     answer_question,
+    hybrid_search,
     search_project
 )
 from osintgpt.answering import DEFAULT_PASSAGES
 from osintgpt.exceptions.errors import MissingEnvironmentVariableError
+from osintgpt.fusion import FusedResult
+from osintgpt.lexical import derive_search_terms, lexical_search
 from osintgpt.llm import (
     build_embedding_provider,
     build_generation_provider
@@ -112,6 +115,38 @@ def _result(result: SearchResult, rank: int) -> Dict[str, object]:
         'timestamp': result.chunk.timestamp,
         'author': result.chunk.author
     }
+
+
+def _ranked_result(result: FusedResult, rank: int) -> Dict[str, object]:
+    row = _result(result.result, rank)
+    row['score'] = result.score
+    row['legs'] = result.legs
+    row['ranks'] = result.ranks
+
+    return row
+
+
+def _single_leg(
+    results: List[SearchResult], leg: str, top_k: int
+) -> List[FusedResult]:
+    return [
+        FusedResult(result=result, score=result.score, ranks={leg: rank})
+        for rank, result in enumerate(results[:top_k], 1)
+    ]
+
+
+def _embedding_model(effective, engine) -> Optional[str]:
+    if effective.embedding_model:
+        return effective.embedding_model
+
+    models = engine.models()
+    if len(models) <= 1:
+        return models[0] if models else None
+
+    raise ValueError(
+        'the store has multiple embedding models; configure embedding_model '
+        f'before exact search (found: {", ".join(models)})'
+    )
 
 
 def ask(
@@ -227,12 +262,24 @@ def _agentic_payload(answer) -> Dict[str, object]:
 
 def search(
     context: typer.Context,
-    query: str = typer.Argument(..., help='Text to search for.'),
+    query: Optional[str] = typer.Argument(
+        None, help='Text for semantic search; optional with --exact only.'
+    ),
     top_k: int = typer.Option(
         10, '--top-k', min=1, help='Maximum number of hits.'
     ),
     full: bool = typer.Option(
         False, '--full', help='Print complete passages without trimming.'
+    ),
+    exact: Optional[List[str]] = typer.Option(
+        None, '--exact', help='Literal term to match; repeatable.'
+    ),
+    semantic: bool = typer.Option(
+        False, '--semantic', help='Run semantic search alongside exact terms.'
+    ),
+    derive_terms: bool = typer.Option(
+        False, '--derive-terms',
+        help='Ask the generation model for exact terms, then fuse both legs.'
     ),
     project_slug: Optional[str] = typer.Option(
         None, '--project', help='Project slug or id; overrides selection.'
@@ -242,28 +289,66 @@ def search(
     project, effective, config = _runtime(
         context, project_slug, json_output
     )
-    embedder = _embedder(effective, config, json_output)
+    exact = exact or []
+    semantic_enabled = semantic or not exact or derive_terms
+    if semantic_enabled and not query:
+        fail('semantic search needs query text', json_output)
+    embedder = (
+        _embedder(effective, config, json_output)
+        if semantic_enabled else None
+    )
     try:
         with _store(project, config) as engine:
-            results = search_project(
-                project, query, embedder, top_k=top_k, store=engine
-            )
+            if not semantic_enabled:
+                matches = lexical_search(
+                    project,
+                    exact,
+                    embedding_model=_embedding_model(effective, engine),
+                    store=engine
+                )
+                results = _single_leg(matches, 'lexical', top_k)
+            else:
+                terms = exact
+                if derive_terms:
+                    generator = _LazyGenerator(effective, config)
+                    terms = exact + derive_search_terms(generator, query)
+
+                if terms:
+                    results = hybrid_search(
+                        project, query, embedder, top_k=top_k, terms=terms,
+                        store=engine
+                    )
+                else:
+                    matches = search_project(
+                        project, query, embedder, top_k=top_k, store=engine
+                    )
+                    results = _single_leg(matches, 'semantic', top_k)
     except Exception as error:  # noqa: BLE001 — provider and store boundary
         fail(str(error), json_output)
 
-    rows = [_result(result, rank) for rank, result in enumerate(results, 1)]
+    rows = [
+        _ranked_result(result, rank)
+        for rank, result in enumerate(results, 1)
+    ]
 
     def render(target) -> None:
         if not rows:
             target.print('Nothing found.')
             return
         for row in rows:
+            legs = ', '.join(
+                f'{leg} #{row["ranks"][leg]}' for leg in row['legs']
+            )
             target.print(
-                f'{row["rank"]}. {row["score"]:.3f}  {row["citation"]}',
-                style='bold'
+                f'{row["rank"]}. {row["score"]:.3f}  {row["citation"]}  '
+                f'[{legs}]',
+                style='bold', markup=False
             )
             text = str(row['text'])
-            target.print(text if full else text[:PREVIEW_CHARS], soft_wrap=True)
+            target.print(
+                text if full else text[:PREVIEW_CHARS],
+                soft_wrap=True, markup=False
+            )
             if not full and len(text) > PREVIEW_CHARS:
                 target.print(f'… [{len(text) - PREVIEW_CHARS} more chars]')
 

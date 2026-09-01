@@ -7,6 +7,7 @@ from typer.testing import CliRunner
 
 from osintgpt.cli import app
 from osintgpt.cli import retrieval as cli_retrieval
+from osintgpt.config import ENV_VARS
 from osintgpt.projects import Registry
 from osintgpt.vector_store import SQLiteVectorStore, StoredChunk
 
@@ -23,6 +24,13 @@ class Generator:
 
     def generate(self, system, user):
         return 'The project says alpha. [1]'
+
+
+class TermGenerator:
+    model = 'test-chat'
+
+    def generate(self, system, user):
+        return '["alpha"]'
 
 
 @pytest.fixture
@@ -70,6 +78,12 @@ def stub_providers(monkeypatch, generator_factory=None):
             lambda provider, settings, model=None: Generator()
         )
     )
+
+
+def clear_credentials(monkeypatch):
+    for field, name in ENV_VARS.items():
+        if field.endswith('_api_key') or field.endswith('_dsn'):
+            monkeypatch.delenv(name, raising=False)
 
 
 def test_ask_prints_answer_and_sources(runner, home, monkeypatch):
@@ -159,6 +173,104 @@ def test_search_returns_ranked_hits_and_honours_top_k(
     assert [row['rank'] for row in payload['results']] == [1, 2]
     assert len(payload['results']) == 2
     assert payload['results'][0]['score'] >= payload['results'][1]['score']
+
+
+def test_exact_search_is_keyless_and_never_builds_an_embedder(
+    runner, home, monkeypatch
+):
+    project_with_chunks(runner, home)
+    clear_credentials(monkeypatch)
+
+    def forbidden(*args, **kwargs):
+        raise AssertionError('exact search must not build an embedder')
+
+    monkeypatch.setattr(cli_retrieval, 'build_embedding_provider', forbidden)
+
+    result = invoke(
+        runner, home, 'search', '--exact', 'passage 1',
+        '--project', 'case-search', '--json'
+    )
+
+    payload = json.loads(result.output)
+    assert result.exit_code == 0
+    assert [row['ref'] for row in payload['results']] == ['doc-1.md']
+    assert payload['results'][0]['legs'] == ['lexical']
+    assert payload['results'][0]['ranks'] == {'lexical': 1}
+
+
+def test_exact_search_infers_the_only_stored_model_without_a_provider(
+    runner, home, monkeypatch
+):
+    project = project_with_chunks(runner, home).with_settings(
+        embedding_model=''
+    )
+    project.save()
+
+    def forbidden(*args, **kwargs):
+        raise AssertionError('model discovery must stay store-local')
+
+    monkeypatch.setattr(cli_retrieval, 'build_embedding_provider', forbidden)
+    result = invoke(
+        runner, home, 'search', '--exact', 'passage 2',
+        '--project', 'case-search', '--json'
+    )
+
+    assert result.exit_code == 0
+    assert json.loads(result.output)['results'][0]['ref'] == 'doc-2.md'
+
+
+def test_exact_with_semantic_fuses_and_names_both_legs(
+    runner, home, monkeypatch
+):
+    project_with_chunks(runner, home)
+    clear_credentials(monkeypatch)
+    stub_providers(monkeypatch)
+
+    result = invoke(
+        runner, home, 'search', 'alpha', '--exact', 'alpha', '--semantic',
+        '--project', 'case-search', '--json'
+    )
+
+    payload = json.loads(result.output)
+    assert result.exit_code == 0
+    assert payload['results'][0]['legs'] == ['semantic', 'lexical']
+    assert payload['results'][0]['ranks'] == {
+        'semantic': 1, 'lexical': 1
+    }
+
+    human = invoke(
+        runner, home, 'search', 'alpha', '--exact', 'alpha', '--semantic',
+        '--project', 'case-search'
+    )
+    assert '[semantic #1, lexical #1]' in human.output
+
+
+def test_derived_terms_run_both_legs(runner, home, monkeypatch):
+    project_with_chunks(runner, home)
+    stub_providers(
+        monkeypatch,
+        lambda provider, settings, model=None: TermGenerator()
+    )
+
+    result = invoke(
+        runner, home, 'search', 'find the identifier', '--derive-terms',
+        '--project', 'case-search', '--json'
+    )
+
+    payload = json.loads(result.output)
+    assert result.exit_code == 0
+    assert payload['results'][0]['legs'] == ['semantic', 'lexical']
+
+
+def test_semantic_search_requires_query_text(runner, home):
+    project_with_chunks(runner, home)
+
+    result = invoke(
+        runner, home, 'search', '--semantic', '--project', 'case-search'
+    )
+
+    assert result.exit_code != 0
+    assert 'needs query text' in result.output
 
 
 @pytest.mark.parametrize('command', [('ask', 'question'), ('search', 'query')])
