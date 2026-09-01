@@ -58,3 +58,8 @@ README-BETA.md
 # .env file
 *.env
 
+
+# scratch homes created while testing or documenting
+.operator-docs-home/
+*-docs-home/
+.osintgpt/
