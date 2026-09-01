@@ -17,8 +17,8 @@ from pathlib import Path
 # type hints
 from typing import Any, Callable, Dict, Optional, Tuple
 
-# import osintgpt config
-from osintgpt.config import Settings
+# import osintgpt credentials
+from osintgpt.credentials import resolve_credentials
 
 # import osintgpt llm
 from osintgpt.llm import build_embedding_provider, build_generation_provider
@@ -147,7 +147,7 @@ def runtime_for(
     '''
     defaults = load_user_defaults(home)
     effective = project.effective_settings(defaults)
-    config = project.settings_for(Settings.from_env(), defaults)
+    config = project.settings_for(resolve_credentials(home), defaults)
 
     if builder is not None:
         embedder, generator = builder(effective, config)

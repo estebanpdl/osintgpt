@@ -8,6 +8,7 @@ import typer
 from osintgpt.projects import default_home
 
 from .app_command import register_app_command
+from .auth import auth_app
 from .config import config_app
 from .corpus import register_corpus_commands
 from .doctor import doctor as doctor_command
@@ -33,6 +34,7 @@ def configure(
 
 
 app.add_typer(project_app, name='project')
+app.add_typer(auth_app, name='auth')
 app.add_typer(config_app, name='config')
 app.add_typer(graph_app, name='graph')
 register_corpus_commands(app)

@@ -7,7 +7,8 @@ from typing import Dict, List, Optional
 import typer
 from rich.table import Table
 
-from osintgpt import Settings, index_project
+from osintgpt import index_project
+from osintgpt.credentials import resolve_credentials
 from osintgpt.exceptions.errors import MissingEnvironmentVariableError
 from osintgpt.ingestion import (
     Corpus,
@@ -198,7 +199,7 @@ def index_corpus(
     state, project = _open_project(context, project_slug, json_output)
     defaults = load_user_defaults(state.home)
     project_settings = project.effective_settings(defaults)
-    config = project.settings_for(Settings.from_env(), defaults)
+    config = project.settings_for(resolve_credentials(state.home), defaults)
 
     try:
         embedder = build_embedding_provider(

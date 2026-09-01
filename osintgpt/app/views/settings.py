@@ -11,10 +11,10 @@
 # =================================================================================
 
 # type hints
-from typing import Any, Dict, List
+from typing import Any, Dict
 
-# import osintgpt config
-from osintgpt.config import ENV_VARS, Settings, secret_fields
+# import osintgpt credentials
+from osintgpt.credentials import credential_status, resolve_credentials
 
 # import osintgpt llm
 from osintgpt.llm import (
@@ -42,30 +42,6 @@ LEGS = [
 ]
 
 
-# whether a provider has what it needs
-def credential_status(config: Settings) -> List[Dict[str, Any]]:
-    '''
-    Which credentials are present, without revealing any of them.
-
-    Args:
-        config (Settings): The resolved settings.
-
-    Returns:
-        List[Dict[str, Any]]: One row per secret: its name, the environment \
-            variable it comes from, and whether it is set. Never the value — \
-            a settings screen that prints a key is a settings screen that \
-            leaks one into a screenshot.
-    '''
-    return [
-        {
-            'field': name,
-            'variable': ENV_VARS.get(name, name.upper()),
-            'set': bool(getattr(config, name, ''))
-        }
-        for name in sorted(secret_fields())
-    ]
-
-
 # render the settings view
 def render(st, runtime, home, state) -> None:
     '''
@@ -83,7 +59,7 @@ def render(st, runtime, home, state) -> None:
 
     defaults = load_user_defaults(home)
     effective = project.effective_settings(defaults)
-    config = project.settings_for(Settings.from_env(), defaults)
+    config = project.settings_for(resolve_credentials(home), defaults)
 
     changes = {}
     changes.update(_providers(st, effective))
@@ -99,7 +75,7 @@ def render(st, runtime, home, state) -> None:
         st.cache_resource.clear()
 
     st.divider()
-    _credentials(st, config)
+    _credentials(st, home)
     _locality(st, config, effective)
 
 
@@ -190,20 +166,26 @@ def _storage(st, effective) -> Dict[str, Any]:
     return {'storage_backend': backend}
 
 
-def _credentials(st, config) -> None:
+def _credentials(st, home) -> None:
     st.markdown('#### Credentials')
     st.caption(
-        'Read from the environment or a .env file, never written into the '
-        'project. Values are not shown.'
+        'Read from the environment, then from credentials stored with '
+        '"osintgpt auth set". Never written into the project, and never '
+        'shown here.'
     )
 
-    for row in credential_status(config):
-        state = 'good' if row['set'] else 'partial'
-        label = 'set' if row['set'] else 'not set'
+    for row in credential_status(home):
+        state = 'good' if row.is_set else 'partial'
+        label = row.source if row.is_set else 'not set'
         st.markdown(
-            f'{badge(label, state)} <code>{row["variable"]}</code>',
+            f'{badge(label, state)} <code>{row.variable}</code>',
             unsafe_allow_html=True
         )
+        if row.shadowed:
+            st.caption(
+                f'{row.variable} in the environment is being used instead of '
+                f'the stored {row.provider} credential.'
+            )
 
 
 def _locality(st, config, effective) -> None:

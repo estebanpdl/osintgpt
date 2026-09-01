@@ -6,6 +6,7 @@ import typer
 from rich.table import Table
 
 from osintgpt import Settings
+from osintgpt.credentials import credential_status, resolve_credentials
 from osintgpt.ingestion import Corpus
 from osintgpt.llm import (
     EMBEDDING_BACKENDS,
@@ -86,6 +87,25 @@ def _provider_status(
         _finding(findings, f'{role} reachability', False, str(error))
 
     return status
+
+
+def _credential_sources(home, findings: List[Dict[str, object]]):
+    rows = []
+    for status in credential_status(home):
+        rows.append({
+            'provider': status.provider,
+            'variable': status.variable,
+            'source': status.source,
+            'shadowed': status.shadowed
+        })
+        if status.shadowed:
+            _finding(
+                findings, f'{status.provider} credential', False,
+                f'{status.variable} in the environment is used instead of '
+                'the stored credential'
+            )
+
+    return rows
 
 
 def _store_status(project, settings: Settings,
@@ -214,7 +234,7 @@ def doctor(
         defaults = ProjectSettings()
         _finding(findings, 'user defaults', False, str(error))
     try:
-        base = Settings.from_env()
+        base = resolve_credentials(state.home)
     except Exception as error:  # noqa: BLE001 — diagnostic boundary
         base = Settings()
         _finding(findings, 'environment', False, str(error))
@@ -248,6 +268,7 @@ def doctor(
         'storage': storage,
         'providers': {'embedding': embedding, 'generation': generation},
         'locality': _locality(settings, effective, findings),
+        'credentials': _credential_sources(state.home, findings),
         'sources': _source_status(project, findings),
         'findings': findings
     }
@@ -272,6 +293,10 @@ def doctor(
             )
         target.print(provider_table)
         target.print(f'Locality: {data["locality"]["summary"]}')
+        target.print('Credentials', style='bold')
+        for row in data['credentials']:
+            where = row['source'] or 'not set'
+            target.print(f'{row["provider"]}: {where}')
         target.print('Sources', style='bold')
         if not data['sources']:
             target.print('None registered.')

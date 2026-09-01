@@ -6,13 +6,13 @@ from typing import Dict, List, Optional
 import typer
 
 from osintgpt import (
-    Settings,
     agentic_answer,
     answer_question,
     hybrid_search,
     search_project
 )
 from osintgpt.answering import DEFAULT_PASSAGES
+from osintgpt.credentials import resolve_credentials
 from osintgpt.exceptions.errors import MissingEnvironmentVariableError
 from osintgpt.fusion import FusedResult
 from osintgpt.lexical import derive_search_terms, lexical_search
@@ -35,7 +35,7 @@ def _runtime(context: typer.Context, explicit: Optional[str], json_output: bool)
         project = resolve_project(state.home, explicit)
         defaults = load_user_defaults(state.home)
         effective = project.effective_settings(defaults)
-        config = project.settings_for(Settings.from_env(), defaults)
+        config = project.settings_for(resolve_credentials(state.home), defaults)
     except (ProjectSelectionError, OSError, ValueError) as error:
         fail(str(error), json_output)
 

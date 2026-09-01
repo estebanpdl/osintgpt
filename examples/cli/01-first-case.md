@@ -43,9 +43,17 @@ under 200      0 (0%) — short chunks carry little for a vector to match on
 context        1 of 1 (100%) carry a heading or section path
 ```
 
-Indexing needs an embedding provider. The default provider uses the key and
-model already present in the process environment; the fully local setup is in
-[`05-running-local.md`](05-running-local.md).
+Indexing needs an embedding provider. Store its credential once, or export the
+variable yourself — the environment is read first, then the stored value:
+
+```bash
+osintgpt auth set openai
+osintgpt auth list
+```
+
+`auth set` prompts rather than taking the key as an argument, which keeps it
+out of the shell history. The fully local setup, needing no credential at all,
+is in [`05-running-local.md`](05-running-local.md).
 
 ```bash
 osintgpt index

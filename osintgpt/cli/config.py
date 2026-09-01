@@ -6,8 +6,8 @@ from typing import Optional, Union, get_args, get_origin
 
 import typer
 
-from osintgpt import Settings
 from osintgpt.config import ENV_VARS, secret_fields
+from osintgpt.credentials import resolve_credentials
 from osintgpt.projects import (
     ProjectSettings,
     Registry,
@@ -28,7 +28,7 @@ def _context(context: typer.Context, explicit: Optional[str], json_output: bool)
     try:
         project = resolve_project(state.home, explicit)
         defaults = load_user_defaults(state.home)
-        environment = Settings.from_env()
+        environment = resolve_credentials(state.home)
     except (ProjectSelectionError, OSError, ValueError) as error:
         fail(str(error), json_output)
 
@@ -142,10 +142,14 @@ def set_config(
     state, project, defaults, _ = _context(context, project_slug, json_output)
     _field_or_fail(key, json_output)
     if key in SECRET_FIELDS:
-        variable = ENV_VARS[key]
+        # Naming the command rather than only the prohibition: an operator who
+        # reaches for this is trying to store a key, and telling them where
+        # that actually works is the whole of the answer.
+        provider = key.rsplit('_api_key', 1)[0].rsplit('_dsn', 1)[0]
         fail(
-            f'{key} is a secret; set {variable} in the environment or a .env '
-            'file instead',
+            f'{key} is a secret and is never written to a project file. '
+            f'Store it with "osintgpt auth set {provider}", or set '
+            f'{ENV_VARS[key]} in the environment.',
             json_output
         )
     try:

@@ -61,7 +61,7 @@ def test_get_secret_reports_status_without_printing_value(
     assert secret not in result.output
 
 
-def test_set_api_key_refuses_and_points_to_environment(runner, home):
+def test_set_api_key_refuses_and_names_where_a_key_belongs(runner, home):
     create_project(runner, home)
 
     result = invoke(
@@ -71,7 +71,7 @@ def test_set_api_key_refuses_and_points_to_environment(runner, home):
 
     assert result.exit_code != 0
     assert 'OPENAI_API_KEY' in result.output
-    assert '.env' in result.output
+    assert 'osintgpt auth set openai' in result.output
 
 
 def test_set_user_writes_defaults_and_not_project(runner, home):

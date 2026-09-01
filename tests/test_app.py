@@ -443,21 +443,20 @@ class TestSettingsNeverLeakACredential:
     into a screenshot.
     '''
 
-    def test_it_reports_presence_not_value(self):
+    def test_it_reports_presence_not_value(self, home, monkeypatch):
         from osintgpt.app.views.settings import credential_status
-        from osintgpt.config import Settings
 
-        rows = credential_status(Settings(openai_api_key='sk-do-not-print'))
+        monkeypatch.setenv('OPENAI_API_KEY', 'sk-do-not-print')
+        rows = credential_status(home)
 
-        assert any(r['set'] for r in rows)
-        assert all('sk-do-not-print' not in str(r) for r in rows)
+        assert any(row.is_set for row in rows)
+        assert all('sk-do-not-print' not in str(row) for row in rows)
 
-    def test_it_names_the_variable_to_set(self, ):
+    def test_it_names_the_variable_to_set(self, home, monkeypatch):
         from osintgpt.app.views.settings import credential_status
-        from osintgpt.config import Settings
 
-        rows = credential_status(Settings())
-        variables = {r['variable'] for r in rows}
+        monkeypatch.delenv('OPENAI_API_KEY', raising=False)
+        variables = {row.variable for row in credential_status(home)}
 
         assert 'OPENAI_API_KEY' in variables
 
@@ -488,7 +487,7 @@ class TestSettingsNeverLeakACredential:
 
         source = inspect.getsource(settings)
 
-        assert 'from osintgpt.config import' in source
+        assert 'from osintgpt.credentials import' in source
         assert 'osintgpt.cli' not in source
 
 

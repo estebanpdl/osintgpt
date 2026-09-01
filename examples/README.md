@@ -41,9 +41,12 @@ Choose the half that matches how you use osintgpt:
 | [`migrating_from_0_1.py`](library/migrating_from_0_1.py) | Replaces the compatibility constructors |
 
 The programs read credentials already present in the environment with
-`Settings.from_env()`. [`config/.env.template`](config/.env.template) is only
-for library code that explicitly passes its path to `Settings.from_env`; the
-CLI and browser app do not discover that file.
+`Settings.from_env()`. The CLI and browser app read the environment first and
+then anything stored with `osintgpt auth set`; run `osintgpt auth list` to see
+which source each credential is coming from.
+[`config/.env.template`](config/.env.template) is only for library code that
+explicitly passes its path to `Settings.from_env`; nothing discovers that file
+on its own.
 
 ## Inspection scripts
 
