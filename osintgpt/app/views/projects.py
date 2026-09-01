@@ -21,7 +21,7 @@ from osintgpt.vector_store import store_for
 
 from ..browse import directory_input
 from ..session import list_projects, select_project
-from ..styles import badge
+from ..styles import badge, escape
 
 
 # what a project currently holds
@@ -130,7 +130,10 @@ def render(st, home, state) -> None:
                 st.error(str(error))
             else:
                 select_project(state, project.slug)
+                # Both the value and the field behind it: clearing only the
+                # value leaves the path in the box for the next project.
                 state.pop('new-project-location', None)
+                state.pop('new-project-location-text', None)
                 st.rerun()
 
     entries = list_projects(home)
@@ -169,7 +172,7 @@ def render(st, home, state) -> None:
         f'Legs on: {", ".join(facts["legs"]) or "none"}'
     )
     st.markdown(
-        f'<span class="citation-chip">{facts["root"]}</span>',
+        f'<span class="citation-chip">{escape(facts["root"])}</span>',
         unsafe_allow_html=True
     )
 
@@ -181,6 +184,7 @@ def render(st, home, state) -> None:
         st.markdown(
             badge('model mismatch', 'problem')
             + ' This store holds vectors from more than one embedding model: '
-            + f'{", ".join(stored)}. Only the configured one is searched.',
+            + f'{", ".join(escape(m) for m in stored)}. '
+            + 'Only the configured one is searched.',
             unsafe_allow_html=True
         )

@@ -112,28 +112,36 @@ def directory_input(
     Returns:
         str: The current path, stripped.
     '''
+    field = f'{key}-text'
+    pending = f'{key}-chosen'
+
+    # Applied before the field is created, because a widget with a key reads
+    # its value from session state and ignores anything written to it later
+    # in the same run — which is how a chosen directory used to vanish
+    # between the dialog closing and the field being drawn.
+    if pending in state:
+        state[field] = state.pop(pending)
+
     columns = st.columns([6, 1])
 
     with columns[0]:
         typed = st.text_input(
-            label, value=state.get(key, ''), key=f'{key}-text',
-            help=help_text, placeholder=placeholder
+            label, key=field, help=help_text, placeholder=placeholder
         )
 
     with columns[1]:
-        # The label lines the button up with the field rather than the field's
-        # caption; Streamlit has no vertical alignment for this.
+        # The spacer lines the button up with the field rather than with the
+        # field's caption; Streamlit has no vertical alignment for this.
         st.markdown('<div style="height: 1.8rem"></div>',
                     unsafe_allow_html=True)
         if can_browse() and st.button(
-            '📁', key=f'{key}-browse', help='Browse for a folder',
-            use_container_width=True
+            '📁', key=f'{key}-browse', help='Browse for a folder'
         ):
             chosen = select_directory(typed or None)
             if chosen:
-                state[key] = chosen
+                state[pending] = chosen
                 st.rerun()
 
-    state[key] = typed.strip()
+    state[key] = (typed or '').strip()
 
     return state[key]

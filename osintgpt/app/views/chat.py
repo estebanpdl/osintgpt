@@ -17,7 +17,7 @@ from typing import Any, Dict, List
 from osintgpt import agentic_answer
 
 from ..session import queue_question, remember, take_pending
-from ..styles import badge
+from ..styles import badge, escape
 
 # Enough of a passage to judge it without the chip becoming the page.
 PREVIEW_CHARS = 900
@@ -97,7 +97,7 @@ def _turn(st, question, answer, state, replayed: bool) -> None:
             # not red: it worked, just not the way it should have.
             st.markdown(
                 badge('answered without tools', 'partial')
-                + f' <span class="citation-chip">{answer.degraded}</span>',
+                + f' <span class="citation-chip">{escape(answer.degraded)}</span>',
                 unsafe_allow_html=True
             )
 
@@ -111,13 +111,16 @@ def _sources(st, answer) -> None:
     passages = passages_of(answer)
     if not passages:
         if answer.sources:
-            st.caption('Sources: ' + ', '.join(answer.sources))
+            st.caption(
+                'Sources: '
+                + ', '.join(escape(ref) for ref in answer.sources)
+            )
 
         return
 
     st.caption(f'{len(passages)} sources')
     for passage in passages:
-        with st.expander(passage['citation']):
+        with st.expander(escape(passage['citation'])):
             st.write(passage['text'])
 
 

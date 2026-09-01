@@ -10,8 +10,17 @@
 #   and three colours held back, because they carry meaning here.
 # =================================================================================
 
+# import modules
+import html
+
 # type hints
 from typing import Dict
+
+# Escaped wherever data reaches a markdown renderer. Backslash leads because
+# it escapes the rest. `&`, `<` and `>` are absent on purpose: HTML-escaping
+# turns them into entities first, and backslashing those would print the
+# entity rather than the character.
+MARKDOWN_SPECIAL = '\\`*_[]'
 
 # Reserved. Nothing decorative may use these, because each one is the answer
 # to a question an analyst is actually asking:
@@ -193,6 +202,32 @@ def load_css(st) -> None:
         st: The Streamlit module.
     '''
     st.markdown(STYLESHEET, unsafe_allow_html=True)
+
+
+# text that has to survive a markdown renderer intact
+def escape(value) -> str:
+    '''
+    Make arbitrary text safe to place in a string Streamlit will render as
+    markdown, including inside a span written with `unsafe_allow_html`.
+
+    Markdown is still applied to text between raw HTML tags, so a Windows
+    path loses the backslash in `\\.osintgpt` and a filename with underscores
+    turns into italics. Every value here is data — a path, a document
+    reference, something a model wrote — and none of it is markup.
+
+    Args:
+        value: Text to escape.
+
+    Returns:
+        str: The same text, rendered literally.
+    '''
+    text = html.escape(str(value), quote=False)
+    # Backslash first: it is the escape character, so escaping it after the
+    # others would double the backslashes they just added.
+    for character in MARKDOWN_SPECIAL:
+        text = text.replace(character, f'\\{character}')
+
+    return text
 
 
 # a coloured badge
