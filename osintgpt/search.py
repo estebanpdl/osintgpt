@@ -14,7 +14,7 @@
 from contextlib import contextmanager
 
 # type hints
-from typing import Iterable, List, Optional, Sequence
+from typing import Callable, Iterable, List, Optional, Sequence
 
 # import osintgpt llm
 from osintgpt.llm.base import EmbeddingProvider, GenerationProvider
@@ -32,6 +32,8 @@ from osintgpt.projects.settings import ProjectSettings
 
 # import osintgpt vector store
 from osintgpt.vector_store import BaseVectorEngine, SearchResult, store_for
+
+StoreFactory = Callable[[Project], BaseVectorEngine]
 
 
 # search one project
@@ -130,7 +132,8 @@ def search_across_projects(
     query: str,
     embedder: EmbeddingProvider,
     top_k: int = 10,
-    defaults: Optional[ProjectSettings] = None
+    defaults: Optional[ProjectSettings] = None,
+    store_factory: Optional[StoreFactory] = None
 ) -> CrossProjectResults:
     '''
     Search projects that share an embedding model, and say which were left out.
@@ -147,6 +150,9 @@ def search_across_projects(
         top_k (int): How many passages to return in total.
         defaults (ProjectSettings, optional): User defaults, for projects \
             that left their embedding model unset.
+        store_factory (Callable, optional): Opens a configured store for one \
+            project. Stores it returns are closed after that project is \
+            searched; omission uses `store_for(project)`.
 
     Returns:
         CrossProjectResults: Merged hits, plus what was skipped and why.
@@ -154,7 +160,7 @@ def search_across_projects(
     vector = embedder.embed([query])[0]
 
     def run(project: Project):
-        with _store_for(project, None) as engine:
+        with _store_for(project, None, store_factory) as engine:
             results = engine.search(
                 vector, embedding_model=embedder.model, top_k=top_k
             )
@@ -171,7 +177,11 @@ def search_across_projects(
 
 
 @contextmanager
-def _store_for(project: Project, store: Optional[BaseVectorEngine]):
+def _store_for(
+    project: Project,
+    store: Optional[BaseVectorEngine],
+    store_factory: Optional[StoreFactory] = None
+):
     '''
     A store this opened is one it closes; one passed in belongs to the caller.
     '''
@@ -180,7 +190,10 @@ def _store_for(project: Project, store: Optional[BaseVectorEngine]):
 
         return
 
-    engine = store_for(project)
+    engine = (
+        store_factory(project) if store_factory is not None
+        else store_for(project)
+    )
     try:
         yield engine
     finally:

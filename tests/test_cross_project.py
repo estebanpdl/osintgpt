@@ -24,9 +24,36 @@ from osintgpt.projects.cross_project import (
     search_projects,
     select_projects
 )
+from osintgpt.search import search_across_projects
+from osintgpt.vector_store import SearchResult, StoredChunk
 
 LARGE = 'text-embedding-3-large'
 SMALL = 'text-embedding-3-small'
+
+
+class Embedder:
+    model = LARGE
+
+    def embed(self, texts):
+        return [[1.0, 0.0] for _ in texts]
+
+
+class Store:
+    def __init__(self, slug, score):
+        self.slug = slug
+        self.score = score
+        self.closed = False
+
+    def search(self, vector, embedding_model, top_k=10, refs=None):
+        chunk = StoredChunk(
+            ref=f'{self.slug}.md', sequence=0, text=self.slug,
+            embedding_model=embedding_model
+        )
+
+        return [SearchResult(chunk=chunk, score=self.score)]
+
+    def close(self):
+        self.closed = True
 
 
 @pytest.fixture
@@ -215,3 +242,36 @@ class TestSearch:
 
         assert [hit.payload for hit in results] == ['only-a']
         assert results.notice == ''
+
+
+class TestSearchAcrossProjects:
+    def test_supplied_stores_keep_the_model_mismatch_boundary(
+        self, make_project
+    ):
+        projects = [
+            make_project('A', LARGE),
+            make_project('B', LARGE),
+            make_project('C', SMALL)
+        ]
+        stores = {
+            'a': Store('a', 0.9),
+            'b': Store('b', 0.7),
+            'c': Store('c', 1.0)
+        }
+        opened = []
+
+        def factory(project):
+            opened.append(project.slug)
+            return stores[project.slug]
+
+        results = search_across_projects(
+            projects, 'query', Embedder(), store_factory=factory
+        )
+
+        assert [hit.project_slug for hit in results] == ['a', 'b']
+        assert opened == ['a', 'b']
+        assert stores['a'].closed is True
+        assert stores['b'].closed is True
+        assert stores['c'].closed is False
+        assert 'c' in results.notice
+        assert SMALL in results.notice

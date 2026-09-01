@@ -15,6 +15,8 @@
 import math
 import pytest
 
+import osintgpt.evaluation as evaluation_module
+
 # import osintgpt
 from osintgpt import Project, Question, evaluate, index_project
 from osintgpt.evaluation import (
@@ -311,7 +313,10 @@ class TestQuestionSet:
     def test_it_round_trips(self, tmp_path):
         path = tmp_path / 'questions.toml'
         questions = [
-            Question('a question', ['a.md', 'b.md'], note='why it is here'),
+            Question(
+                'a question', ['a.md', 'b.md'], note='why it is here',
+                terms=['A-1', 'B-2']
+            ),
             Question('another', ['c.md'])
         ]
         save_questions(path, questions)
@@ -319,6 +324,22 @@ class TestQuestionSet:
         loaded = load_questions(path)
 
         assert loaded == questions
+
+    def test_unknown_fields_are_ignored(self):
+        question = Question.from_dict({
+            'text': 'a question', 'expected': ['a.md'],
+            'terms': ['A-1'], 'future_option': True
+        })
+
+        assert question == Question(
+            'a question', ['a.md'], terms=['A-1']
+        )
+
+    def test_adding_terms_keeps_the_positional_note_contract(self):
+        question = Question('a question', ['a.md'], 'why it is here')
+
+        assert question.note == 'why it is here'
+        assert question.terms == []
 
     def test_an_absent_file_is_an_empty_set(self, tmp_path):
         assert load_questions(tmp_path / 'nothing.toml') == []
@@ -357,3 +378,93 @@ class TestTopK:
 
         assert report.top_k == 5
         assert report.embedding_model == embedder.model
+
+
+class TestStoreOwnership:
+    def test_an_explicit_store_bypasses_the_project_factory(
+        self, indexed, embedder, monkeypatch
+    ):
+        store = evaluation_module.store_for(indexed)
+
+        def forbidden(project):
+            raise AssertionError('the project store must not be opened')
+
+        monkeypatch.setattr(evaluation_module, 'store_for', forbidden)
+        try:
+            report = evaluate(
+                indexed,
+                [Question('aardvark', ['material/alpha.md'])],
+                embedder,
+                store=store
+            )
+            assert report.found == 1
+        finally:
+            store.close()
+
+    def test_a_multi_question_run_opens_the_store_once(
+        self, indexed, embedder, monkeypatch
+    ):
+        store = evaluation_module.store_for(indexed)
+        opened = []
+
+        def factory(project):
+            opened.append(project.slug)
+            return store
+
+        monkeypatch.setattr(evaluation_module, 'store_for', factory)
+        evaluate(
+            indexed,
+            [
+                Question('aardvark', ['material/alpha.md']),
+                Question('zebra', ['material/beta.md'])
+            ],
+            embedder
+        )
+
+        assert opened == ['case']
+
+    def test_a_caller_supplied_store_is_left_open(self, indexed, embedder):
+        store = evaluation_module.store_for(indexed)
+        try:
+            evaluate(
+                indexed,
+                [Question('aardvark', ['material/alpha.md'])],
+                embedder,
+                store=store
+            )
+
+            assert store.count(embedder.model) > 0
+        finally:
+            store.close()
+
+
+class TestRetrievalMethod:
+    def test_semantic_stays_the_default(self, indexed, embedder):
+        report = evaluate(
+            indexed,
+            [Question('aardvark', ['material/alpha.md'])],
+            embedder
+        )
+
+        assert report.retrieval == 'semantic'
+
+    def test_hybrid_reaches_an_exact_hit_below_the_semantic_cut(
+        self, indexed, embedder
+    ):
+        question = Question(
+            'zebra', ['material/alpha.md'], terms=['aardvark']
+        )
+
+        semantic = evaluate(indexed, [question], embedder, top_k=1)
+        hybrid = evaluate(
+            indexed, [question], embedder, top_k=1, retrieval='hybrid'
+        )
+
+        assert semantic.found == 0
+        assert hybrid.found == 1
+        assert hybrid.results[0].retrieved == ['material/alpha.md']
+        assert hybrid.retrieval == 'hybrid'
+
+    def test_an_unknown_method_is_refused(self, indexed, embedder):
+        with pytest.raises(ValueError, match='unknown retrieval'):
+            evaluate(indexed, [], embedder, retrieval='graph')
