@@ -19,6 +19,10 @@ there. `OLLAMA_BASE_URL` may point at a different endpoint; the default is the
 loopback server. With a loopback Ollama URL, sentence-transformers, and SQLite,
 document content does not leave the machine at query time.
 
+Local provider calls do not print a dollar estimate. Their JSON usage record
+still names the calls and models, but `estimated_cost_usd` is null rather than
+`$0.00`, keeping a non-billable run distinct from a measured remote bill.
+
 Local is a data-boundary choice, not a promise of identical answers. Model
 size and tool-calling ability affect answer quality and whether the agentic
 loop can use retrieval tools well. If tool calling is unavailable, osintgpt

@@ -8,6 +8,7 @@ from typer.testing import CliRunner
 from osintgpt.cli import app
 from osintgpt.cli import evaluate as cli_evaluate
 from osintgpt.evaluation import Question, save_questions
+from osintgpt.llm import Usage
 from osintgpt.projects import Registry
 from osintgpt.vector_store import SQLiteVectorStore, StoredChunk
 
@@ -15,7 +16,15 @@ from osintgpt.vector_store import SQLiteVectorStore, StoredChunk
 class Embedder:
     model = 'test-model'
 
+    def __init__(self, recorder=None):
+        self.recorder = recorder
+
     def embed(self, texts):
+        if self.recorder is not None:
+            self.recorder.record(Usage(
+                'stub', self.model, input_tokens=len(texts)
+            ))
+
         return [[1.0, 0.0] for _ in texts]
 
 
@@ -77,7 +86,9 @@ def stub_embedder(monkeypatch):
     monkeypatch.setattr(
         cli_evaluate,
         'build_embedding_provider',
-        lambda provider, settings, model=None: Embedder()
+        lambda provider, settings, model=None, recorder=None: (
+            Embedder(recorder)
+        )
     )
 
 
@@ -104,6 +115,7 @@ def test_report_has_expected_scores_and_names_the_method_and_model(
     assert payload['mean_reciprocal_rank'] == 0.5
     assert payload['found'] == 1
     assert payload['scored'] == 2
+    assert payload['usage']['calls'] == 2
 
 
 def test_unknown_ref_is_unscorable_instead_of_a_miss(

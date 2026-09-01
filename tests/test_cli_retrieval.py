@@ -70,12 +70,12 @@ def project_with_chunks(runner, home, chunks=3):
 def stub_providers(monkeypatch, generator_factory=None):
     monkeypatch.setattr(
         cli_retrieval, 'build_embedding_provider',
-        lambda provider, settings, model=None: Embedder()
+        lambda provider, settings, model=None, recorder=None: Embedder()
     )
     monkeypatch.setattr(
         cli_retrieval, 'build_generation_provider',
         generator_factory or (
-            lambda provider, settings, model=None: Generator()
+            lambda provider, settings, model=None, recorder=None: Generator()
         )
     )
 
@@ -117,7 +117,7 @@ def test_ask_json_carries_the_answer_and_the_trace(
 
     payload = json.loads(result.output)
     assert set(payload) == {
-        'answer', 'sources', 'followups', 'degraded', 'trace'
+        'answer', 'sources', 'followups', 'degraded', 'trace', 'usage'
     }
     assert set(payload['trace']) == {'rounds', 'calls', 'narration', 'reading'}
     assert '\x1b[' not in result.output
@@ -136,7 +136,7 @@ def test_static_json_keeps_the_passage_shape(runner, home, monkeypatch):
     )
 
     payload = json.loads(result.output)
-    assert set(payload) == {'answer', 'passages', 'followups'}
+    assert set(payload) == {'answer', 'passages', 'followups', 'usage'}
     assert len(payload['passages']) == 2
     assert set(payload['passages'][0]) == {'text', 'score', 'citation'}
 
@@ -249,7 +249,7 @@ def test_derived_terms_run_both_legs(runner, home, monkeypatch):
     project_with_chunks(runner, home)
     stub_providers(
         monkeypatch,
-        lambda provider, settings, model=None: TermGenerator()
+        lambda provider, settings, model=None, recorder=None: TermGenerator()
     )
 
     result = invoke(

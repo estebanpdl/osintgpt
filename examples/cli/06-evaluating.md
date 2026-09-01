@@ -18,6 +18,10 @@ document appeared), and recall (how many expected documents appeared within
 `--top-k`, which defaults to 10). It also lists every miss and unscorable
 question.
 
+Evaluation also reports its embedding calls and estimated cost. JSON includes
+whether every billable call was counted and priced, so a partial estimate
+cannot be mistaken for a complete one.
+
 To measure hybrid retrieval, add literal `terms` to the relevant questions in
 the TOML set and run:
 

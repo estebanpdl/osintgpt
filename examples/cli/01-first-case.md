@@ -55,6 +55,21 @@ osintgpt auth list
 out of the shell history. The fully local setup, needing no credential at all,
 is in [`05-running-local.md`](05-running-local.md).
 
+Optionally put a ceiling on each command run before indexing:
+
+```bash
+osintgpt config set cost_ceiling_usd 1.00
+```
+
+The ceiling resets for every invocation; it is not a lifetime project budget.
+Provider replies reveal their usage only after a call, so a run may cross the
+ceiling by that final call and then stops non-zero. An interrupted index saves
+the documents it completed: run `osintgpt index` again to continue with what
+remains, raising the ceiling if one remaining call exceeds it by itself. If a
+remote provider omits usage or the configured model has no verified price, a
+ceiling cannot be enforced and the run stops rather than pretending its
+partial estimate is complete.
+
 ```bash
 osintgpt index
 osintgpt ask "Which node acknowledged sequence LX-204?"
@@ -63,4 +78,6 @@ osintgpt ask "Which node acknowledged sequence LX-204?"
 `ask` prints its answer followed by the source documents. A bracketed marker
 such as `[1]` refers to the first retrieved passage; open the listed source and
 check the claim against it rather than treating the generated answer as the
-source of record.
+source of record. Commands that made billable provider calls finish with one
+usage line; their JSON output always carries the same counts, estimate, and
+whether that estimate is complete.

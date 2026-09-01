@@ -25,6 +25,8 @@ from osintgpt.ingestion.pdf import (
     join_page_texts,
     render_page
 )
+from osintgpt.ingestion.transcription import transcriber_for
+from osintgpt.llm import Usage, UsageRecorder
 
 pypdfium2 = pytest.importorskip('pypdfium2')
 
@@ -283,6 +285,31 @@ class TestWithATranscriber:
 
         assert 'Page 1' in extraction.markdown
         assert extraction.transcribed_pages == 0
+
+    def test_identical_pages_expose_the_preflight_cache_difference(
+        self, scanned_pdf, tmp_path
+    ):
+        recorder = UsageRecorder()
+
+        class Vision:
+            def describe_image(
+                self, system, user, image, media_type='image/png'
+            ):
+                recorder.record(Usage(
+                    'openai', 'gpt-4o', input_tokens=10, output_tokens=5
+                ))
+
+                return 'Recovered text.'
+
+        expected = extract_pdf(scanned_pdf).needs_vision
+        transcriber = transcriber_for(Vision(), tmp_path / 'extracts')
+        extraction = extract_pdf(scanned_pdf, transcriber)
+
+        assert expected == 2
+        assert extraction.transcribed_pages == expected
+        # Both blank pages render to the same bytes, so the second reads the
+        # content-addressed cache. Pre-flight counts pages, not unique renders.
+        assert recorder.calls == 1
 
 
 class TestThreshold:

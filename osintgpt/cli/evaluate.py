@@ -19,9 +19,17 @@ from osintgpt.evaluation import (
 )
 from osintgpt.exceptions.errors import MissingEnvironmentVariableError
 from osintgpt.llm import build_embedding_provider
+from osintgpt.llm.usage import CostLimitReached
 from osintgpt.projects import load_user_defaults
 from osintgpt.vector_store import store_for
 
+from .costs import (
+    add_usage,
+    fail_for_cost,
+    recorder_for,
+    render_usage,
+    usage_data
+)
 from .output import emit, fail
 from .selection import ProjectSelectionError, resolve_project, state_from
 
@@ -48,15 +56,16 @@ def _runtime(
     return project, effective, config
 
 
-def _embedder(effective, config, json_output: bool):
+def _embedder(effective, config, recorder, json_output: bool):
     try:
         return build_embedding_provider(
             effective.embedding_provider,
             config,
-            model=effective.embedding_model or None
+            model=effective.embedding_model or None,
+            recorder=recorder
         )
     except (ImportError, MissingEnvironmentVariableError, ValueError) as error:
-        fail(str(error), json_output)
+        fail(str(error), json_output, {'usage': usage_data(recorder)})
 
 
 @contextmanager
@@ -96,7 +105,7 @@ def _payload(
     }
 
 
-def _render(report: EvaluationReport, target) -> None:
+def _render(report: EvaluationReport, target, recorder) -> None:
     summary = Table(show_header=False)
     summary.add_column('Field', style='bold')
     summary.add_column('Value')
@@ -126,6 +135,7 @@ def _render(report: EvaluationReport, target) -> None:
         target.print('None')
     for reason in report.unscorable:
         target.print(f'• {reason}', soft_wrap=True)
+    render_usage(target, recorder)
 
 
 def evaluate_command(
@@ -149,6 +159,7 @@ def evaluate_command(
     project, effective, config = _runtime(
         context, project_slug, json_output
     )
+    recorder = recorder_for(effective)
     questions_path = questions.expanduser()
     if not questions_path.is_file():
         fail(f'question set does not exist: {questions_path}', json_output)
@@ -158,7 +169,7 @@ def evaluate_command(
     except (OSError, ValueError) as error:
         fail(str(error), json_output)
 
-    embedder = _embedder(effective, config, json_output)
+    embedder = _embedder(effective, config, recorder, json_output)
     try:
         with _store(project, config) as engine:
             report = evaluate(
@@ -170,11 +181,17 @@ def evaluate_command(
                 retrieval=retrieval.value,
                 store=engine
             )
+    except CostLimitReached as error:
+        fail_for_cost(error, recorder, json_output)
     except Exception as error:  # noqa: BLE001 — provider and store boundary
-        fail(str(error), json_output)
+        fail(str(error), json_output, {'usage': usage_data(recorder)})
 
     data = _payload(report, project.slug, questions_path)
-    emit(data, json_output, lambda target: _render(report, target))
+    add_usage(data, recorder)
+    emit(
+        data, json_output,
+        lambda target: _render(report, target, recorder)
+    )
 
 
 def register_evaluate_command(app: typer.Typer) -> None:

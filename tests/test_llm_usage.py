@@ -26,6 +26,7 @@ from osintgpt.llm import (
     build_embedding_provider,
     build_generation_provider
 )
+from osintgpt.llm.usage import CostLimitReached
 from osintgpt.llm.anthropic_native import AnthropicGeneration
 from osintgpt.llm.local import SentenceTransformerEmbedding
 
@@ -142,6 +143,37 @@ class TestRecorder:
 
         assert 'unpriced' in summary
         assert 'not counted' in summary
+
+    def test_a_ceiling_stops_after_the_call_that_crosses_it(self):
+        recorder = UsageRecorder(cost_ceiling_usd=0.000003)
+        recorder.record(Usage(
+            'openai', 'text-embedding-3-small', input_tokens=100
+        ))
+
+        with pytest.raises(CostLimitReached, match='exceeded after'):
+            recorder.record(Usage(
+                'openai', 'text-embedding-3-small', input_tokens=100
+            ))
+
+        assert recorder.calls == 2
+
+    def test_a_ceiling_refuses_an_uncounted_billable_call(self):
+        recorder = UsageRecorder(cost_ceiling_usd=1.0)
+
+        with pytest.raises(CostLimitReached, match='cannot be enforced'):
+            recorder.record(Usage(
+                'gateway', PRICED, counted=False
+            ))
+
+    def test_local_calls_never_consume_the_ceiling(self):
+        recorder = UsageRecorder(cost_ceiling_usd=0.0)
+
+        recorder.record(Usage(
+            'ollama', UNPRICED, billable=False, counted=False
+        ))
+
+        assert recorder.calls == 1
+        assert recorder.estimated_billable_cost == 0.0
 
 
 class TestProviderRecording:

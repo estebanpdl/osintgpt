@@ -20,9 +20,17 @@ from osintgpt.llm import (
     build_embedding_provider,
     build_generation_provider
 )
+from osintgpt.llm.usage import CostLimitReached
 from osintgpt.projects import load_user_defaults
 from osintgpt.vector_store import SearchResult, store_for
 
+from .costs import (
+    add_usage,
+    fail_for_cost,
+    recorder_for,
+    render_usage,
+    usage_data
+)
 from .output import emit, fail
 from .selection import ProjectSelectionError, resolve_project, state_from
 
@@ -42,15 +50,16 @@ def _runtime(context: typer.Context, explicit: Optional[str], json_output: bool)
     return project, effective, config
 
 
-def _embedder(effective, config, json_output: bool):
+def _embedder(effective, config, recorder, json_output: bool):
     try:
         return build_embedding_provider(
             effective.embedding_provider,
             config,
-            model=effective.embedding_model or None
+            model=effective.embedding_model or None,
+            recorder=recorder
         )
     except (ImportError, MissingEnvironmentVariableError, ValueError) as error:
-        fail(str(error), json_output)
+        fail(str(error), json_output, {'usage': usage_data(recorder)})
 
 
 class _LazyGenerator:
@@ -59,9 +68,10 @@ class _LazyGenerator:
     never costs a credential check.
     '''
 
-    def __init__(self, effective, config) -> None:
+    def __init__(self, effective, config, recorder) -> None:
         self.effective = effective
         self.config = config
+        self.recorder = recorder
         self._built = None
 
     @property
@@ -70,7 +80,8 @@ class _LazyGenerator:
             self._built = build_generation_provider(
                 self.effective.generation_provider,
                 self.config,
-                model=self.effective.generation_model or None
+                model=self.effective.generation_model or None,
+                recorder=self.recorder
             )
 
         return self._built
@@ -171,8 +182,9 @@ def ask(
     project, effective, config = _runtime(
         context, project_slug, json_output
     )
-    embedder = _embedder(effective, config, json_output)
-    generator = _LazyGenerator(effective, config)
+    recorder = recorder_for(effective)
+    embedder = _embedder(effective, config, recorder, json_output)
+    generator = _LazyGenerator(effective, config, recorder)
 
     try:
         with _store(project, config) as engine:
@@ -188,8 +200,12 @@ def ask(
                 )
                 data = _agentic_payload(answer)
                 lines = answer.trace.lines() + answer.trace.reading
+    except CostLimitReached as error:
+        fail_for_cost(error, recorder, json_output)
     except Exception as error:  # noqa: BLE001 — provider and store boundary
-        fail(str(error), json_output)
+        fail(str(error), json_output, {'usage': usage_data(recorder)})
+
+    add_usage(data, recorder)
 
     def render(target) -> None:
         target.print(answer.text, soft_wrap=True)
@@ -209,6 +225,7 @@ def ask(
             target.print('Trace', style='bold')
             for line in lines:
                 target.print(line, soft_wrap=True)
+        render_usage(target, recorder)
 
     emit(data, json_output, render)
 
@@ -289,12 +306,13 @@ def search(
     project, effective, config = _runtime(
         context, project_slug, json_output
     )
+    recorder = recorder_for(effective)
     exact = exact or []
     semantic_enabled = semantic or not exact or derive_terms
     if semantic_enabled and not query:
         fail('semantic search needs query text', json_output)
     embedder = (
-        _embedder(effective, config, json_output)
+        _embedder(effective, config, recorder, json_output)
         if semantic_enabled else None
     )
     try:
@@ -310,7 +328,7 @@ def search(
             else:
                 terms = exact
                 if derive_terms:
-                    generator = _LazyGenerator(effective, config)
+                    generator = _LazyGenerator(effective, config, recorder)
                     terms = exact + derive_search_terms(generator, query)
 
                 if terms:
@@ -323,36 +341,43 @@ def search(
                         project, query, embedder, top_k=top_k, store=engine
                     )
                     results = _single_leg(matches, 'semantic', top_k)
+    except CostLimitReached as error:
+        fail_for_cost(error, recorder, json_output)
     except Exception as error:  # noqa: BLE001 — provider and store boundary
-        fail(str(error), json_output)
+        fail(str(error), json_output, {'usage': usage_data(recorder)})
 
     rows = [
         _ranked_result(result, rank)
         for rank, result in enumerate(results, 1)
     ]
+    data = {'results': rows}
+    add_usage(data, recorder)
 
     def render(target) -> None:
         if not rows:
             target.print('Nothing found.')
-            return
-        for row in rows:
-            legs = ', '.join(
-                f'{leg} #{row["ranks"][leg]}' for leg in row['legs']
-            )
-            target.print(
-                f'{row["rank"]}. {row["score"]:.3f}  {row["citation"]}  '
-                f'[{legs}]',
-                style='bold', markup=False
-            )
-            text = str(row['text'])
-            target.print(
-                text if full else text[:PREVIEW_CHARS],
-                soft_wrap=True, markup=False
-            )
-            if not full and len(text) > PREVIEW_CHARS:
-                target.print(f'… [{len(text) - PREVIEW_CHARS} more chars]')
+        else:
+            for row in rows:
+                legs = ', '.join(
+                    f'{leg} #{row["ranks"][leg]}' for leg in row['legs']
+                )
+                target.print(
+                    f'{row["rank"]}. {row["score"]:.3f}  '
+                    f'{row["citation"]}  [{legs}]',
+                    style='bold', markup=False
+                )
+                text = str(row['text'])
+                target.print(
+                    text if full else text[:PREVIEW_CHARS],
+                    soft_wrap=True, markup=False
+                )
+                if not full and len(text) > PREVIEW_CHARS:
+                    target.print(
+                        f'… [{len(text) - PREVIEW_CHARS} more chars]'
+                    )
+        render_usage(target, recorder)
 
-    emit({'results': rows}, json_output, render)
+    emit(data, json_output, render)
 
 
 def register_retrieval_commands(app: typer.Typer) -> None:

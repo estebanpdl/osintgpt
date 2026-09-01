@@ -20,8 +20,16 @@ from osintgpt.graph import (
     path_between,
     verify_evidence
 )
+from osintgpt.llm.usage import CostLimitReached
 from osintgpt.projects import load_user_defaults
 
+from .costs import (
+    add_usage,
+    fail_for_cost,
+    recorder_for,
+    render_usage,
+    usage_data
+)
 from .output import console, emit, emit_record, fail
 from .selection import ProjectSelectionError, resolve_project, state_from
 
@@ -29,10 +37,11 @@ graph_app = typer.Typer(help='Build, inspect, or export a knowledge graph.')
 
 
 class _LazyGenerator:
-    def __init__(self, factory, effective, config) -> None:
+    def __init__(self, factory, effective, config, recorder) -> None:
         self.factory = factory
         self.effective = effective
         self.config = config
+        self.recorder = recorder
         self._built = None
 
     @property
@@ -41,7 +50,8 @@ class _LazyGenerator:
             self._built = self.factory(
                 self.effective.generation_provider,
                 self.config,
-                model=self.effective.generation_model or None
+                model=self.effective.generation_model or None,
+                recorder=self.recorder
             )
 
         return self._built
@@ -97,7 +107,10 @@ def build_graph_command(
 
     from osintgpt.llm import build_generation_provider
 
-    generator = _LazyGenerator(build_generation_provider, effective, config)
+    recorder = recorder_for(effective)
+    generator = _LazyGenerator(
+        build_generation_provider, effective, config, recorder
+    )
     progress = None if json_output else (
         lambda ref, position, total: console.print(
             f'{position}/{total} {ref}'
@@ -111,14 +124,19 @@ def build_graph_command(
             project, generator, incremental=incremental, rebuild=rebuild,
             on_progress=progress
         )
+    except CostLimitReached as error:
+        fail_for_cost(error, recorder, json_output)
     except (
         ImportError, MissingEnvironmentVariableError, OSError,
         sqlite3.Error, ValueError
     ) as error:
-        fail(str(error), json_output)
+        fail(str(error), json_output, {'usage': usage_data(recorder)})
 
     if report.refused:
-        fail(report.refused, json_output)
+        fail(
+            report.refused, json_output,
+            {'usage': usage_data(recorder)}
+        )
 
     data = {
         'project': project.slug,
@@ -131,11 +149,13 @@ def build_graph_command(
         'removed': report.removed,
         'failed': [asdict(result) for result in report.failed]
     }
+    add_usage(data, recorder)
 
     def render(target) -> None:
         target.print(report.summary, style='bold')
         for result in report.failed:
             target.print(f'{result.ref}: {result.problem}', style='bold red')
+        render_usage(target, recorder)
 
     emit(data, json_output, render)
     if report.failed:
