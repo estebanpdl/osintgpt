@@ -9,7 +9,7 @@ nbs/
 # checkpoints
 .ipynb_checkpoints/
 
-# dev material
+# dev material folders
 plan/
 rules/
 .agents/
@@ -17,6 +17,12 @@ rules/
 references/
 codex-support/
 .human-read-only/
+codex-terra-support/
+
+# operator documentation, on trial before anyone commits to maintaining it
+docs/
+
+# dev material files
 CLAUDE.md
 resources.txt
 skills-lock.json
