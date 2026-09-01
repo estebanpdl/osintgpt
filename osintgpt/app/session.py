@@ -11,7 +11,7 @@
 # =================================================================================
 
 # import submodules
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 
 # type hints
@@ -34,18 +34,43 @@ PENDING = 'pending_question'
 
 
 # Runtime class
-@dataclass(frozen=True)
+@dataclass
 class Runtime:
     '''
-    A project and the providers configured for it.
+    A project, and the providers it would use — built on first use rather
+    than up front, because most of what the app does needs neither.
     '''
     project: Project
-    embedder: Any
-    generator: Any
+    build_embedder: Callable[[], Any]
+    build_generator: Callable[[], Any]
+    # Built providers, memoized. A rerun that asks a second question must
+    # reuse the client rather than open a new one per keystroke.
+    built: Dict[str, Any] = field(default_factory=dict)
 
     @property
     def key(self) -> str:
         return self.project.id
+
+    @property
+    def embedder(self) -> Any:
+        return self._provider('embedder', self.build_embedder)
+
+    @property
+    def generator(self) -> Any:
+        return self._provider('generator', self.build_generator)
+
+    def _provider(self, name: str, build: Callable[[], Any]) -> Any:
+        '''
+        Build a provider once, at the point something actually needs it.
+
+        Eagerly building both is what put every view behind a credential
+        neither of them required: an operator could not reach the settings
+        screen to fix the very configuration it was complaining about.
+        '''
+        if name not in self.built:
+            self.built[name] = build()
+
+        return self.built[name]
 
 
 # every project under a home
@@ -131,37 +156,54 @@ def runtime_for(
     builder: Optional[Callable[..., Tuple[Any, Any]]] = None
 ) -> Runtime:
     '''
-    Build the providers a project is configured for.
+    Describe how to build the providers a project is configured for.
+
+    Nothing is constructed here. Resolving settings reads files and needs no
+    credential, so this succeeds for a project whose provider could never be
+    built — which is what lets the settings view render and be corrected.
 
     Args:
         project (Project): The project.
         home (Path): The osintgpt home, for user defaults.
         builder (Callable, optional): Builds (embedder, generator), for tests.
 
-    Raises:
-        Exception: Whatever a provider raises when it cannot be built — a \
-            missing key is the operator's to fix, and the view says so.
-
     Returns:
-        Runtime: The project and its providers.
+        Runtime: The project, and providers that raise on first use if they \
+            cannot be built. A missing key is the operator's to fix, and the \
+            view that needs the provider is the view that says so.
     '''
     defaults = load_user_defaults(home)
     effective = project.effective_settings(defaults)
     config = project.settings_for(resolve_credentials(home), defaults)
 
     if builder is not None:
-        embedder, generator = builder(effective, config)
-    else:
-        embedder = build_embedding_provider(
+        # One call produces both, so memoize the pair rather than calling it
+        # twice and handing back two unrelated halves.
+        pair: Dict[str, Any] = {}
+
+        def build_pair(index: int) -> Any:
+            if 'pair' not in pair:
+                pair['pair'] = builder(effective, config)
+
+            return pair['pair'][index]
+
+        return Runtime(
+            project=project,
+            build_embedder=lambda: build_pair(0),
+            build_generator=lambda: build_pair(1)
+        )
+
+    return Runtime(
+        project=project,
+        build_embedder=lambda: build_embedding_provider(
             effective.embedding_provider, config,
             model=effective.embedding_model or None
-        )
-        generator = build_generation_provider(
+        ),
+        build_generator=lambda: build_generation_provider(
             effective.generation_provider, config,
             model=effective.generation_model or None
         )
-
-    return Runtime(project=project, embedder=embedder, generator=generator)
+    )
 
 
 # what a cached resource is keyed on

@@ -16,6 +16,9 @@ import streamlit as st
 # import submodules
 from pathlib import Path
 
+# import osintgpt exceptions
+from osintgpt.exceptions.errors import MissingEnvironmentVariableError
+
 # import osintgpt projects
 from osintgpt.projects import default_home
 
@@ -74,19 +77,30 @@ def main() -> None:
             cache_key(project), str(project.paths.root), str(home)
         )
     except Exception as error:  # noqa: BLE001 — the operator's to fix
+        # Reading settings needs no provider, so reaching here means the
+        # project itself could not be opened.
         st.error(str(error))
-        st.caption(
-            'Set the provider credentials this project needs, then reload.'
-        )
+        st.caption('This project could not be opened.')
 
         return
 
-    if view == 'Material':
-        ingest.render(st, runtime, st.session_state)
-    elif view == 'Settings':
-        settings.render(st, runtime, home, st.session_state)
-    else:
-        chat.render(st, runtime, st.session_state)
+    try:
+        if view == 'Material':
+            ingest.render(st, runtime, st.session_state)
+        elif view == 'Settings':
+            settings.render(st, runtime, home, st.session_state)
+        else:
+            chat.render(st, runtime, st.session_state)
+    except MissingEnvironmentVariableError as error:
+        # Raised where a provider is first used, not on the way in. The view
+        # that needed it is the view that reports it, and every other view —
+        # Settings above all — stays reachable so the operator can fix this
+        # without leaving the app.
+        st.error(str(error))
+        st.caption(
+            'Store it with "osintgpt auth set", or change this project\'s '
+            'provider under Settings.'
+        )
 
 
 main()
