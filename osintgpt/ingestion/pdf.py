@@ -45,7 +45,10 @@ FAILED = '[Page {page}: transcription failed]'
 # Takes rendered page bytes and returns transcribed markdown. Injected rather
 # than constructed here, so extraction is testable without a provider and the
 # ingestion model stays the caller's choice.
-Transcriber = Callable[[bytes], str]
+# Takes the rendered page and its 1-based number. The number is passed rather
+# than counted by the transcriber, because only the extractor knows which
+# pages were skipped as already readable.
+Transcriber = Callable[[bytes, int], str]
 
 _PDF_EXTRACTION_NOISE = re.compile(
     r'[\x0c\uE000-\uF8FF\U000F0000-\U000FFFFD\U00100000-\U0010FFFD]'
@@ -267,7 +270,7 @@ def extract_pdf(
             continue
 
         try:
-            transcribed = transcriber(render_page(path, index)).strip()
+            transcribed = transcriber(render_page(path, index), number).strip()
         except Exception as error:  # noqa: BLE001 — one page, not the document
             log.warning('page %d of %s could not be transcribed: %s',
                         number, path.name, error)

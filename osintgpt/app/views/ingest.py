@@ -19,6 +19,7 @@ from osintgpt import index_project
 # import osintgpt ingestion
 from osintgpt.ingestion import Corpus, FieldMapping, describe_fields, dry_run
 from osintgpt.ingestion.loaders import needs_mapping
+from osintgpt.ingestion.transcription import transcriber_for_project
 
 from ..browse import directory_input
 
@@ -166,8 +167,13 @@ def _index(st, runtime) -> None:
         progress.progress(position / max(total, 1))
         status.text(f'{position}/{total}  {ref}')
 
+    # The generator is built only if a scanned page is actually found, so a
+    # corpus of born-digital documents never needs a generation credential.
     report_result = index_project(
-        runtime.project, runtime.embedder, on_progress=report
+        runtime.project, runtime.embedder, on_progress=report,
+        transcriber=transcriber_for_project(
+            runtime.project, lambda: runtime.generator
+        )
     )
     progress.empty()
     status.empty()

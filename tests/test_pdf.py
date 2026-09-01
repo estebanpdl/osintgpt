@@ -217,7 +217,7 @@ class TestExtractionNoise:
 
     def test_private_use_text_from_a_transcriber_is_preserved(self, scanned_pdf):
         extraction = extract_pdf(
-            scanned_pdf, lambda image: 'Recovered \ue000 transcription.'
+            scanned_pdf, lambda image, page: 'Recovered \ue000 transcription.'
         )
 
         assert '\ue000' in extraction.markdown
@@ -252,7 +252,7 @@ class TestWithATranscriber:
     def test_only_pages_needing_it_are_sent(self, scanned_pdf):
         calls = []
 
-        def transcriber(image):
+        def transcriber(image, page):
             calls.append(image)
 
             return 'Transcribed page content.'
@@ -263,14 +263,14 @@ class TestWithATranscriber:
         assert all(image.startswith(b'\x89PNG') for image in calls)
 
     def test_transcribed_text_reaches_the_markdown(self, scanned_pdf):
-        extraction = extract_pdf(scanned_pdf, lambda image: 'Recovered text.')
+        extraction = extract_pdf(scanned_pdf, lambda image, page: 'Recovered text.')
 
         assert 'Recovered text.' in extraction.markdown
         assert extraction.transcribed_pages == 2
         assert extraction.empty_pages == 0
 
     def test_a_failing_page_does_not_fail_the_document(self, scanned_pdf):
-        def transcriber(image):
+        def transcriber(image, page):
             raise RuntimeError('the provider refused')
 
         extraction = extract_pdf(scanned_pdf, transcriber)
@@ -279,7 +279,7 @@ class TestWithATranscriber:
         assert extraction.empty_pages == 2
 
     def test_a_page_that_transcribes_to_nothing_is_named(self, scanned_pdf):
-        extraction = extract_pdf(scanned_pdf, lambda image: '   ')
+        extraction = extract_pdf(scanned_pdf, lambda image, page: '   ')
 
         assert 'Page 1' in extraction.markdown
         assert extraction.transcribed_pages == 0
@@ -293,7 +293,7 @@ class TestThreshold:
         '''
         calls = []
         extract_pdf(
-            scanned_pdf, lambda image: calls.append(image) or 'text',
+            scanned_pdf, lambda image, page: calls.append(image) or 'text',
             min_page_chars=0
         )
 
@@ -306,7 +306,7 @@ class TestThreshold:
 class TestThroughTheLoader:
     def test_a_pdf_becomes_one_document(self, scanned_pdf):
         documents = load_documents(
-            scanned_pdf, transcriber=lambda image: 'Recovered text.'
+            scanned_pdf, transcriber=lambda image, page: 'Recovered text.'
         )
 
         assert len(documents) == 1

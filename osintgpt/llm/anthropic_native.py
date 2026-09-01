@@ -10,6 +10,8 @@
 #   there is no OpenAI-compatible endpoint to point the shared client at.
 # =================================================================================
 
+import base64
+
 # type hints
 from typing import List, Optional
 
@@ -70,6 +72,7 @@ class AnthropicGeneration(GenerationProvider):
         self.client = Anthropic(api_key=api_key)
 
     supports_tools = True
+    supports_vision = True
 
     def generate_with_tools(self, system, user, tools, history=None):
         messages = [{'role': 'user', 'content': user}]
@@ -137,6 +140,40 @@ class AnthropicGeneration(GenerationProvider):
         ]
 
         return ModelTurn(text=text, calls=calls)
+
+    def describe_image(
+        self, system: str, user: str, image: bytes,
+        media_type: str = 'image/png'
+    ) -> str:
+        # Base64 in a source block rather than the OpenAI data-URI shape, and
+        # the image before the text: Anthropic documents that ordering as
+        # producing better results when the question is about the image.
+        response = self.client.messages.create(
+            model=self.model,
+            max_tokens=self.max_tokens,
+            system=system,
+            messages=[{'role': 'user', 'content': [
+                {'type': 'image', 'source': {
+                    'type': 'base64',
+                    'media_type': media_type,
+                    'data': base64.b64encode(image).decode('ascii')
+                }},
+                {'type': 'text', 'text': user}
+            ]}]
+        )
+
+        usage = getattr(response, 'usage', None)
+        self._record(Usage(
+            provider='anthropic',
+            model=self.model,
+            input_tokens=getattr(usage, 'input_tokens', 0) or 0,
+            output_tokens=getattr(usage, 'output_tokens', 0) or 0,
+            counted=usage is not None
+        ))
+
+        return ''.join(
+            block.text for block in response.content if block.type == 'text'
+        )
 
     def generate(self, system: str, user: str) -> str:
         # The system prompt is its own parameter here rather than a message,

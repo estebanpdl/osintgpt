@@ -132,6 +132,11 @@ class GenerationProvider(ABC):
     # by an endpoint that supports tools may still not use them well.
     supports_tools: bool = False
 
+    # True when this backend accepts an image alongside a prompt. Like
+    # supports_tools, it is a property of the model as much as the vendor:
+    # an endpoint that accepts images will still refuse for a text-only model.
+    supports_vision: bool = False
+
     @abstractmethod
     def generate(self, system: str, user: str) -> str:
         '''
@@ -144,6 +149,32 @@ class GenerationProvider(ABC):
         Returns:
             str: The model's reply, empty when it produced none.
         '''
+
+    def describe_image(
+        self, system: str, user: str, image: bytes, media_type: str = 'image/png'
+    ) -> str:
+        '''
+        Single-turn completion over an image.
+
+        Not abstract, for the same reason `embed_images` is not: most models
+        cannot do this, and making every backend implement a refusal would be
+        ceremony. `supports_vision` is the flag to check first.
+
+        Args:
+            system (str): System instruction.
+            user (str): What to do with the image.
+            image (bytes): The image, encoded as `media_type` says.
+            media_type (str): Its MIME type.
+
+        Raises:
+            NotImplementedError: If this backend cannot be given an image.
+
+        Returns:
+            str: The model's reply.
+        '''
+        raise NotImplementedError(
+            f'the {type(self).__name__} backend cannot be given an image'
+        )
 
     def generate_with_tools(
         self,

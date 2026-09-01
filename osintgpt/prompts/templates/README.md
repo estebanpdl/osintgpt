@@ -29,6 +29,7 @@ contains literal `{` and `}` and `.format` would require doubling every one.
 | `graph_extraction` | `graph.extract_document` | `ref`, `text`, `known_entities`, `part` |
 | `agentic` | `agentic.agentic_answer` | `today` |
 | `followups` | `followups.suggest_followups` | `n`, `question`, `answer`, `passages`, `asked` |
+| `transcription` | `ingestion.transcription.transcriber_for` | `page` |
 
 ## Two kinds of prompt
 
@@ -57,6 +58,14 @@ cites nothing and reads exactly like the grounded version.
 
 If per-project prompt overrides are ever built, only voice prompts are safe to
 expose.
+
+`transcription` is a **contract** prompt with no parser behind it, which makes
+it the most dangerous one here. Its output is not checked against anything —
+it *becomes* the page, and every leg then treats it as the source document.
+The rules that matter are the ones forbidding improvement: do not translate,
+do not correct spelling, do not guess at a digit. A model that tidies a
+scanned page produces text that reads better than the original and no longer
+matches it, and nothing downstream can tell.
 
 `graph_extraction` is a **contract** prompt, and the one where the contract
 carries the most weight. Its reply is parsed into entities and edges, and the

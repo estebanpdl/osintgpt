@@ -17,7 +17,8 @@ from osintgpt.ingestion import (
     describe_fields
 )
 from osintgpt.ingestion.loaders import needs_mapping
-from osintgpt.llm import build_embedding_provider
+from osintgpt.ingestion.transcription import transcriber_for_project
+from osintgpt.llm import build_embedding_provider, build_generation_provider
 from osintgpt.projects import load_user_defaults
 
 from .output import console, emit, emit_record, fail
@@ -208,6 +209,22 @@ def index_corpus(
     except (ImportError, MissingEnvironmentVariableError, ValueError) as error:
         fail(str(error), json_output)
 
+    # Built on first use, so indexing born-digital documents never asks for
+    # a generation credential. The ingestion model falls back to the
+    # generation one, which is what the setting's help promises.
+    transcriber = transcriber_for_project(
+        project,
+        lambda: build_generation_provider(
+            project_settings.generation_provider,
+            config,
+            model=(
+                project_settings.ingestion_model
+                or project_settings.generation_model
+                or None
+            )
+        )
+    )
+
     progress = None if json_output else (
         lambda ref, position, total: console.print(
             f'{position}/{total} {ref}'
@@ -225,7 +242,8 @@ def index_corpus(
                 force=force,
                 purge_other_models=purge_other_models,
                 on_progress=progress,
-                config=config
+                config=config,
+                transcriber=transcriber
             )
         except (
             ImportError, MissingEnvironmentVariableError, OSError, ValueError

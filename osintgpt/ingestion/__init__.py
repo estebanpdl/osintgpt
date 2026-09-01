@@ -27,3 +27,8 @@ from .preview import DryRun, FilePreview, dry_run, preview_file
 from .sources import MAX_FOLDER_FILES, Corpus, Source
 from .tabular import UnmappedSourceError, describe_fields
 from .text import HTML_SUFFIXES, TEXT_SUFFIXES
+from .transcription import (
+    cache_path,
+    transcriber_for,
+    transcriber_for_project
+)

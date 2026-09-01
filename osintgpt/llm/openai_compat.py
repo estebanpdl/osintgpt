@@ -11,6 +11,7 @@
 # =================================================================================
 
 # import modules
+import base64
 import json
 
 # import submodules
@@ -115,6 +116,7 @@ class OpenAICompatGeneration(GenerationProvider):
     # is a different question, and the loop answers it by degrading when a
     # round comes back unusable rather than by trusting this flag.
     supports_tools = True
+    supports_vision = True
 
     def __init__(
         self,
@@ -147,6 +149,39 @@ class OpenAICompatGeneration(GenerationProvider):
             messages=[
                 {'role': 'system', 'content': system},
                 {'role': 'user', 'content': user}
+            ]
+        )
+
+        usage = getattr(response, 'usage', None)
+        self._record(Usage(
+            provider=self.provider,
+            model=self.model,
+            input_tokens=getattr(usage, 'prompt_tokens', 0) or 0,
+            output_tokens=getattr(usage, 'completion_tokens', 0) or 0,
+            billable=self.billable,
+            counted=usage is not None
+        ))
+
+        return response.choices[0].message.content or ''
+
+    def describe_image(
+        self, system: str, user: str, image: bytes,
+        media_type: str = 'image/png'
+    ) -> str:
+        # A data URI rather than a hosted URL: the image is a page of the
+        # operator's own document, and putting it somewhere fetchable to pass
+        # a reference would publish the thing they are analysing.
+        encoded = base64.b64encode(image).decode('ascii')
+        response = self.client.chat.completions.create(
+            model=self.model,
+            messages=[
+                {'role': 'system', 'content': system},
+                {'role': 'user', 'content': [
+                    {'type': 'text', 'text': user},
+                    {'type': 'image_url', 'image_url': {
+                        'url': f'data:{media_type};base64,{encoded}'
+                    }}
+                ]}
             ]
         )
 

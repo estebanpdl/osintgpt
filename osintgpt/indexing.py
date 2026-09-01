@@ -121,7 +121,8 @@ def index_project(
     force: bool = False,
     purge_other_models: bool = False,
     on_progress: Optional[Progress] = None,
-    config=None
+    config=None,
+    transcriber=None
 ) -> IndexReport:
     '''
     Bring a project's index up to date with its registered corpus.
@@ -147,6 +148,11 @@ def index_project(
         config (Settings, optional): Connection settings, needed only by a \
             backend that reaches a server.
 
+        transcriber (Callable, optional): Reads PDF pages holding no \
+            extractable text. Without one those pages are indexed as a named \
+            gap rather than failing, so a corpus of born-digital documents \
+            needs no vision model at all.
+
     Returns:
         IndexReport: What the pass did, per document.
     '''
@@ -155,7 +161,8 @@ def index_project(
 
     try:
         return _run(
-            project, embedder, store, force, purge_other_models, on_progress
+            project, embedder, store, force, purge_other_models, on_progress,
+            transcriber
         )
     finally:
         # A store this function opened is a store it closes; one passed in
@@ -170,7 +177,8 @@ def _run(
     store: BaseVectorEngine,
     force: bool,
     purge_other_models: bool,
-    on_progress: Optional[Progress]
+    on_progress: Optional[Progress],
+    transcriber=None
 ) -> IndexReport:
     root = project.paths.root
     corpus = Corpus.load(project.paths.sources)
@@ -198,7 +206,9 @@ def _run(
             continue
 
         try:
-            stored = _index_document(path, ref, root, corpus, embedder, store)
+            stored = _index_document(
+                path, ref, root, corpus, embedder, store, transcriber
+            )
         except Exception as error:  # noqa: BLE001 — one document, not the pass
             log.warning('%s could not be indexed: %s', ref, error)
             failed.append(DocumentResult(ref=ref, problem=str(error)))
@@ -237,7 +247,8 @@ def _index_document(
     root: Path,
     corpus: Corpus,
     embedder: EmbeddingProvider,
-    store: BaseVectorEngine
+    store: BaseVectorEngine,
+    transcriber=None
 ) -> int:
     '''
     Read, chunk, embed and store one document. Returns the chunks stored.
@@ -260,7 +271,9 @@ def _index_document(
             [vector]
         )
 
-    documents = load_documents(path, corpus.mapping_for(path, root))
+    documents = load_documents(
+        path, corpus.mapping_for(path, root), transcriber
+    )
 
     chunks: List[StoredChunk] = []
     texts: List[str] = []
