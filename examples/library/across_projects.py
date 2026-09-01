@@ -10,6 +10,7 @@ from pathlib import Path
 
 from osintgpt import Project, Settings, search_across_projects
 from osintgpt.llm import build_embedding_provider
+from osintgpt.vector_store import store_for
 
 
 def main() -> None:
@@ -24,13 +25,22 @@ def main() -> None:
     arguments = parser.parse_args()
 
     projects = [Project.load(path) for path in arguments.projects]
+    settings = Settings.from_env()
     embedder = build_embedding_provider(
         arguments.embedding_provider,
-        Settings.from_env(),
+        settings,
         model=arguments.embedding_model,
     )
+
+    def configured_store(project):
+        return store_for(project, project.settings_for(settings))
+
     results = search_across_projects(
-        projects, arguments.query, embedder, top_k=arguments.top_k
+        projects,
+        arguments.query,
+        embedder,
+        top_k=arguments.top_k,
+        store_factory=configured_store,
     )
 
     if results.notice:

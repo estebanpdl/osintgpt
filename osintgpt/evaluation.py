@@ -28,7 +28,10 @@ from osintgpt.projects import Project
 from osintgpt.projects.toml_io import read_toml, write_toml
 
 # import osintgpt search
-from osintgpt.search import search_project
+from osintgpt.search import hybrid_search, search_project
+
+# import osintgpt vector store
+from osintgpt.vector_store import BaseVectorEngine, store_for
 
 log = logging.getLogger('osintgpt.evaluation')
 
@@ -37,6 +40,10 @@ log = logging.getLogger('osintgpt.evaluation')
 # is one an answer would not have seen.
 DEFAULT_TOP_K = 10
 
+SEMANTIC = 'semantic'
+HYBRID = 'hybrid'
+RETRIEVAL_METHODS = (SEMANTIC, HYBRID)
+
 QUESTIONS_HEADER = '''\
 # osintgpt evaluation set
 #
@@ -44,6 +51,7 @@ QUESTIONS_HEADER = '''\
 # rather than argued about. Keep them real: questions an analyst would
 # actually ask of this corpus, with the documents that genuinely answer them.
 # A set written to make the numbers look good measures nothing.
+# Optional terms are literal strings used only by hybrid evaluation.
 
 '''
 
@@ -60,9 +68,13 @@ class Question:
     expected: List[str] = field(default_factory=list)
     # Free text: why this question is in the set, or what it is probing.
     note: str = ''
+    # Literal strings for the lexical leg of a hybrid evaluation.
+    terms: List[str] = field(default_factory=list)
 
     def to_dict(self) -> dict:
         recorded = {'text': self.text, 'expected': list(self.expected)}
+        if self.terms:
+            recorded['terms'] = list(self.terms)
         if self.note:
             recorded['note'] = self.note
 
@@ -73,6 +85,7 @@ class Question:
         return cls(
             text=str(data.get('text', '')),
             expected=[str(ref) for ref in data.get('expected', [])],
+            terms=[str(term) for term in data.get('terms', [])],
             note=str(data.get('note', ''))
         )
 
@@ -135,6 +148,7 @@ class EvaluationReport:
     unscorable: List[str] = field(default_factory=list)
     embedding_model: str = ''
     top_k: int = DEFAULT_TOP_K
+    retrieval: str = SEMANTIC
 
     @property
     def scored(self) -> int:
@@ -266,7 +280,9 @@ def evaluate(
     questions: Sequence[Question],
     embedder: EmbeddingProvider,
     top_k: int = DEFAULT_TOP_K,
-    known_refs: Optional[Sequence[str]] = None
+    known_refs: Optional[Sequence[str]] = None,
+    retrieval: str = SEMANTIC,
+    store: Optional[BaseVectorEngine] = None
 ) -> EvaluationReport:
     '''
     Ask every question and check whether the right documents came back.
@@ -282,10 +298,43 @@ def evaluate(
             given, a question expecting something absent is reported as \
             unscorable rather than counted as a miss — a typo in the set \
             should not read as a retrieval failure.
+        retrieval (str): `semantic` for the existing vector-only measure, or \
+            `hybrid` to fuse semantic results with each question's exact \
+            terms. No terms are derived or generated during evaluation.
+        store (BaseVectorEngine, optional): An open store to reuse for the \
+            whole run. It remains owned by the caller; otherwise this \
+            function opens the project's store once and closes it.
 
     Returns:
         EvaluationReport: Per-question results and the aggregates over them.
     '''
+    if retrieval not in RETRIEVAL_METHODS:
+        raise ValueError(
+            f'unknown retrieval {retrieval!r}; use '
+            f'{" or ".join(RETRIEVAL_METHODS)}'
+        )
+
+    owned = store is None
+    engine = store if store is not None else store_for(project)
+    try:
+        return _evaluate(
+            project, questions, embedder, engine, top_k,
+            known_refs, retrieval
+        )
+    finally:
+        if owned:
+            engine.close()
+
+
+def _evaluate(
+    project: Project,
+    questions: Sequence[Question],
+    embedder: EmbeddingProvider,
+    store: BaseVectorEngine,
+    top_k: int,
+    known_refs: Optional[Sequence[str]],
+    retrieval: str
+) -> EvaluationReport:
     known = set(known_refs) if known_refs is not None else None
     results: List[QuestionResult] = []
     unscorable: List[str] = []
@@ -303,7 +352,15 @@ def evaluate(
                 )
                 continue
 
-        hits = search_project(project, question.text, embedder, top_k=top_k)
+        if retrieval == HYBRID:
+            hits = hybrid_search(
+                project, question.text, embedder, top_k=top_k,
+                terms=question.terms, store=store
+            )
+        else:
+            hits = search_project(
+                project, question.text, embedder, top_k=top_k, store=store
+            )
 
         # A document can produce several chunks; what is being scored is
         # whether the document was reached, so rank by its best chunk.
@@ -326,5 +383,6 @@ def evaluate(
         results=results,
         unscorable=unscorable,
         embedding_model=embedder.model,
-        top_k=top_k
+        top_k=top_k,
+        retrieval=retrieval
     )
