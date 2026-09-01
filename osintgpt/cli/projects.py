@@ -1,6 +1,7 @@
 '''Project creation, discovery, selection, inspection, and deletion.'''
 
 import shutil
+from pathlib import Path
 from typing import Optional
 
 import typer
@@ -36,11 +37,22 @@ def _project_data(project: Project) -> dict:
 def create_project(
     context: typer.Context,
     name: str = typer.Argument(..., help='Display name for the project.'),
+    path: Optional[Path] = typer.Option(
+        None, '--path',
+        help=(
+            'Create beside source material or on an encrypted/removable '
+            'volume.'
+        )
+    ),
     json_output: bool = typer.Option(False, '--json', help='Print JSON only.')
 ) -> None:
     state = state_from(context)
     try:
-        project = Project.create(name, home=state.home)
+        project = Project.create(
+            name,
+            home=state.home,
+            path=path.expanduser() if path is not None else None
+        )
     except (FileExistsError, OSError, ValueError) as error:
         fail(str(error), json_output)
 

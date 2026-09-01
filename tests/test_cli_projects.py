@@ -66,6 +66,26 @@ def test_create_then_list_shows_the_project(runner, home):
     assert 'Caso Norte' in listed.output
 
 
+def test_create_at_an_exact_path_registers_the_project(
+    runner, home, tmp_path
+):
+    destination = tmp_path / 'encrypted-volume' / 'field-case'
+
+    created = invoke(
+        runner, home, 'project', 'create', 'Field Case',
+        '--path', str(destination), '--json'
+    )
+    listed = invoke(runner, home, 'project', 'list', '--json')
+
+    assert created.exit_code == 0
+    assert destination.joinpath('project.toml').is_file()
+    assert Registry.load(home).open('field-case').paths.root == destination
+    assert any(
+        row['slug'] == 'field-case' and row['path'] == str(destination)
+        for row in json.loads(listed.output)
+    )
+
+
 def test_showing_a_missing_project_exits_nonzero(runner, home):
     result = invoke(runner, home, 'project', 'show', 'missing')
 
