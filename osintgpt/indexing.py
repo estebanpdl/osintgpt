@@ -34,6 +34,7 @@ from osintgpt.ingestion.images import NO_IMAGE_SUPPORT
 
 # import osintgpt llm
 from osintgpt.llm.base import EmbeddingProvider
+from osintgpt.llm.usage import CostLimitReached
 
 # import osintgpt projects
 from osintgpt.projects import Project
@@ -208,6 +209,11 @@ def _run(
         try:
             stored = _index_document(
                 path, ref, root, corpus, embedder, store, transcriber
+            )
+        except CostLimitReached as error:
+            state.save()
+            raise error.with_index_progress(
+                len(indexed), len(plan.work) - position + 1
             )
         except Exception as error:  # noqa: BLE001 — one document, not the pass
             log.warning('%s could not be indexed: %s', ref, error)

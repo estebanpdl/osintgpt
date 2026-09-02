@@ -33,7 +33,7 @@ osintgpt search --exact LX-204 --project walkthrough --json
 ```
 
 ```json
-{"results": [{"rank": 1, "score": 1.0, "citation": "dispatches.txt › Dispatch 4", "ref": "dispatches.txt", "text": "Operator Neral-7 acknowledged transmission LX-204.", "path": "Dispatch 4", "timestamp": "", "author": "", "legs": ["lexical"], "ranks": {"lexical": 1}}, {"rank": 2, "score": 1.0, "citation": "ledger.txt › Ledger", "ref": "ledger.txt", "text": "Account LX-204 was assigned to relay Delta.", "path": "Ledger", "timestamp": "", "author": "", "legs": ["lexical"], "ranks": {"lexical": 2}}]}
+{"results": [{"rank": 1, "score": 1.0, "citation": "dispatches.txt › Dispatch 4", "ref": "dispatches.txt", "text": "Operator Neral-7 acknowledged transmission LX-204.", "path": "Dispatch 4", "timestamp": "", "author": "", "legs": ["lexical"], "ranks": {"lexical": 1}}, {"rank": 2, "score": 1.0, "citation": "ledger.txt › Ledger", "ref": "ledger.txt", "text": "Account LX-204 was assigned to relay Delta.", "path": "Ledger", "timestamp": "", "author": "", "legs": ["lexical"], "ranks": {"lexical": 2}}], "usage": {"calls": 0, "billable_calls": 0, "input_tokens": 0, "output_tokens": 0, "total_tokens": 0, "estimated_cost_usd": null, "complete": true, "unpriced_calls": 0, "uncounted_calls": 0, "by_model": {}, "ceiling_usd": null}}
 ```
 
 `ask` remains model-directed. It may use exact, semantic, and graph tools and

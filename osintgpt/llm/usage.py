@@ -20,6 +20,10 @@ from typing import Dict, List, Optional
 from osintgpt.pricing import estimate_cost
 
 
+def format_usd(value: float) -> str:
+    return f'${value:.6f}'.rstrip('0').rstrip('.')
+
+
 # Usage class
 @dataclass(frozen=True)
 class Usage:
@@ -68,6 +72,36 @@ class Usage:
         return cost
 
 
+class CostLimitReached(BaseException):
+    '''
+    A hard run stop that ordinary fail-soft exception boundaries cannot hide.
+    '''
+
+    def __init__(self, message: str, ceiling_usd: float) -> None:
+        super().__init__(message)
+        self.ceiling_usd = ceiling_usd
+        self.completed = None
+        self.remaining = None
+
+    def with_index_progress(self, completed: int, remaining: int):
+        self.completed = completed
+        self.remaining = remaining
+
+        return self
+
+    def __str__(self) -> str:
+        message = super().__str__()
+        if self.remaining is None:
+            return message
+
+        return (
+            f'{message} {self.completed} documents indexed; '
+            f'{self.remaining} remain. Completed documents were saved; '
+            're-run index to continue, increasing the ceiling if one '
+            'remaining call exceeds it.'
+        )
+
+
 # UsageRecorder class
 @dataclass
 class UsageRecorder:
@@ -76,9 +110,41 @@ class UsageRecorder:
     it when they are given one.
     '''
     records: List[Usage] = field(default_factory=list)
+    cost_ceiling_usd: Optional[float] = None
 
     def record(self, usage: Usage) -> None:
         self.records.append(usage)
+        self._enforce(usage)
+
+    def _enforce(self, latest: Usage) -> None:
+        ceiling = self.cost_ceiling_usd
+        if ceiling is None or not latest.billable:
+            return
+
+        if not latest.counted:
+            raise CostLimitReached(
+                f'Cost ceiling {format_usd(ceiling)} cannot be enforced '
+                f'because '
+                f'{latest.provider} returned no usage for {latest.model}.',
+                ceiling
+            )
+
+        if latest.estimated_cost is None:
+            raise CostLimitReached(
+                f'Cost ceiling {format_usd(ceiling)} cannot be enforced '
+                f'because '
+                f'{latest.model} has no verified price.',
+                ceiling
+            )
+
+        if self.estimated_billable_cost > ceiling:
+            raise CostLimitReached(
+                f'Cost ceiling {format_usd(ceiling)} exceeded after a '
+                f'provider '
+                f'call; estimated run spend is '
+                f'~{format_usd(self.estimated_billable_cost)}.',
+                ceiling
+            )
 
     def __len__(self) -> int:
         return len(self.records)
@@ -119,6 +185,25 @@ class UsageRecorder:
     @property
     def uncounted_calls(self) -> int:
         return sum(1 for u in self.records if not u.counted)
+
+    @property
+    def uncounted_billable_calls(self) -> int:
+        return sum(1 for u in self.records if u.billable and not u.counted)
+
+    @property
+    def billable_calls(self) -> int:
+        return sum(1 for u in self.records if u.billable)
+
+    @property
+    def estimated_billable_cost(self) -> float:
+        return sum(
+            u.estimated_cost for u in self.records
+            if u.billable and u.counted and u.estimated_cost is not None
+        )
+
+    @property
+    def cost_complete(self) -> bool:
+        return not self.unpriced_calls and not self.uncounted_billable_calls
 
     @property
     def estimated_cost(self) -> float:

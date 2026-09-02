@@ -19,8 +19,16 @@ from osintgpt.ingestion import (
 from osintgpt.ingestion.loaders import needs_mapping
 from osintgpt.ingestion.transcription import transcriber_for_project
 from osintgpt.llm import build_embedding_provider, build_generation_provider
+from osintgpt.llm.usage import CostLimitReached
 from osintgpt.projects import load_user_defaults
 
+from .costs import (
+    add_usage,
+    fail_for_cost,
+    recorder_for,
+    render_usage,
+    usage_data
+)
 from .output import console, emit, emit_record, fail
 from .selection import ProjectSelectionError, resolve_project, state_from
 
@@ -201,13 +209,14 @@ def index_corpus(
     defaults = load_user_defaults(state.home)
     project_settings = project.effective_settings(defaults)
     config = project.settings_for(resolve_credentials(state.home), defaults)
+    recorder = recorder_for(project_settings)
 
     try:
         embedder = build_embedding_provider(
-            project_settings.embedding_provider, config
+            project_settings.embedding_provider, config, recorder=recorder
         )
     except (ImportError, MissingEnvironmentVariableError, ValueError) as error:
-        fail(str(error), json_output)
+        fail(str(error), json_output, {'usage': usage_data(recorder)})
 
     # Built on first use, so indexing born-digital documents never asks for
     # a generation credential. The ingestion model falls back to the
@@ -221,7 +230,8 @@ def index_corpus(
                 project_settings.ingestion_model
                 or project_settings.generation_model
                 or None
-            )
+            ),
+            recorder=recorder
         )
     )
 
@@ -245,10 +255,12 @@ def index_corpus(
                 config=config,
                 transcriber=transcriber
             )
+        except CostLimitReached as error:
+            fail_for_cost(error, recorder, json_output)
         except (
             ImportError, MissingEnvironmentVariableError, OSError, ValueError
         ) as error:
-            fail(str(error), json_output)
+            fail(str(error), json_output, {'usage': usage_data(recorder)})
     finally:
         index_log.disabled = was_disabled
 
@@ -262,6 +274,7 @@ def index_corpus(
         'removed': report.removed,
         'purged': report.purged
     }
+    add_usage(data, recorder)
 
     def render(target) -> None:
         target.print(report.summary)
@@ -269,6 +282,7 @@ def index_corpus(
             target.print(
                 f'{failed_result.ref}: {failed_result.problem}', style='bold red'
             )
+        render_usage(target, recorder)
 
     emit(data, json_output, render)
     if report.failed:

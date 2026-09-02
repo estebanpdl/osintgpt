@@ -10,6 +10,7 @@ from osintgpt.config import ENV_VARS
 from osintgpt.graph import Edge, Entity, graph_for, merge_key
 from osintgpt.ingestion import Corpus
 from osintgpt import llm
+from osintgpt.llm import Usage
 from osintgpt.projects import Registry
 
 
@@ -194,7 +195,14 @@ def test_graph_build_prints_cost_progress_and_report(
     class Generator:
         model = 'test-chat'
 
+        def __init__(self, recorder):
+            self.recorder = recorder
+
         def generate(self, system, user):
+            self.recorder.record(Usage(
+                'stub', self.model, input_tokens=10, output_tokens=5
+            ))
+
             return json.dumps({
                 'entities': [{'name': 'Alpha'}, {'name': 'Beta'}],
                 'edges': [{
@@ -206,7 +214,9 @@ def test_graph_build_prints_cost_progress_and_report(
 
     monkeypatch.setattr(
         llm, 'build_generation_provider',
-        lambda provider, settings, model=None: Generator()
+        lambda provider, settings, model=None, recorder=None: (
+            Generator(recorder)
+        )
     )
 
     result = invoke(
@@ -217,6 +227,7 @@ def test_graph_build_prints_cost_progress_and_report(
     assert 'one generation call per document' in result.output
     assert '1/1 evidence.md' in result.output
     assert '1 documents, 2 entities, 1 edges' in result.output
+    assert 'Usage:' in result.output
 
 
 def test_graph_build_refuses_when_disabled_without_building_provider(

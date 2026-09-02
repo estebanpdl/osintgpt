@@ -107,6 +107,14 @@ def test_set_parses_project_boolean_and_number(runner, home):
     assert project.settings.cost_ceiling_usd == 12.5
 
 
+def test_cost_ceiling_help_says_it_is_per_run(runner, home):
+    result = invoke(runner, home, 'config', 'set', '--help')
+
+    assert result.exit_code == 0
+    assert 'cost_ceiling_usd limits each run' in result.output
+    assert 'separately' in result.output
+
+
 @pytest.mark.parametrize(
     'arguments',
     [('config', 'get'), ('config', 'set', 'graph_enabled', 'true', '--user')]

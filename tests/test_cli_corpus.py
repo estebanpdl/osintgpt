@@ -155,7 +155,9 @@ def test_index_prints_progress_and_passes_maintenance_flags(
     received = {}
     monkeypatch.setattr(
         cli_corpus, 'build_embedding_provider',
-        lambda provider, settings: SimpleNamespace(model='modelo-local')
+        lambda provider, settings, recorder=None: SimpleNamespace(
+            model='modelo-local'
+        )
     )
 
     def index(project, embedder, **options):
@@ -186,7 +188,9 @@ def test_index_json_suppresses_progress_and_reports_failures(
     create_project(runner, home, 'Caso A')
     monkeypatch.setattr(
         cli_corpus, 'build_embedding_provider',
-        lambda provider, settings: SimpleNamespace(model='modelo-local')
+        lambda provider, settings, recorder=None: SimpleNamespace(
+            model='modelo-local'
+        )
     )
 
     def index(project, embedder, **options):

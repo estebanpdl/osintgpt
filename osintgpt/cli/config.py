@@ -132,7 +132,9 @@ def get_config(
 def set_config(
     context: typer.Context,
     key: str = typer.Argument(..., help='Setting to update.'),
-    value: str = typer.Argument(..., help='New value.'),
+    value: str = typer.Argument(
+        ..., help='New value; cost_ceiling_usd limits each run separately.'
+    ),
     user: bool = typer.Option(False, '--user', help='Write user defaults.'),
     project_slug: Optional[str] = typer.Option(
         None, '--project', help='Project slug or id; overrides selection.'

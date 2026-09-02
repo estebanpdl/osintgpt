@@ -8,10 +8,10 @@ osintgpt config set graph_enabled true
 osintgpt graph build
 ```
 
-The build command warns before provider calls and prints `position/total ref`
-progress. Use `--incremental` after the first build to read only new documents,
-or `--rebuild` to replace claims from documents that changed. The two modes
-cannot be combined.
+The build command warns before provider calls, prints `position/total ref`
+progress, and reports the run's provider usage. Use `--incremental` after the
+first build to read only new documents, or `--rebuild` to replace claims from
+documents that changed. The two modes cannot be combined.
 
 ```bash
 osintgpt graph build --incremental --json
