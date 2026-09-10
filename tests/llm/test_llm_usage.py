@@ -33,7 +33,7 @@ from osintgpt.llm.local import SentenceTransformerEmbedding
 # import osintgpt pricing
 from osintgpt.pricing import PRICES
 
-from conftest import FAKE_KEY, StubOpenAI
+from tests.conftest import FAKE_KEY, StubOpenAI
 
 PRICED = 'gpt-4o'
 UNPRICED = 'gpt-99-unreleased'

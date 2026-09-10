@@ -29,9 +29,9 @@ from osintgpt.llm import EmbeddingProvider, GenerationProvider
 # import osintgpt llms
 from osintgpt.llms import OpenAIGPT
 
-from conftest import FAKE_KEY
+from tests.conftest import FAKE_KEY
 
-PACKAGE = Path(__file__).resolve().parent.parent / 'osintgpt'
+PACKAGE = Path(__file__).resolve().parent.parent.parent / 'osintgpt'
 
 
 @pytest.fixture

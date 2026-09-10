@@ -33,7 +33,7 @@ try:
 except ModuleNotFoundError:
     import tomli as tomllib
 
-from conftest import FAKE_KEY
+from tests.conftest import FAKE_KEY
 
 USER_MESSAGES = (
     "SELECT message FROM chat_gpt_conversations WHERE role = 'user'"

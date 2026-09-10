@@ -124,7 +124,7 @@ class TestCallers:
         import ast
         from pathlib import Path
 
-        package = Path(__file__).resolve().parent.parent / 'osintgpt'
+        package = Path(__file__).resolve().parent.parent.parent / 'osintgpt'
         offenders = []
 
         scopes = (
@@ -223,7 +223,7 @@ class TestPackaging:
         # 3.10 is a supported floor.
         from osintgpt.projects.toml_io import read_toml
 
-        root = Path(__file__).resolve().parent.parent
+        root = Path(__file__).resolve().parent.parent.parent
         config = read_toml(root / 'pyproject.toml')
 
         setuptools = config.get('tool', {}).get('setuptools', {})

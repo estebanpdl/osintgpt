@@ -28,7 +28,7 @@ from osintgpt.llm import (
 )
 from osintgpt.llm.local import SentenceTransformerEmbedding
 
-from conftest import FAKE_KEY
+from tests.conftest import FAKE_KEY
 
 
 class StubModels:

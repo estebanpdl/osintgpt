@@ -26,7 +26,7 @@ from osintgpt.config import Settings
 from osintgpt.llm import audit_locality
 from osintgpt.llm.locality import is_loopback
 
-REPO_ROOT = Path(__file__).resolve().parent.parent
+REPO_ROOT = Path(__file__).resolve().parent.parent.parent
 LOCAL_EMBEDDING = 'sentence-transformers'
 
 

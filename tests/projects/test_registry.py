@@ -28,7 +28,7 @@ from osintgpt.projects import (
 )
 from osintgpt.projects.home import config_file
 
-from conftest import FAKE_KEY
+from tests.conftest import FAKE_KEY
 
 
 @pytest.fixture

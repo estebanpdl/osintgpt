@@ -28,7 +28,7 @@ from osintgpt.exceptions.errors import MissingEnvironmentVariableError
 # import utils
 from osintgpt.utils import encoding_for_model
 
-from conftest import FAKE_KEY
+from tests.conftest import FAKE_KEY
 
 
 @pytest.fixture

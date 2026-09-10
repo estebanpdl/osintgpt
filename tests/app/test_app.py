@@ -251,7 +251,7 @@ class TestPackaging:
 
         from osintgpt.projects.toml_io import read_toml
 
-        root = Path(__file__).resolve().parent.parent
+        root = Path(__file__).resolve().parent.parent.parent
         config = read_toml(root / 'pyproject.toml')
 
         core = ' '.join(config['project']['dependencies'])
@@ -357,7 +357,7 @@ class TestOneEntryPoint:
 
         from osintgpt.projects.toml_io import read_toml
 
-        root = Path(__file__).resolve().parent.parent
+        root = Path(__file__).resolve().parent.parent.parent
         scripts = read_toml(root / 'pyproject.toml')['project']['scripts']
 
         assert list(scripts) == ['osintgpt']

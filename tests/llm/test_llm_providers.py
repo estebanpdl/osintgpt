@@ -46,7 +46,7 @@ from osintgpt.llm.registry import (
 # import exceptions
 from osintgpt.exceptions.errors import MissingEnvironmentVariableError
 
-from conftest import FAKE_KEY, StubOpenAI
+from tests.conftest import FAKE_KEY, StubOpenAI
 
 
 @pytest.fixture

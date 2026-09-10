@@ -46,7 +46,7 @@ class TestItStaysOptional:
         from pathlib import Path
 
         source = (
-            Path(__file__).resolve().parent.parent
+            Path(__file__).resolve().parent.parent.parent
             / 'osintgpt' / 'vector_store' / 'factory.py'
         ).read_text(encoding='utf-8')
         tree = ast.parse(source)

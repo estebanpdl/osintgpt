@@ -26,7 +26,7 @@ from osintgpt.llms import OpenAIGPT
 # import exceptions
 from osintgpt.exceptions.errors import MissingEnvironmentVariableError
 
-from conftest import FAKE_KEY, StubCompletions
+from tests.conftest import FAKE_KEY, StubCompletions
 
 
 @pytest.fixture

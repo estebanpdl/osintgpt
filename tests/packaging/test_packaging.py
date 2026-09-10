@@ -25,7 +25,7 @@ from pathlib import Path
 # import osintgpt
 import osintgpt
 
-REPO_ROOT = Path(__file__).resolve().parent.parent
+REPO_ROOT = Path(__file__).resolve().parent.parent.parent
 
 
 @pytest.fixture(scope='module')

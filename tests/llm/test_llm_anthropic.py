@@ -35,7 +35,7 @@ from osintgpt.llm.registry import ANTHROPIC, OPENAI_COMPAT
 # import exceptions
 from osintgpt.exceptions.errors import MissingEnvironmentVariableError
 
-from conftest import FAKE_KEY
+from tests.conftest import FAKE_KEY
 
 
 class StubMessages:

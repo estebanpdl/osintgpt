@@ -16,7 +16,7 @@ from typer.main import get_command
 from osintgpt.cli import app
 from osintgpt.config import ENV_VARS
 
-ROOT = Path(__file__).parents[1]
+ROOT = Path(__file__).parents[2]
 EXAMPLES = ROOT / 'examples'
 PYTHON_EXAMPLES = sorted(EXAMPLES.rglob('*.py'))
 LIBRARY_EXAMPLES = sorted((EXAMPLES / 'library').glob('*.py'))
