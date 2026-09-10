@@ -1,15 +1,31 @@
 # cache
 .pytest_cache/
+.coverage
 __pycache__/
 
 # notebooks
-nbs/*
+nbs/
 
 # checkpoints
 .ipynb_checkpoints/
 
-# dev material
+# dev material folders
+plan/
+rules/
+.agents/
+.claude/
+references/
+codex-support/
+.human-read-only/
+codex-terra-support/
+
+# operator documentation, on trial before anyone commits to maintaining it
+docs/
+
+# dev material files
+CLAUDE.md
 resources.txt
+skills-lock.json
 examples/data/sql_database.db
 
 # dev & test folders
@@ -41,3 +57,9 @@ README-BETA.md
 
 # .env file
 *.env
+
+
+# scratch homes created while testing or documenting
+.operator-docs-home/
+*-docs-home/
+.osintgpt/

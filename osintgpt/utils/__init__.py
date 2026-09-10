@@ -26,6 +26,29 @@ def create_unique_id(ids: List = []) -> str:
     # return unique id
     return unique_id
 
+# fallback encoding for models tiktoken does not know
+DEFAULT_ENCODING = 'o200k_base'
+
+# resolve the encoding for a model
+def encoding_for_model(model: str):
+    '''
+    Get the tiktoken encoding a model uses.
+
+    Models released after the installed tiktoken are unknown to it, which
+    raises rather than returning something usable. Falling back keeps counting
+    approximate instead of fatal.
+
+    Args:
+        model (str): Model name.
+
+    Returns:
+        tiktoken.Encoding: The model's encoding, or the default fallback.
+    '''
+    try:
+        return tiktoken.encoding_for_model(model)
+    except KeyError:
+        return tiktoken.get_encoding(DEFAULT_ENCODING)
+
 # count tokens < GPT model >
 def count_tokens(prompt: str, model: str) -> int:
     '''
@@ -34,12 +57,13 @@ def count_tokens(prompt: str, model: str) -> int:
 
     Args:
         prompt (str): The input prompt for the GPT model.
-        model (str): The GPT model
+        model (str): The model the tokens will be sent to. Encodings differ \
+            between models, so counting for the wrong one gives a wrong number.
 
     Returns:
         int: Number of tokens.
     '''
-    encoding = tiktoken.encoding_for_model(model)
+    encoding = encoding_for_model(model)
 
     # count tokens
     tokens = encoding.encode(prompt)

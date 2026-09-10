@@ -11,27 +11,25 @@
 # ===============================================================
 
 # import modules <Qdrant>
-import os
-import sys
 import qdrant_client
 
 # import submodules <Qdrant>
 from qdrant_client.http import models as rest
 
-# import submodules
-from dotenv import load_dotenv
-
 # type hints
-from typing import List, Optional
+from typing import List, Optional, Union
 
-# import exceptions
-from osintgpt.exceptions.errors import MissingEnvironmentVariableError
+# import osintgpt config
+from osintgpt.config import Settings, resolve_settings
 
-# import base class
-from .base import BaseVectorEngine
+from .connection import REMOTE, connect
+
+# Not a BaseVectorEngine yet: this class predates the widened interface and
+# still speaks in collections rather than documents. Adapting it is its own
+# step; until then it keeps the surface its callers already use.
 
 # Qdrant class
-class Qdrant(BaseVectorEngine):
+class Qdrant(object):
     '''
     Qdrant class
 
@@ -52,75 +50,43 @@ class Qdrant(BaseVectorEngine):
     github.com/qdrant/qdrant-client/blob/master/qdrant_client/qdrant_client.py
     '''
     # constructor
-    def __init__(self, env_file_path: str):
+    def __init__(self, config: Union[Settings, str]):
         '''
         Constructor
 
         args:
-            **kwargs: keyword arguments for QdrantClient
+            config (Union[Settings, str]): Settings, or a path to a .env file \
+                (deprecated).
         '''
-        # load environment variables
-        load_dotenv(dotenv_path=env_file_path)
+        # settings
+        self.settings = resolve_settings(config)
 
-        # set environment variables
+        # connect
         self.set_required_variables()
 
-    # set required environment variables
+    # set required settings
     def set_required_variables(self):
         '''
-        set required environment variables
+        set required settings
 
-        This method sets for the required environment variables for connecting
-        to a Qdrant server.
+        This method reads the settings required to connect to a Qdrant server
+        and opens the connection. A remote pair (api key + url) wins over a
+        local pair (host + port) when both are present.
 
         returns:
             use_remote: use remote
             use_local: use local
         '''
-        # set required environment variables
-        use_remote = os.getenv('QDRANT_API_KEY') and os.getenv('QDRANT_URL')
-        use_local = os.getenv('QDRANT_PORT') and os.getenv('QDRANT_HOST')
+        settings = self.settings
+        self.qdrant, kind = connect(settings)
 
-        if not (use_remote or use_local):
-            raise MissingEnvironmentVariableError(
-                'QDRANT_API_KEY or QDRANT_URL or QDRANT_HOST or QDRANT_PORT'
-            )
-
-        # set environment variables
-        if use_remote:
-            self.api_key = os.getenv('QDRANT_API_KEY')
-            self.url = os.getenv('QDRANT_URL')
-
-            # connect
-            self.qdrant = qdrant_client.QdrantClient(
-                url=self.url,
-                api_key=self.api_key,
-                https=True
-            )
+        # Kept as attributes because callers read them.
+        if kind == REMOTE:
+            self.api_key = settings.qdrant_api_key
+            self.url = settings.qdrant_url
         else:
-            self.host = os.getenv('QDRANT_HOST')
-            self.port = int(os.getenv('QDRANT_PORT'))
-
-            # connect
-            self.qdrant = qdrant_client.QdrantClient(
-                host=self.host,
-                port=self.port
-            )
-        
-        '''
-
-        Ensure if is indeed connected
-        '''
-        # Perform a simple operation to check connectivity
-        try:
-            collections = self.get_collections()
-        except Exception as e:
-            m = f'''
-            Unable to establish a connection to the Qdrant server. Please ensure
-            that the Qdrant server is up and running. If you're using this locally,
-            make sure to start the Qdrant server before using this feature.
-            '''
-            raise ConnectionError(' '.join(m.split()).strip()) from None
+            self.host = settings.qdrant_host
+            self.port = settings.qdrant_port
     
     # get client
     def get_client(self):
@@ -351,12 +317,12 @@ class Qdrant(BaseVectorEngine):
         vector_name = kwargs.get('vector_name', 'main')
 
         # query results
-        query_results = self.qdrant.search(
+        # query_points wraps its hits; unwrap to return a plain list of points.
+        response = self.qdrant.query_points(
             collection_name=collection_name,
-            query_vector=(
-                vector_name, embedded_query
-            ),
+            query=embedded_query,
+            using=vector_name,
             limit=top_k
         )
 
-        return query_results
+        return response.points

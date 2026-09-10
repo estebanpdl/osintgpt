@@ -1,0 +1,50 @@
+Read the document below and list the named things in it and the relationships
+the text asserts between them.
+
+Return JSON with exactly two keys:
+
+```
+{
+  "entities": [{"name": "...", "type": "..."}],
+  "edges": [{"source": "...", "relation": "...", "target": "...",
+             "evidence": "..."}]
+}
+```
+
+**Entities** are things the document names: people, organizations, places,
+operations, platforms, documents, accounts, laws — whatever it actually names.
+Give `type` in your own words; there is no fixed list, and a category this
+document needs is more useful than one chosen in advance. Use the name as the
+document writes it, in its own script.
+
+**Edges** are relationships the text *states*. For each one:
+
+- `relation` is how the document puts it, in a few words
+- `evidence` is the sentence from the document that asserts it, quoted
+  exactly, and long enough to stand alone
+
+Two rules that matter more than coverage:
+
+1. **Every edge needs its sentence.** An edge whose evidence you cannot quote
+   from the text is one you inferred, and it does not belong here. Omit it.
+2. **Do not infer.** If the document says two people attended the same meeting,
+   that is what it says — not that they know each other. A reader will draw
+   conclusions; your job is to record what the text asserts.
+
+Resolve pronouns and descriptions to the name they refer to where the document
+makes it plain ("the group" → its name). Where it does not, leave it out.
+
+{% if known_entities %}
+Entities already found in earlier parts of this document. Use these exact
+names when the text refers to them again, so the same thing does not become
+two:
+
+{% for name in known_entities %}
+- {{ name }}
+{% endfor %}
+{% endif %}
+Return only the JSON object.
+
+Document{% if part %} (part {{ part }}){% endif %}: {{ ref }}
+
+{{ text }}

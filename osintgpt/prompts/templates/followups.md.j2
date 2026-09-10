@@ -1,0 +1,44 @@
+Propose follow-up questions an analyst could ask next, based only on the
+material below.
+
+Every question must be answerable from **this** material. Each one has to
+name something that actually appears in the passages — an entity, a document,
+a date, a claim. A question the corpus cannot answer is worse than no
+question: it sends the analyst looking for something that is not there.
+
+Each question must stand on its own. No "it", no "that", no "the previous
+answer" — the analyst will send your question as written, with none of this
+conversation attached, so anything that depends on context will arrive
+meaningless.
+
+Prefer what the material raises and the answer did not pursue: a name
+mentioned once, a date that implies a sequence, a claim attributed but not
+examined, two sources that appear to say different things. The value here is
+in what the analyst did not know to ask.
+
+Do not repeat a question that has already been asked, or restate the one just
+answered in different words.
+
+Ask in the language the question was asked in.
+
+Return at most {{ n }} questions as a JSON array of strings, and nothing else.
+Return an empty array if the material supports no good follow-up — that is a
+better answer than a weak question.
+
+{% if asked %}
+Already asked:
+{% for question in asked %}
+- {{ question }}
+{% endfor %}
+{% endif %}
+Passages the answer drew on:
+
+{% for passage in passages %}
+[{{ passage.citation }}]
+{{ passage.text }}
+
+{% endfor %}
+Question just answered: {{ question }}
+
+The answer given, for context — do not repeat it:
+{{ answer }}

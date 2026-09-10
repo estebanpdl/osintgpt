@@ -1,0 +1,114 @@
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "osintgpt"
+version = "0.3.0"
+description = "A Python OSINT tool using Large Language Models"
+readme = "README.md"
+requires-python = ">=3.10"
+license = "Apache-2.0"
+authors = [
+    { name = "Esteban Ponce de Leon" }
+]
+keywords = ["osint", "llm", "rag", "retrieval", "embeddings", "text-analysis"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Programming Language :: Python",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
+    "Operating System :: OS Independent",
+    "Intended Audience :: Science/Research",
+    "Intended Audience :: Education",
+    "Intended Audience :: Information Technology",
+    "Intended Audience :: Developers",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Topic :: Scientific/Engineering :: Information Analysis",
+    "Topic :: Text Processing",
+    "Topic :: Text Processing :: General",
+    "Topic :: Text Processing :: Indexing",
+    "Topic :: Utilities"
+]
+# An OSINT tool that cannot read a PDF out of the box is failing at its own
+# description, so every format an analyst routinely holds is here rather than
+# behind a flag. The one thing kept optional is the local embedding stack,
+# which is twenty times the size of everything else combined.
+dependencies = [
+    "anthropic>=0.40,<2",
+    "markitdown[docx,pdf,pptx,xlsx]>=0.1,<1",
+    "openai>=1.0,<3",
+    "openpyxl",
+    "pandas",
+    "pillow>=10,<13",
+    "pypdf>=5,<8",
+    "pypdfium2>=4,<6",
+    "python-docx>=1,<2",
+    "python-dotenv",
+    "qdrant-client>=1.10,<2",
+    "rich>=13,<15",
+    "tiktoken",
+    "tomli-w",
+    "tomli; python_version < '3.11'",
+    "typer>=0.12,<1"
+]
+
+[project.scripts]
+osintgpt = "osintgpt.cli.main:main"
+
+[project.optional-dependencies]
+# sentence-transformers pulls torch: ~650 MB against ~120 MB for everything
+# else. Offline embedding stays first-class as a capability and opt-in as a
+# download.
+# Streamlit is a web framework, and a library that pulls one into every
+# dependency tree is a library nobody embeds. The CLI is core because a hidden
+# CLI helps nobody; an app is a different decision.
+app = [
+    "streamlit>=1.36,<2"
+]
+local = [
+    "sentence-transformers>=3,<6"
+]
+# For operators who already run Postgres. Never the thing an error message
+# tells someone to go set up: the default store needs no server at all.
+postgres = [
+    "psycopg[binary]>=3.1,<4",
+    "pgvector>=0.3,<1"
+]
+all = [
+    "osintgpt[app,local,postgres]"
+]
+dev = [
+    "pytest>=8",
+    "pytest-cov",
+    "pytest-mock",
+    "python-pptx",
+    "tomli; python_version < '3.11'"
+]
+
+[project.urls]
+Homepage = "https://github.com/estebanpdl/osintgpt"
+Repository = "https://github.com/estebanpdl/osintgpt"
+Issues = "https://github.com/estebanpdl/osintgpt/issues"
+
+[tool.setuptools]
+# Prompt templates are .md.j2, not .py, so packaging has to be told to carry
+# them. Without this a wheel installs the loader and none of the prompts, and
+# every call raises TemplateNotFound.
+include-package-data = true
+
+[tool.setuptools.packages.find]
+include = ["osintgpt*"]
+
+[tool.setuptools.package-data]
+"osintgpt.prompts" = ["templates/*.md.j2", "templates/README.md"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q --strict-markers"
+markers = [
+    "integration: needs a live service; deselected by default"
+]

@@ -9,10 +9,79 @@
 # Description: Package initialization file.
 # =================================================
 
+# import submodules
+from importlib.metadata import PackageNotFoundError, version
+
+# import osintgpt config
+from osintgpt.config import Settings
+
+# import osintgpt projects
+from osintgpt.projects import Project, ProjectSettings
+
+# import osintgpt evaluation
+from osintgpt.evaluation import (
+    EvaluationReport,
+    Question,
+    evaluate,
+    load_questions,
+    save_questions
+)
+
+# import osintgpt answering
+from osintgpt.agentic import AgenticAnswer, agentic_answer
+from osintgpt.answering import Answer, answer_question
+from osintgpt.followups import suggest_followups
+
+# import osintgpt graph
+from osintgpt.graph import GraphReport, build_graph, graph_for
+
+# import osintgpt indexing, lexical search and semantic search
+from osintgpt.indexing import IndexReport, index_project
+from osintgpt.lexical import derive_search_terms, lexical_search
+from osintgpt.fusion import FusedResult, reciprocal_rank_fusion
+from osintgpt.search import (
+    hybrid_search,
+    search_across_projects,
+    search_project
+)
+
 # define package-level variables and constants
-__version__ = '0.0.1'
+# The version lives in pyproject.toml; reading it back from the installed
+# metadata keeps one source of truth. Running from a source tree that was
+# never installed has no metadata to read.
+try:
+    __version__ = version('osintgpt')
+except PackageNotFoundError:
+    __version__ = '0.0.0+unknown'
+
 __name__ = 'osintgpt'
-__all__ = []
+__all__ = [
+    'AgenticAnswer',
+    'Answer',
+    'FusedResult',
+    'GraphReport',
+    'EvaluationReport',
+    'IndexReport',
+    'Question',
+    'Project',
+    'ProjectSettings',
+    'Settings',
+    'agentic_answer',
+    'answer_question',
+    'build_graph',
+    'derive_search_terms',
+    'evaluate',
+    'graph_for',
+    'hybrid_search',
+    'index_project',
+    'lexical_search',
+    'reciprocal_rank_fusion',
+    'load_questions',
+    'save_questions',
+    'search_across_projects',
+    'search_project',
+    'suggest_followups'
+]
 
 # describition variables
 __author__ = 'Esteban Ponce de Leon'

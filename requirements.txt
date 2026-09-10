@@ -1,6 +1,0 @@
-openai==0.28
-pandas
-python-dotenv
-qdrant-client
-scipy
-tiktoken

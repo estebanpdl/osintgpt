@@ -1,96 +1,163 @@
 <div align="center">
 
-# **OSINT GPT**
-
-<br />
-
-`osintgpt` is a Python package for leveraging LLMs to analyze text data and perform tasks such as calculating text embeddings, searching for similar documents, and more. It is designed for use in open-source intelligence (OSINT) applications and research.
-
-<br />
+# OSINT GPT
 
 <img src="https://raw.githubusercontent.com/estebanpdl/osintgpt/main/images/osintgpt.png" alt="osintgpt osint gpt" width="33%" height="33%" />
 
-<br />
-<br />
-
 [![GitHub forks](https://img.shields.io/github/forks/estebanpdl/osintgpt.svg?style=social&label=Fork&maxAge=2592000)](https://GitHub.com/estebanpdl/osintgpt/network/)
 [![GitHub stars](https://img.shields.io/github/stars/estebanpdl/osintgpt?style=social)](https://github.com/estebanpdl/osintgpt/stargazers)
-[![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://github.com/estebanpdl/osintgpt/blob/main/LICENCE)
+[![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://github.com/estebanpdl/osintgpt/blob/main/LICENSE)
 [![Open Source](https://badges.frapsoft.com/os/v1/open-source.svg?v=103)](https://twitter.com/estebanpdl)
 [![Made-with-python](https://img.shields.io/badge/Made%20with-Python-1f425f.svg)](https://www.python.org/)
 [![Twitter estebanpdl](https://badgen.net/badge/icon/twitter?icon=twitter&label)](https://twitter.com/estebanpdl)
 
 </div>
 
-<hr />
-<br />
+`osintgpt` indexes documents an analyst already holds and answers questions
+from that material with citations. It is built for examining research
+collections without mixing projects or losing the path back to a source. Use
+it from the command line or as a Python library, with hosted or local models
+and SQLite, Qdrant, or Postgres storage.
+Embeddings support OpenAI, Gemini, Voyage, Ollama, and sentence-transformers;
+generation supports OpenAI, Gemini, Anthropic, and Ollama.
 
-## **Installation**
+## Install
 
-You can install the `osintgpt` package using pip:
+The core install includes the document readers and command-line interface:
 
 ```bash
 pip install osintgpt
 ```
 
-Given the recent changes and updates, it is highly recommended to upgrade to the latest version of the package by executing the following command
+Local embeddings are the one opt-in extra because they bring
+sentence-transformers and torch:
 
 ```bash
-pip install -U osintgpt
+pip install osintgpt[local]
 ```
 
-This command will update your existing installation of `osintgpt` to the most recent version available, ensuring you have access to the latest features and improvements.
+The current release is 0.3.0. See
+[osintgpt on PyPI](https://pypi.org/project/osintgpt/) for package metadata
+and release history.
 
-To access the package details and documentation on PyPI, please follow the link [osintgpt on PyPI](https://pypi.org/project/osintgpt/)
+## Quickstart
 
+By default, embeddings and answers use OpenAI. Set `OPENAI_API_KEY` and
+`OPENAI_GPT_MODEL` in your environment first, or configure the
+[fully local path](#keep-data-local).
 
-<hr />
-<br />
+```bash
+osintgpt project create "Research notes"
+osintgpt project use research-notes
+osintgpt add ./material
+osintgpt index
+osintgpt ask "Who did Alpha Corp fund?"
+```
 
-## 🚀 **Features**
+A real `ask` ends like this:
 
-The `osintgpt` Python package is designed to streamline the process of analyzing text data by leveraging OpenAI's GPT models. Here are some of the key features:
+```text
+Alpha Corp funded Beta Ltd in March. [1]
 
-- **Text Analysis**: Utilize OpenAI's GPT models to analyze text data, including calculating text embeddings and searching for similar documents.
+Sources
+• material/alpha.md
 
-- **Interactive Mode**: The package includes an interactive mode that allows users to communicate directly with the GPT model. The user can input a prompt and receive a response from the model, facilitating a more dynamic interaction.
+Ask next
+1. Who else did Alpha Corp fund?
+2. What happened after March?
+```
 
-- **Database Management**: The package integrates with SQLite database, enabling easy storage and retrieval of conversation data. The SQLDatabaseManager class creates tables, handles data insertion, and manages transactions.
+An unindexed project is also a valid state: `ask` explains that nothing was
+retrieved and does not call the generation model.
 
-Please note that the development of `osintgpt` is still in progress, and some features may still be refined or expanded.
+## How it searches
 
-<hr />
-<br />
+`ask` can draw from semantic similarity, exact text matches, and sourced graph
+relationships. By default the model surveys the project, chooses which tools
+to use, reads the relevant material, and then answers. Use `--trace` to see
+that work, or `--static` when you want the earlier one-pass retrieval behavior.
+Graph edges retain their source document and quoted evidence;
+`osintgpt graph verify` checks those quotes, while
+`osintgpt graph export graph.cypherl` writes CYPHERL for Memgraph or Neo4j
+(`.json` is also supported).
 
+## Canon
 
-## 💾 **Vector store**
+Every project has a `canon/` directory for plain Markdown synthesis. Pages in
+it are indexed automatically alongside primary material, and `[[wiki links]]`
+work in Obsidian. `osintgpt` does not yet populate those pages; today it
+provides the directory, indexing, and link structure.
 
-<h2>Qdrant</h2>
+## Keep data local
 
-The `Qdrant` class is an interface to Qdrant, a high-performance vector similarity search engine. It provides a variety of methods for connecting and interacting with a Qdrant server, such as creating, updating, and deleting collections, and managing vector embeddings along with their associated payloads.
+**Fully local means the `[local]` extra for embeddings,
+[Ollama](https://ollama.com) running on your machine for generation, and the
+default SQLite store; nothing leaves your machine at query time.** These are
+separate pieces: the Python extra installs sentence-transformers and torch,
+while Ollama is a separately installed local server and costs nothing from
+pip.
 
-<h3>Main Features:</h3>
+```bash
+osintgpt config set embedding_provider sentence-transformers
+osintgpt config set generation_provider ollama
+osintgpt config set generation_model MODEL_NAME
+osintgpt doctor
+```
 
-- **Connection Management**: The class allows you to establish and manage connections to a Qdrant server. The server can be accessed remotely or locally.
-- **Collection Management**: You can create, update, and delete collections in Qdrant. Each collection can contain multiple vectors.
-- **Vector and Payload Management**: The class provides methods to add, update, and search for vector embeddings in collections. Each vector can optionally have an associated payload. The payload represents data associated with the vector, such as metadata or additional features.
-- **High Efficiency**: With the ability to efficiently store and search embeddings, Qdrant can support high-dimensional data and large-scale databases.
+Replace `MODEL_NAME` with a model already available to Ollama. A model fetched
+on first use needs a network connection during setup; operation is local after
+that download. `doctor` runs offline by default and reports what would leave
+the machine, provider readiness, stored models, source coverage, and embedding
+model mismatches. Add `--check-providers` only when you want it to contact
+configured services.
 
-<h3>Setting Up Qdrant:</h3>
+## What it reads
 
-To use the Qdrant class, you will need access to a Qdrant server, either remotely or locally:
+The 29 readable extensions cover PDF, Word, Excel and CSV, JSON and JSONL,
+Markdown and plain text, HTML and XML, and common image formats when the
+embedding model supports them. A fallback converter handles formats such as
+PowerPoint and EPUB. Structured files need a content-field mapping when they
+are registered; scanned PDF pages need a transcriber to recover text.
 
-- **Remote Server**: Register for a remote server on [Qdrant Cloud](https://cloud.qdrant.io/).
-- **Local Server**: Set up a local server following the instructions on the [Qdrant Quick Start guide](https://qdrant.tech/documentation/quick_start/).
+## Use it as a library
 
+The [CLI quickstart](#quickstart) is the shortest route. The same project and
+retrieval APIs are available to Python callers:
 
-<hr />
-<br />
+```python
+from osintgpt import Project, Settings, search_project
+from osintgpt.llm import build_embedding_provider
 
+project = Project.load("/path/to/project")
+settings = project.settings_for(Settings.from_env(".env"))
+embedder = build_embedding_provider(
+    project.settings.embedding_provider, settings
+)
 
-## **Disclaimer**
+for hit in search_project(project, "What does the evidence say?", embedder):
+    print(hit.score, hit.chunk.citation)
+```
 
-The `osintgpt` tool is provided for research purposes and intended to assist users in analyzing data from open-source intelligence (OSINT) tools more efficiently. It relies on third-party services, such as the OpenAI API, various database engines, and other resources that may have associated costs. By using this tool, you acknowledge that you are responsible for understanding and managing any costs related to these services. The creators and maintainers of `osintgpt` are not liable for any expenses incurred or any misuse of the tool. Please use this tool responsibly and in compliance with all applicable laws and regulations.
+Configuration is passed into library calls; importing `osintgpt` does not read
+the environment or select a project behind the caller's back.
 
-<hr />
-<br />
+## Where projects live
+
+The default home is `~/.osintgpt`, with each project under
+`projects/<slug>/`. `project.toml` holds non-secret choices, `sources.toml`
+records registered locations and field mappings, and `store.sqlite` contains
+the default local vector store. Back up the project directory together with
+any registered material stored outside it; Qdrant and Postgres stores need
+their own backup.
+
+## Responsible use
+
+`osintgpt` analyzes material supplied by its operator. Use it only with data
+you may lawfully process, protect personal and sensitive information, verify
+answers against their cited passages, and understand any costs or data
+handling terms of the providers you configure. The maintainers are not liable
+for misuse or third-party service charges.
+
+## License
+
+Licensed under the [Apache License 2.0](LICENSE).

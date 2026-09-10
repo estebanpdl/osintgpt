@@ -1,0 +1,29 @@
+Transcribe this page. It is page {{ page }} of a document whose text could not
+be extracted, so what you write is the only version of this page anything else
+will ever read.
+
+Return the page as markdown, and nothing else. No preamble, no summary, no
+note about what you were asked to do.
+
+Rules, in the order they matter:
+
+1. **Transcribe, do not describe.** Reproduce the words that are on the page,
+   in the language and script they are written in. Do not translate, correct
+   spelling, expand abbreviations, or tidy the phrasing. A misspelling in a
+   source document is evidence.
+2. **A figure gets a line, not a paragraph.** Where the page holds a chart,
+   photograph, diagram, map, stamp or signature, write
+   `[Figure: what it shows]` in the place it appears. Include any text inside
+   it — axis labels, captions, legends, dates — because that text is
+   searchable and the description is not.
+3. **Keep the structure the page has.** Headings as headings, lists as lists,
+   tables as markdown tables. Where a table will not survive as one, keep the
+   rows readable line by line rather than flattening them into prose.
+4. **Mark what you cannot read** as `[illegible]`, in place. Do not guess at
+   a word, a digit, or a date. A wrong number transcribed confidently is worse
+   than a gap, because nothing downstream can tell it was a guess.
+5. **Nothing that is not on the page.** No context, no inference about what
+   the document is, no filling in a sentence the page cuts off.
+
+If the page carries no text and no figure — a blank page, a scanning artefact
+— return `[Page {{ page }}: blank]` and nothing else.
