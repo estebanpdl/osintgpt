@@ -18,7 +18,7 @@ import pytest
 from osintgpt import Project, index_project, search_project
 from osintgpt.canon import is_canon_ref, write_page
 from osintgpt.ingestion import Corpus, FieldMapping
-from osintgpt.llm.base import EmbeddingProvider
+from osintgpt.llm.base import EmbeddingProvider, EmbeddingPurpose
 from osintgpt.vector_store import SQLiteVectorStore
 
 MODEL = 'test-embedding'
@@ -34,10 +34,12 @@ class CountingEmbedder(EmbeddingProvider):
         self.model = model
         self.calls = 0
         self.texts = []
+        self.purposes = []
 
-    def embed(self, texts):
+    def embed(self, texts, *, purpose=EmbeddingPurpose.DOCUMENT):
         self.calls += 1
         self.texts.extend(texts)
+        self.purposes.append(purpose)
 
         return [self._vector(text) for text in texts]
 
@@ -353,6 +355,26 @@ class TestSearch:
         assert search_project(empty, 'anything', embedder) == []
 
 
+class TestRetrievalPair:
+    '''
+    Models that embed a question and the passage answering it differently are
+    only better when told which is which, and the two sides are told here.
+    '''
+    def test_indexing_embeds_documents(self, project, embedder):
+        index_project(project, embedder)
+
+        assert embedder.purposes
+        assert set(embedder.purposes) == {EmbeddingPurpose.DOCUMENT}
+
+    def test_searching_embeds_a_query(self, project, embedder):
+        index_project(project, embedder)
+        embedder.purposes.clear()
+
+        search_project(project, 'aardvarks', embedder)
+
+        assert embedder.purposes == [EmbeddingPurpose.QUERY]
+
+
 class TestFailures:
     def test_one_unreadable_document_does_not_stop_the_pass(
         self, project, embedder
@@ -454,7 +476,7 @@ class TestModelSwitch:
         index_project(project, embedder)
 
         class Failing(CountingEmbedder):
-            def embed(self, texts):
+            def embed(self, texts, *, purpose=EmbeddingPurpose.DOCUMENT):
                 raise RuntimeError('the provider refused')
 
         index_project(

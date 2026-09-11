@@ -20,7 +20,7 @@ from openai import OpenAI
 # type hints
 from typing import List, Optional
 
-from .base import EmbeddingProvider, GenerationProvider
+from .base import EmbeddingProvider, EmbeddingPurpose, GenerationProvider
 from .calling import ModelTurn, ToolCall
 from .usage import Usage, UsageRecorder
 
@@ -83,7 +83,15 @@ class OpenAICompatEmbedding(EmbeddingProvider):
         self.provider = provider
         self.recorder = recorder
 
-    def embed(self, texts: List[str]) -> List[List[float]]:
+    def embed(
+        self,
+        texts: List[str],
+        *,
+        purpose: EmbeddingPurpose = EmbeddingPurpose.DOCUMENT
+    ) -> List[List[float]]:
+        # Accepted and ignored: the OpenAI embeddings request has no field for
+        # it, and inventing one as an unknown parameter would be dropped by
+        # some endpoints and rejected by others.
         vectors: List[List[float]] = []
         for start in range(0, len(texts), self.batch_size):
             response = self.client.embeddings.create(

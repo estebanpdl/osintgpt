@@ -16,6 +16,9 @@ import pytest
 # import osintgpt config
 from osintgpt.config import DEFAULT_EMBEDDING_MODEL
 
+# import osintgpt llm
+from osintgpt.llm import EmbeddingPurpose
+
 # import osintgpt projects
 from osintgpt.projects import Project, ProjectSettings
 from osintgpt.projects.cross_project import (
@@ -34,7 +37,7 @@ SMALL = 'text-embedding-3-small'
 class Embedder:
     model = LARGE
 
-    def embed(self, texts):
+    def embed(self, texts, *, purpose=EmbeddingPurpose.DOCUMENT):
         return [[1.0, 0.0] for _ in texts]
 
 

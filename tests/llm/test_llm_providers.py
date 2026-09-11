@@ -90,18 +90,20 @@ class TestBaseUrl:
 
         assert base_url is None
 
-    @pytest.mark.parametrize('provider, expected', [
-        ('gemini', GEMINI_COMPAT_URL),
-        ('voyage', VOYAGE_COMPAT_URL)
-    ])
-    def test_compat_backends_carry_their_endpoint(
-        self, keyed, provider, expected
-    ):
+    def test_a_compat_backend_carries_its_endpoint(self, keyed):
         _, base_url, _ = connection_for(
-            provider, EMBEDDING_BACKENDS, 'embedding', keyed
+            'voyage', EMBEDDING_BACKENDS, 'embedding', keyed
         )
 
-        assert base_url == expected
+        assert base_url == VOYAGE_COMPAT_URL
+
+    def test_gemini_generation_stays_on_the_compat_endpoint(self, keyed):
+        '''Only embedding needs the native SDK; generation is unaffected.'''
+        _, base_url, _ = connection_for(
+            'gemini', GENERATION_BACKENDS, 'generation', keyed
+        )
+
+        assert base_url == GEMINI_COMPAT_URL
 
     def test_ollama_defaults_to_localhost(self):
         _, base_url, _ = connection_for(

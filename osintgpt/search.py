@@ -17,7 +17,11 @@ from contextlib import contextmanager
 from typing import Callable, Iterable, List, Optional, Sequence
 
 # import osintgpt llm
-from osintgpt.llm.base import EmbeddingProvider, GenerationProvider
+from osintgpt.llm.base import (
+    EmbeddingProvider,
+    EmbeddingPurpose,
+    GenerationProvider
+)
 
 # import osintgpt fusion
 from osintgpt.fusion import FusedResult, reciprocal_rank_fusion
@@ -62,7 +66,7 @@ def search_project(
     Returns:
         List[SearchResult]: Best first.
     '''
-    vector = embedder.embed([query])[0]
+    vector = embedder.embed([query], purpose=EmbeddingPurpose.QUERY)[0]
 
     with _store_for(project, store) as engine:
         return engine.search(
@@ -157,7 +161,7 @@ def search_across_projects(
     Returns:
         CrossProjectResults: Merged hits, plus what was skipped and why.
     '''
-    vector = embedder.embed([query])[0]
+    vector = embedder.embed([query], purpose=EmbeddingPurpose.QUERY)[0]
 
     def run(project: Project):
         with _store_for(project, None, store_factory) as engine:

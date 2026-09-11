@@ -71,6 +71,7 @@ class BackendSpec:
 
 OPENAI_COMPAT = 'openai-compat'
 ANTHROPIC = 'anthropic'
+GEMINI = 'gemini'
 SENTENCE_TRANSFORMERS = 'sentence-transformers'
 
 EMBEDDING_BACKENDS: Dict[str, BackendSpec] = {
@@ -78,7 +79,9 @@ EMBEDDING_BACKENDS: Dict[str, BackendSpec] = {
         OPENAI_COMPAT, 'openai_api_key',
         default_model=DEFAULT_EMBEDDING_MODEL, discovers_models=True
     ),
-    'gemini': BackendSpec(OPENAI_COMPAT, 'gemini_api_key', GEMINI_COMPAT_URL),
+    # Native SDK because the compatibility endpoint has no way to say what a
+    # vector is for, and Gemini's retrieval quality depends on being told.
+    'gemini': BackendSpec(GEMINI, 'gemini_api_key'),
     'voyage': BackendSpec(OPENAI_COMPAT, 'voyage_api_key', VOYAGE_COMPAT_URL),
     # Discovery matters most here: it reports the models actually pulled onto
     # this machine, which no static list could know.

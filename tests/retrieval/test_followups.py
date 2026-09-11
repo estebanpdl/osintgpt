@@ -24,7 +24,11 @@ from osintgpt.followups import (
     _parse
 )
 from osintgpt.ingestion import Corpus
-from osintgpt.llm.base import EmbeddingProvider, GenerationProvider
+from osintgpt.llm.base import (
+    EmbeddingProvider,
+    EmbeddingPurpose,
+    GenerationProvider
+)
 from osintgpt.projects import asked_questions, record_question
 from osintgpt.vector_store import SearchResult, StoredChunk
 
@@ -34,7 +38,7 @@ MODEL = 'test-embedding'
 class FlatEmbedder(EmbeddingProvider):
     model = MODEL
 
-    def embed(self, texts):
+    def embed(self, texts, *, purpose=EmbeddingPurpose.DOCUMENT):
         return [[1.0, 0.0] for _ in texts]
 
 

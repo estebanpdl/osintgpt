@@ -26,7 +26,7 @@ from osintgpt.evaluation import (
     save_questions
 )
 from osintgpt.ingestion import Corpus
-from osintgpt.llm.base import EmbeddingProvider
+from osintgpt.llm.base import EmbeddingProvider, EmbeddingPurpose
 
 
 class WordEmbedder(EmbeddingProvider):
@@ -41,7 +41,7 @@ class WordEmbedder(EmbeddingProvider):
         'infrastructure contamination'
     ).split()
 
-    def embed(self, texts):
+    def embed(self, texts, *, purpose=EmbeddingPurpose.DOCUMENT):
         return [self._vector(text) for text in texts]
 
     def _vector(self, text):

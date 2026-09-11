@@ -60,10 +60,10 @@ class TestDeclaredSupport:
         assert GENERATION_BACKENDS['anthropic'].discovers_models is True
 
     @pytest.mark.parametrize('provider', ['gemini', 'voyage'])
-    def test_unverified_endpoints_do_not_claim_it(self, provider):
+    def test_unverified_backends_do_not_claim_it(self, provider):
         '''
-        Claiming discovery and returning a 404 is worse than not offering it,
-        so a backend stays false until its endpoint is known to answer.
+        Claiming discovery and failing the call is worse than not offering it,
+        so a backend stays false until it is known to answer.
         '''
         assert EMBEDDING_BACKENDS[provider].discovers_models is False
 

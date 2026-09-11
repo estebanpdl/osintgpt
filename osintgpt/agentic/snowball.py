@@ -17,7 +17,7 @@ from dataclasses import dataclass, field
 from typing import List, Optional, Sequence
 
 # import osintgpt llm
-from osintgpt.llm.base import EmbeddingProvider
+from osintgpt.llm.base import EmbeddingProvider, EmbeddingPurpose
 
 # import osintgpt projects
 from osintgpt.projects import Project
@@ -144,7 +144,10 @@ def snowball(
 
 def _walk(project, query, embedder, engine, depth, threshold,
           score_against_initial, refs):
-    initial = embedder.embed([query])[0] if score_against_initial else None
+    initial = (
+        embedder.embed([query], purpose=EmbeddingPurpose.QUERY)[0]
+        if score_against_initial else None
+    )
 
     hops: List[Hop] = []
     seen = set()
@@ -192,7 +195,9 @@ def _drift(initial: Sequence[float], result: SearchResult,
     '''
     import math
 
-    vector = embedder.embed([result.text])[0]
+    vector = embedder.embed(
+        [result.text], purpose=EmbeddingPurpose.DOCUMENT
+    )[0]
     dot = sum(a * b for a, b in zip(initial, vector))
     norms = (
         math.sqrt(sum(a * a for a in initial))

@@ -21,7 +21,11 @@ from osintgpt import Project, agentic_answer, index_project
 from osintgpt.agentic import MAX_ROUNDS, TOOL_NAMES, TOOL_SPECS, run_tool
 from osintgpt.agentic.tools import ToolContext
 from osintgpt.ingestion import Corpus
-from osintgpt.llm.base import EmbeddingProvider, GenerationProvider
+from osintgpt.llm.base import (
+    EmbeddingProvider,
+    EmbeddingPurpose,
+    GenerationProvider
+)
 from osintgpt.llm.calling import ModelTurn, ToolCall, ToolCallingUnsupported
 
 MODEL = 'test-embedding'
@@ -31,7 +35,7 @@ class WordEmbedder(EmbeddingProvider):
     model = MODEL
     VOCABULARY = 'aardvark zebra quokka'.split()
 
-    def embed(self, texts):
+    def embed(self, texts, *, purpose=EmbeddingPurpose.DOCUMENT):
         return [self._vector(t) for t in texts]
 
     def _vector(self, text):

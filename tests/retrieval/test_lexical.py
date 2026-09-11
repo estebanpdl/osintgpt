@@ -24,7 +24,11 @@ from osintgpt.lexical import (
     _parse_terms,
     _usable
 )
-from osintgpt.llm.base import EmbeddingProvider, GenerationProvider
+from osintgpt.llm.base import (
+    EmbeddingProvider,
+    EmbeddingPurpose,
+    GenerationProvider
+)
 from osintgpt.vector_store import SQLiteVectorStore, StoredChunk
 
 MODEL = 'test-embedding'
@@ -35,7 +39,7 @@ class FlatEmbedder(EmbeddingProvider):
 
     model = MODEL
 
-    def embed(self, texts):
+    def embed(self, texts, *, purpose=EmbeddingPurpose.DOCUMENT):
         return [[1.0, 0.0] for _ in texts]
 
 

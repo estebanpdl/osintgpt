@@ -33,7 +33,7 @@ from osintgpt.agentic.support import _moment, _within_days
 from osintgpt.agentic.tools import FETCH_LINES
 from osintgpt.graph import Edge, build_graph, graph_for
 from osintgpt.ingestion import Corpus
-from osintgpt.llm.base import EmbeddingProvider
+from osintgpt.llm.base import EmbeddingProvider, EmbeddingPurpose
 from osintgpt.vector_store import SearchResult, StoredChunk
 
 MODEL = 'test-embedding'
@@ -43,7 +43,12 @@ class WordEmbedder(EmbeddingProvider):
     model = MODEL
     VOCABULARY = 'aardvark zebra quokka narwhal ibex'.split()
 
-    def embed(self, texts):
+    def __init__(self):
+        self.purposes = []
+
+    def embed(self, texts, *, purpose=EmbeddingPurpose.DOCUMENT):
+        self.purposes.append(purpose)
+
         return [self._vector(t) for t in texts]
 
     def _vector(self, text):
@@ -356,6 +361,19 @@ class TestSnowball:
         walk = snowball(project, 'aardvark', embedder, depth=3, threshold=0.0)
 
         assert all(h.drift is not None for h in walk.hops)
+
+    def test_the_question_is_a_query_and_the_passages_are_documents(
+        self, project, embedder
+    ):
+        '''
+        Drift compares a retrieved passage against the opening question, which
+        is the retrieval pairing and has to be embedded as one.
+        '''
+        embedder.purposes.clear()
+        snowball(project, 'aardvark', embedder, depth=2, threshold=0.0)
+
+        assert embedder.purposes[0] == EmbeddingPurpose.QUERY
+        assert EmbeddingPurpose.DOCUMENT in embedder.purposes
 
     def test_the_tool_returns_the_hops_and_the_reason(self, context):
         result = snowball_search(context, 'aardvark', depth=2, threshold=0.0)

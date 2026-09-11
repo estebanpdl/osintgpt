@@ -12,12 +12,25 @@
 
 # import submodules
 from abc import ABC, abstractmethod
+from enum import Enum
 
 # type hints
 from typing import List, Optional
 
 from .calling import Exchange, ModelTurn, ToolCallingUnsupported, ToolSpec
 from .usage import Usage, UsageRecorder
+
+
+# EmbeddingPurpose class
+class EmbeddingPurpose(Enum):
+    '''
+    Which side of a retrieval pair a vector is for. Some models embed a
+    question and the passage answering it differently; those that do not
+    ignore this.
+    '''
+    DOCUMENT = 'document'
+    QUERY = 'query'
+
 
 # EmbeddingProvider class
 class EmbeddingProvider(ABC):
@@ -61,7 +74,12 @@ class EmbeddingProvider(ABC):
             f'the {type(self).__name__} backend cannot list its models'
         )
 
-    def embed_images(self, images: List[bytes]) -> List[List[float]]:
+    def embed_images(
+        self,
+        images: List[bytes],
+        *,
+        purpose: EmbeddingPurpose = EmbeddingPurpose.DOCUMENT
+    ) -> List[List[float]]:
         '''
         Embed images into the same vector space as text.
 
@@ -71,6 +89,8 @@ class EmbeddingProvider(ABC):
 
         Args:
             images (List[bytes]): Image files as stored.
+            purpose (EmbeddingPurpose): Which side of a retrieval pair these \
+                vectors are for.
 
         Raises:
             NotImplementedError: If the configured model embeds text only.
@@ -84,12 +104,21 @@ class EmbeddingProvider(ABC):
         )
 
     @abstractmethod
-    def embed(self, texts: List[str]) -> List[List[float]]:
+    def embed(
+        self,
+        texts: List[str],
+        *,
+        purpose: EmbeddingPurpose = EmbeddingPurpose.DOCUMENT
+    ) -> List[List[float]]:
         '''
         Embed a batch of texts.
 
         Args:
             texts (List[str]): Texts to embed.
+            purpose (EmbeddingPurpose): Which side of a retrieval pair these \
+                vectors are for. Defaulting to DOCUMENT keeps a caller that \
+                passes nothing embedding both sides alike, which is what \
+                every model without the distinction does anyway.
 
         Returns:
             List[List[float]]: One vector per input, in the same order.

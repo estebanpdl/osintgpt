@@ -30,7 +30,9 @@ examples/data/sql_database.db
 
 # dev & test folders
 drafts/
+dev-tasks/
 gpt-results/
+
 
 # Distribution / packaging
 .Python

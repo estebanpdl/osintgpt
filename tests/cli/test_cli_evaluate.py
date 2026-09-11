@@ -8,7 +8,7 @@ from typer.testing import CliRunner
 from osintgpt.cli import app
 from osintgpt.cli import evaluate as cli_evaluate
 from osintgpt.evaluation import Question, save_questions
-from osintgpt.llm import Usage
+from osintgpt.llm import EmbeddingPurpose, Usage
 from osintgpt.projects import Registry
 from osintgpt.vector_store import SQLiteVectorStore, StoredChunk
 
@@ -19,7 +19,7 @@ class Embedder:
     def __init__(self, recorder=None):
         self.recorder = recorder
 
-    def embed(self, texts):
+    def embed(self, texts, *, purpose=EmbeddingPurpose.DOCUMENT):
         if self.recorder is not None:
             self.recorder.record(Usage(
                 'stub', self.model, input_tokens=len(texts)

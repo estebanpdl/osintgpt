@@ -82,7 +82,8 @@ class TestMetadata:
         }
 
         assert {
-            'openai', 'python-dotenv', 'rich', 'tiktoken', 'typer'
+            'google-genai', 'openai', 'python-dotenv', 'rich', 'tiktoken',
+            'typer'
         } <= names
 
     def test_installs_the_console_script(self, pyproject):

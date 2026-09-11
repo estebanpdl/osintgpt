@@ -39,6 +39,7 @@ classifiers = [
 # which is twenty times the size of everything else combined.
 dependencies = [
     "anthropic>=0.40,<2",
+    "google-genai>=2,<3",
     "markitdown[docx,pdf,pptx,xlsx]>=0.1,<1",
     "openai>=1.0,<3",
     "openpyxl",

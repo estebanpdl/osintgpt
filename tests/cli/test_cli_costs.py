@@ -9,7 +9,7 @@ from osintgpt.cli import app
 from osintgpt.cli import corpus as cli_corpus
 from osintgpt.cli import retrieval as cli_retrieval
 from osintgpt.ingestion import Corpus
-from osintgpt.llm import Usage
+from osintgpt.llm import EmbeddingPurpose, Usage
 from osintgpt.projects import Registry
 from osintgpt.vector_store import SQLiteVectorStore, StoredChunk
 
@@ -25,7 +25,7 @@ class RecordingEmbedder:
         self.counted = counted
         self.tokens = tokens
 
-    def embed(self, texts):
+    def embed(self, texts, *, purpose=EmbeddingPurpose.DOCUMENT):
         self.recorder.record(Usage(
             'stub', self.model, input_tokens=self.tokens,
             billable=self.billable, counted=self.counted

@@ -23,7 +23,11 @@ from osintgpt.answering import (
     build_prompt
 )
 from osintgpt.ingestion import Corpus
-from osintgpt.llm.base import EmbeddingProvider, GenerationProvider
+from osintgpt.llm.base import (
+    EmbeddingProvider,
+    EmbeddingPurpose,
+    GenerationProvider
+)
 from osintgpt.vector_store import SearchResult, StoredChunk
 
 MODEL = 'test-embedding'
@@ -35,7 +39,7 @@ class WordEmbedder(EmbeddingProvider):
     model = MODEL
     VOCABULARY = 'aardvark zebra quokka enforcement narwhal'.split()
 
-    def embed(self, texts):
+    def embed(self, texts, *, purpose=EmbeddingPurpose.DOCUMENT):
         return [self._vector(t) for t in texts]
 
     def _vector(self, text):

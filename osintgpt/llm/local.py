@@ -13,7 +13,7 @@
 # type hints
 from typing import List, Optional
 
-from .base import EmbeddingProvider
+from .base import EmbeddingProvider, EmbeddingPurpose
 from .usage import Usage, UsageRecorder
 
 # Small, fast, and the model most people start from. A local backend needs a
@@ -79,7 +79,12 @@ class SentenceTransformerEmbedding(EmbeddingProvider):
 
         return bool(modalities) and 'image' in modalities
 
-    def embed_images(self, images: List[bytes]) -> List[List[float]]:
+    def embed_images(
+        self,
+        images: List[bytes],
+        *,
+        purpose: EmbeddingPurpose = EmbeddingPurpose.DOCUMENT
+    ) -> List[List[float]]:
         if not images:
             return []
 
@@ -116,7 +121,12 @@ class SentenceTransformerEmbedding(EmbeddingProvider):
             for vector in vectors
         ]
 
-    def embed(self, texts: List[str]) -> List[List[float]]:
+    def embed(
+        self,
+        texts: List[str],
+        *,
+        purpose: EmbeddingPurpose = EmbeddingPurpose.DOCUMENT
+    ) -> List[List[float]]:
         if not texts:
             return []
 

@@ -25,7 +25,7 @@ from osintgpt.ingestion import (
     marker_for
 )
 from osintgpt.ingestion.preview import dry_run
-from osintgpt.llm.base import EmbeddingProvider
+from osintgpt.llm.base import EmbeddingProvider, EmbeddingPurpose
 from osintgpt.vector_store import SQLiteVectorStore
 
 MODEL = 'text-only-model'
@@ -44,7 +44,7 @@ class TextOnlyEmbedder(EmbeddingProvider):
     model = MODEL
     supports_images = False
 
-    def embed(self, texts):
+    def embed(self, texts, *, purpose=EmbeddingPurpose.DOCUMENT):
         return [unit(1.0, float(len(text) % 7)) for text in texts]
 
 
@@ -56,12 +56,14 @@ class MultimodalEmbedder(EmbeddingProvider):
 
     def __init__(self):
         self.images_seen = []
+        self.image_purposes = []
 
-    def embed(self, texts):
+    def embed(self, texts, *, purpose=EmbeddingPurpose.DOCUMENT):
         return [unit(1.0, float(len(text) % 7)) for text in texts]
 
-    def embed_images(self, images):
+    def embed_images(self, images, *, purpose=EmbeddingPurpose.DOCUMENT):
         self.images_seen.extend(images)
+        self.image_purposes.append(purpose)
 
         return [unit(float(len(data) % 5), 1.0) for data in images]
 
@@ -231,6 +233,12 @@ class TestWithAMultimodalModel:
         index_project(project, embedder)
 
         assert embedder.images_seen[0].startswith(b'\x89PNG')
+
+    def test_an_indexed_image_is_embedded_as_a_document(self, project):
+        embedder = MultimodalEmbedder()
+        index_project(project, embedder)
+
+        assert embedder.image_purposes == [EmbeddingPurpose.DOCUMENT]
 
     def test_it_switches_on_the_model_not_the_file(self, project):
         '''

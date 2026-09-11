@@ -8,6 +8,7 @@ from typer.testing import CliRunner
 from osintgpt.cli import app
 from osintgpt.cli import retrieval as cli_retrieval
 from osintgpt.config import ENV_VARS
+from osintgpt.llm import EmbeddingPurpose
 from osintgpt.projects import Registry
 from osintgpt.vector_store import SQLiteVectorStore, StoredChunk
 
@@ -15,7 +16,7 @@ from osintgpt.vector_store import SQLiteVectorStore, StoredChunk
 class Embedder:
     model = 'test-model'
 
-    def embed(self, texts):
+    def embed(self, texts, *, purpose=EmbeddingPurpose.DOCUMENT):
         return [[1.0, 0.0] for _ in texts]
 
 

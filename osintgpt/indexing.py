@@ -33,7 +33,7 @@ from osintgpt.ingestion import (
 from osintgpt.ingestion.images import NO_IMAGE_SUPPORT
 
 # import osintgpt llm
-from osintgpt.llm.base import EmbeddingProvider
+from osintgpt.llm.base import EmbeddingProvider, EmbeddingPurpose
 from osintgpt.llm.usage import CostLimitReached
 
 # import osintgpt projects
@@ -264,7 +264,9 @@ def _index_document(
         # text is a marker rather than a caption, because nothing was
         # extracted and inventing a description would put words in the index
         # that no model produced.
-        vector = embedder.embed_images([read_image(path)])[0]
+        vector = embedder.embed_images(
+            [read_image(path)], purpose=EmbeddingPurpose.DOCUMENT
+        )[0]
 
         return store.upsert(
             ref,
@@ -308,7 +310,11 @@ def _index_document(
 
         return 0
 
-    return store.upsert(ref, chunks, embedder.embed(texts))
+    return store.upsert(
+        ref,
+        chunks,
+        embedder.embed(texts, purpose=EmbeddingPurpose.DOCUMENT)
+    )
 
 
 def _ref_for(path: Path, root: Path) -> str:

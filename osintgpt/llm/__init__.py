@@ -17,7 +17,7 @@ from typing import Optional
 from osintgpt.config import Settings
 
 from .anthropic_native import AnthropicGeneration
-from .base import EmbeddingProvider, GenerationProvider
+from .base import EmbeddingProvider, EmbeddingPurpose, GenerationProvider
 from .calling import (
     Exchange,
     ModelTurn,
@@ -26,6 +26,7 @@ from .calling import (
     ToolSpec,
     tool_spec
 )
+from .gemini import GeminiEmbedding
 from .local import SentenceTransformerEmbedding
 from .locality import LocalityReport, ProviderLocality, audit_locality
 from .usage import Usage, UsageRecorder
@@ -33,6 +34,7 @@ from .openai_compat import OpenAICompatEmbedding, OpenAICompatGeneration
 from .registry import (
     ANTHROPIC,
     EMBEDDING_BACKENDS,
+    GEMINI,
     GENERATION_BACKENDS,
     BackendSpec,
     OPENAI_COMPAT,
@@ -48,6 +50,7 @@ __all__ = [
     'audit_locality',
     'EMBEDDING_BACKENDS',
     'EmbeddingProvider',
+    'EmbeddingPurpose',
     'GENERATION_BACKENDS',
     'GenerationProvider',
     'Usage',
@@ -93,6 +96,11 @@ def build_embedding_provider(
 
     if spec.kind == SENTENCE_TRANSFORMERS:
         return SentenceTransformerEmbedding(model=model, recorder=recorder)
+
+    if spec.kind == GEMINI:
+        return GeminiEmbedding(
+            model=model, api_key=api_key, recorder=recorder
+        )
 
     return OpenAICompatEmbedding(
         model=model, api_key=api_key, base_url=base_url,
