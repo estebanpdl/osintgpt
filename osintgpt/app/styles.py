@@ -371,18 +371,80 @@ hr {
 }
 
 /* The search trace is machinery, so it reads like machinery: monospace,
-   recessed, and tuned down so the prose answer stays the loudest thing. */
-[data-testid="stText"] pre,
-.stText pre {
+   recessed, and tuned down so the prose answer stays the loudest thing.
+   Written as one block per round rather than one element per line, because
+   Streamlit puts a paragraph gap between elements and that turned a dense
+   record into a column of floating sentences. */
+.trace-round {
     color: var(--text-secondary);
+    font-size: 0.7rem;
+    font-weight: 600;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    margin: 0.9rem 0 0.45rem;
+}
+
+.trace-round:first-child {
+    margin-top: 0;
+}
+
+.trace-call {
     background: rgba(0, 0, 0, 0.25);
     border: 1px solid var(--border-faint);
     border-radius: 10px;
-    padding: 0.7rem 0.9rem;
+    padding: 0.45rem 0.75rem;
+    margin-bottom: 0.3rem;
+}
+
+/* Tool, outcome and elapsed time on one row: the three things being compared
+   across calls line up, and the arguments drop beneath rather than pushing
+   them out of alignment. */
+.trace-head {
+    display: flex;
+    align-items: baseline;
+    gap: 0.65rem;
+}
+
+.trace-tool {
     font-family: ui-monospace, 'Cascadia Code', 'Consolas', monospace;
-    font-size: 0.8rem;
-    line-height: 1.55;
-    white-space: pre-wrap;
+    font-size: 0.82rem;
+    font-weight: 600;
+    color: var(--accent-secondary);
+}
+
+.trace-count {
+    font-size: 0.76rem;
+    color: var(--text-bright);
+}
+
+.trace-count.trace-failed {
+    color: var(--status-problem);
+}
+
+.trace-time {
+    margin-left: auto;
+    font-size: 0.72rem;
+    color: var(--text-secondary);
+    font-variant-numeric: tabular-nums;
+}
+
+.trace-args {
+    margin-top: 0.22rem;
+    font-family: ui-monospace, 'Cascadia Code', 'Consolas', monospace;
+    font-size: 0.74rem;
+    line-height: 1.5;
+    color: var(--text-secondary);
+    overflow-wrap: anywhere;
+}
+
+/* The model's own words, quoted rather than boxed — they are prose, and the
+   calls around them are not. */
+[data-testid="stExpander"] blockquote {
+    border-left: 2px solid var(--border-soft);
+    margin: 0.1rem 0 0.55rem;
+    padding: 0 0 0 0.85rem;
+    color: var(--text-secondary);
+    font-size: 0.85rem;
 }
 
 [data-testid="stChatMessage"] {

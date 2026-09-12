@@ -145,7 +145,6 @@ def agentic_answer(
             return _static(project, question, embedder, generator, trace,
                            store, f'tool calling failed: {error}')
 
-        trace.say(turn.text)
         if on_round:
             on_round(round_number, turn)
 
@@ -155,6 +154,11 @@ def agentic_answer(
                 project, generator, question, turn.text.strip(), trace,
                 sources, gathered
             )
+
+        # Recorded only once the turn is known to be working rather than
+        # answering: the answering turn's text *is* the answer, and narrating
+        # it would print the whole answer a second time inside the trace.
+        trace.say(round_number, turn.text)
 
         results = _run_calls(
             context, turn, trace, round_number, sources, gathered

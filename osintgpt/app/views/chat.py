@@ -125,15 +125,84 @@ def _sources(st, answer) -> None:
 
 
 def _trace(st, answer) -> None:
-    lines = answer.trace.lines()
-    if not lines:
+    trace = answer.trace
+    if not (trace.entries or trace.narration):
         return
 
     with st.expander('How I searched'):
-        for line in lines:
-            st.text(line)
-        for note in answer.trace.reading:
+        for number in trace.round_numbers:
+            said = trace.said_in(number)
+            calls = _calls(trace.calls_in(number))
+
+            # Markdown inside raw HTML is not parsed again, so the model's
+            # words cannot share a block with the calls. A round that spoke
+            # pays for two more elements; one that did not stays a single
+            # block, which is most of them.
+            if said:
+                st.markdown(_round(number), unsafe_allow_html=True)
+                for line in said:
+                    st.markdown(_quoted(line.text))
+                st.markdown(calls, unsafe_allow_html=True)
+            else:
+                st.markdown(_round(number) + calls, unsafe_allow_html=True)
+
+        for note in trace.reading:
             st.caption(note)
+
+
+def _round(number: int) -> str:
+    return f'<div class="trace-round">Round {number}</div>'
+
+
+def _calls(entries) -> str:
+    '''
+    One row per call: what ran, what it returned, and how long it took.
+
+    Args:
+        entries (List[TraceEntry]): The round's calls, in order.
+
+    Returns:
+        str: The rows as HTML.
+    '''
+    rows = []
+
+    for entry in entries:
+        failed = '' if entry.ok else ' trace-failed'
+        outcome = entry.counted if entry.ok else entry.error
+        arguments = entry.arguments_line
+
+        rows.append(
+            '<div class="trace-call">'
+            '<div class="trace-head">'
+            f'<span class="trace-tool">{escape(entry.tool)}</span>'
+            f'<span class="trace-count{failed}">{escape(outcome)}</span>'
+            f'<span class="trace-time">{entry.seconds:.2f}s</span>'
+            '</div>'
+            + (
+                f'<div class="trace-args">{escape(arguments)}</div>'
+                if arguments else ''
+            )
+            + '</div>'
+        )
+
+    return ''.join(rows)
+
+
+def _quoted(text: str) -> str:
+    '''
+    The model's words as a blockquote, so they read as something said rather
+    than as another line of machinery. Blank lines keep the quote unbroken.
+
+    Args:
+        text (str): What the model said, in its own markdown.
+
+    Returns:
+        str: The same text, every line quoted.
+    '''
+    return '\n'.join(
+        f'> {line}' if line.strip() else '>'
+        for line in text.splitlines()
+    )
 
 
 def _followups(st, answer, state) -> None:

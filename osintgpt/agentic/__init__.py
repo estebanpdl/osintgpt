@@ -5,7 +5,7 @@ from .loop import MAX_ROUNDS, AgenticAnswer, agentic_answer
 from .registry import TOOL_NAMES, TOOL_SPECS, run_tool
 
 # what a run did
-from .trace import Trace, TraceEntry
+from .trace import Narration, Trace, TraceEntry
 
 # the tools a model may call
 from .tools import (

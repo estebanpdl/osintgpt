@@ -266,12 +266,16 @@ def _agentic_payload(answer) -> Dict[str, object]:
                     'tool': entry.tool,
                     'arguments': entry.arguments,
                     'results': entry.count,
+                    'unit': entry.unit,
                     'seconds': round(entry.seconds, 3),
                     'error': entry.error
                 }
                 for entry in answer.trace.entries
             ],
-            'narration': answer.trace.narration,
+            'narration': [
+                {'round': said.round, 'text': said.text}
+                for said in answer.trace.narration
+            ],
             'reading': answer.trace.reading
         }
     }

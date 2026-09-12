@@ -322,7 +322,62 @@ class TestTheTrace:
 
         answer = agentic_answer(project, 'q', embedder, model)
 
-        assert 'Let me survey first.' in answer.trace.narration
+        assert [n.text for n in answer.trace.narration] == [
+            'Let me survey first.'
+        ]
+        assert answer.trace.narration[0].round == 1
+
+    def test_the_answer_is_not_repeated_as_narration(
+        self, project, embedder
+    ):
+        '''
+        The answering turn's text is the answer. Narrating it too prints the
+        whole answer a second time inside the trace, under "How I searched".
+        '''
+        model = ScriptedModel(
+            calls(('list_documents', {})),
+            ModelTurn(text='The corpus says aardvarks.')
+        )
+
+        answer = agentic_answer(project, 'q', embedder, model)
+
+        assert answer.text == 'The corpus says aardvarks.'
+        assert answer.trace.narration == []
+
+    def test_narration_leads_the_calls_it_introduced(
+        self, project, embedder
+    ):
+        '''
+        A turn carries its words and its calls together, so what the model
+        said belongs above them, in its own round.
+        '''
+        model = ScriptedModel(
+            ModelTurn(
+                text='Let me survey first.',
+                calls=[ToolCall(id='c0', name='list_documents', arguments={})]
+            ),
+            ModelTurn(text='done')
+        )
+
+        lines = agentic_answer(project, 'q', embedder, model).trace.lines()
+
+        assert lines[0] == 'round 1'
+        assert lines[1] == '  said: Let me survey first.'
+        assert lines[2].startswith('  list_documents(')
+
+    def test_a_ref_is_shown_by_where_it_ends(self, project, embedder):
+        '''
+        Every ref in a project shares its leading path, so truncating from the
+        right identifies nothing.
+        '''
+        model = ScriptedModel(
+            calls(('fetch_source', {'ref': 'material/alpha.md'})),
+            ModelTurn(text='done')
+        )
+
+        answer = agentic_answer(project, 'q', embedder, model)
+
+        assert "ref='material/alpha.md'" in answer.trace.entries[0].label
 
     def test_a_failing_call_is_recorded_not_raised(self, project, embedder):
         model = ScriptedModel(

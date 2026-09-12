@@ -12,9 +12,10 @@
 
 # import submodules
 from dataclasses import dataclass, field
+from pathlib import PurePosixPath
 
 # type hints
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 
 # TraceEntry class
@@ -49,19 +50,41 @@ class TraceEntry:
         return f'{self.count} {unit}' + ('' if self.count == 1 else 's')
 
     @property
+    def arguments_line(self) -> str:
+        '''
+        Returns:
+            str: The arguments the call was made with, one line, empty when \
+                it took none. Shared with the app so a trace on screen and a \
+                trace in a terminal say the same thing.
+        '''
+        return ', '.join(
+            _argument(key, value) for key, value in self.arguments.items()
+            if value not in (None, '', [], {})
+        )
+
+    @property
     def label(self) -> str:
         '''
         Returns:
             str: The call in one line, argument values included — a trace \
                 that says only which tool ran cannot be read against another.
         '''
-        shown = ', '.join(
-            f'{key}={_short(value)}' for key, value in self.arguments.items()
-            if value not in (None, '', [], {})
-        )
         outcome = f'error: {self.error}' if self.error else self.counted
 
-        return f'{self.tool}({shown}) — {outcome}, {self.seconds:.2f}s'
+        return (
+            f'{self.tool}({self.arguments_line}) — {outcome}, '
+            f'{self.seconds:.2f}s'
+        )
+
+
+# Narration class
+@dataclass(frozen=True)
+class Narration:
+    '''
+    Something the model said on its way to an answer, and when it said it.
+    '''
+    round: int
+    text: str
 
 
 # Trace class
@@ -71,9 +94,11 @@ class Trace:
     Everything a run did, in order.
     '''
     entries: List[TraceEntry] = field(default_factory=list)
-    # What the model said between rounds. Its reasoning is what makes a trace
-    # explain a bad answer rather than merely display one.
-    narration: List[str] = field(default_factory=list)
+    # What the model said on its way to the answer. Its reasoning is what
+    # makes a trace explain a bad answer rather than merely display one.
+    # Carries the round it belongs to, because narration read apart from the
+    # calls it introduced explains nothing.
+    narration: List[Narration] = field(default_factory=list)
     # Set when the tool loop could not run and the static pipeline answered.
     degraded: str = ''
 
@@ -95,10 +120,45 @@ class Trace:
 
         return entry
 
-    def say(self, text: str) -> None:
+    def say(self, round_number: int, text: str) -> None:
         cleaned = (text or '').strip()
         if cleaned:
-            self.narration.append(cleaned)
+            self.narration.append(
+                Narration(round=round_number, text=cleaned)
+            )
+
+    # every round that produced something, in order
+    @property
+    def round_numbers(self) -> List[int]:
+        '''
+        Returns:
+            List[int]: Rounds that called a tool or spoke, ascending. A round \
+                can do either without the other.
+        '''
+        numbers = {e.round for e in self.entries}
+        numbers |= {n.round for n in self.narration}
+
+        return sorted(numbers)
+
+    def calls_in(self, round_number: int) -> List[TraceEntry]:
+        '''
+        Args:
+            round_number (int): The round.
+
+        Returns:
+            List[TraceEntry]: Its calls, in the order they ran.
+        '''
+        return [e for e in self.entries if e.round == round_number]
+
+    def said_in(self, round_number: int) -> List[Narration]:
+        '''
+        Args:
+            round_number (int): The round.
+
+        Returns:
+            List[Narration]: What the model said that round.
+        '''
+        return [n for n in self.narration if n.round == round_number]
 
     @property
     def rounds(self) -> int:
@@ -181,18 +241,33 @@ class Trace:
                 other provider, because nothing here is provider-shaped.
         '''
         out: List[str] = []
-        current: Optional[int] = None
 
-        for entry in self.entries:
-            if entry.round != current:
-                current = entry.round
-                out.append(f'round {current}')
-            out.append(f'  {entry.label}')
-
-        for said in self.narration:
-            out.append(f'  said: {said}')
+        for number in self.round_numbers:
+            out.append(f'round {number}')
+            # A turn carries its words and its calls together, so what the
+            # model said introduces the calls rather than reporting on them.
+            for said in self.said_in(number):
+                out.append(f'  said: {said.text}')
+            for entry in self.calls_in(number):
+                out.append(f'  {entry.label}')
 
         return out
+
+
+def _argument(key: str, value: Any, width: int = 48) -> str:
+    '''
+    One argument as `key=value`, with a ref shown by where it ends.
+
+    A ref is a path, and one long enough to need truncating loses its filename
+    to it — leaving the drive and the case folder, which every ref in a
+    project shares. The last two segments identify the document instead.
+    '''
+    if key == 'ref' and isinstance(value, str):
+        parts = PurePosixPath(value.replace('\\', '/')).parts
+        if len(parts) > 2:
+            value = '…/' + '/'.join(parts[-2:])
+
+    return f'{key}={_short(value, width)}'
 
 
 def _short(value: Any, width: int = 48) -> str:
