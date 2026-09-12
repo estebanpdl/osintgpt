@@ -396,6 +396,40 @@ hr {
     margin-bottom: 0.3rem;
 }
 
+/* A call that touched documents opens onto them; one that touched none is
+   the same box without the affordance. */
+details.trace-call > summary {
+    display: block;
+    cursor: pointer;
+    list-style: none;
+}
+
+details.trace-call > summary::-webkit-details-marker {
+    display: none;
+}
+
+details.trace-call:hover {
+    border-color: var(--border-soft);
+}
+
+.trace-head::before {
+    content: '▸';
+    color: var(--text-secondary);
+    font-size: 0.62rem;
+    line-height: 1;
+}
+
+details.trace-call[open] > summary .trace-head::before {
+    content: '▾';
+}
+
+/* The flat row keeps the marker's width so tool names stay on one left edge
+   whether or not a call can be opened. */
+.trace-flat .trace-head::before {
+    content: '';
+    width: 0.62rem;
+}
+
 /* Tool, outcome and elapsed time on one row: the three things being compared
    across calls line up, and the arguments drop beneath rather than pushing
    them out of alignment. */
@@ -430,11 +464,46 @@ hr {
 
 .trace-args {
     margin-top: 0.22rem;
+    padding-left: 1.27rem;
     font-family: ui-monospace, 'Cascadia Code', 'Consolas', monospace;
     font-size: 0.74rem;
     line-height: 1.5;
     color: var(--text-secondary);
     overflow-wrap: anywhere;
+}
+
+/* What the call actually read. The refs are full and selectable, because
+   this is the half of the trace an analyst checks an answer against. */
+.trace-detail {
+    margin-top: 0.5rem;
+    padding: 0.5rem 0 0.15rem 1.27rem;
+    border-top: 1px solid var(--border-faint);
+}
+
+.trace-docs-label {
+    color: var(--text-secondary);
+    font-size: 0.68rem;
+    font-weight: 600;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    margin-bottom: 0.35rem;
+}
+
+.trace-doc {
+    display: block;
+    font-family: ui-monospace, 'Cascadia Code', 'Consolas', monospace;
+    font-size: 0.74rem;
+    line-height: 1.6;
+    color: var(--text-bright);
+    overflow-wrap: anywhere;
+    user-select: text;
+}
+
+.trace-more {
+    display: block;
+    margin-top: 0.25rem;
+    font-size: 0.72rem;
+    color: var(--text-secondary);
 }
 
 /* The model's own words, quoted rather than boxed — they are prose, and the
@@ -566,13 +635,34 @@ def escape(value) -> str:
     Returns:
         str: The same text, rendered literally.
     '''
-    text = html.escape(str(value), quote=False)
+    text = escape_html(value)
     # Backslash first: it is the escape character, so escaping it after the
     # others would double the backslashes they just added.
     for character in MARKDOWN_SPECIAL:
         text = text.replace(character, f'\\{character}')
 
     return text
+
+
+# text that goes inside a block of raw HTML
+def escape_html(value) -> str:
+    '''
+    Make arbitrary text safe inside an HTML block written with
+    `unsafe_allow_html`.
+
+    Distinct from `escape`, and the distinction is the renderer's: a string
+    that opens with a block-level tag is raw HTML, and markdown is not parsed
+    inside it. The backslashes `escape` adds are never consumed there, so they
+    reach the screen — `exact\\_search`, `terms=\\[...\\]`. Inline HTML inside
+    a paragraph is the other case, and still needs `escape`.
+
+    Args:
+        value: Text to escape.
+
+    Returns:
+        str: The same text, safe as HTML content.
+    '''
+    return html.escape(str(value), quote=False)
 
 
 # a coloured badge

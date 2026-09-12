@@ -365,6 +365,66 @@ class TestTheTrace:
         assert lines[1] == '  said: Let me survey first.'
         assert lines[2].startswith('  list_documents(')
 
+    def test_a_call_records_the_documents_it_touched(
+        self, project, embedder
+    ):
+        '''
+        A trace that says a search found passages but not which documents
+        they came from records that retrieval happened, not what it read.
+        '''
+        model = ScriptedModel(
+            calls(('semantic_search', {'query': 'aardvark'})),
+            ModelTurn(text='done')
+        )
+
+        answer = agentic_answer(project, 'q', embedder, model)
+
+        assert answer.trace.entries[0].refs == ('material/alpha.md',)
+
+    def test_a_listing_of_bare_refs_is_recorded_too(
+        self, project, embedder
+    ):
+        '''
+        list_documents returns refs as plain strings rather than as evidence
+        carrying a ref, so an extractor written for citations skips it — and
+        "which documents did it look at" is exactly what an audit asks.
+        '''
+        model = ScriptedModel(
+            calls(('list_documents', {})),
+            ModelTurn(text='done')
+        )
+
+        answer = agentic_answer(project, 'q', embedder, model)
+
+        assert answer.trace.entries[0].refs == ('material/alpha.md',)
+
+    def test_a_listing_is_not_mistaken_for_a_citation(
+        self, project, embedder
+    ):
+        '''
+        What a call touched and what an answer cites are different questions.
+        A directory listing answers the first and must not answer the second.
+        '''
+        model = ScriptedModel(
+            calls(('list_documents', {})),
+            ModelTurn(text='done')
+        )
+
+        answer = agentic_answer(project, 'q', embedder, model)
+
+        assert answer.trace.entries[0].refs
+        assert answer.sources == []
+
+    def test_a_failed_call_records_no_documents(self, project, embedder):
+        model = ScriptedModel(
+            calls(('fetch_source', {'ref': '../escape.md'})),
+            ModelTurn(text='done')
+        )
+
+        answer = agentic_answer(project, 'q', embedder, model)
+
+        assert answer.trace.entries[0].refs == ()
+
     def test_a_ref_is_shown_by_where_it_ends(self, project, embedder):
         '''
         Every ref in a project shares its leading path, so truncating from the

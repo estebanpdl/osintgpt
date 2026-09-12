@@ -15,7 +15,7 @@ from dataclasses import dataclass, field
 from pathlib import PurePosixPath
 
 # type hints
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Sequence, Tuple
 
 
 # TraceEntry class
@@ -32,6 +32,10 @@ class TraceEntry:
     # and documents are not comparable quantities, and a trace that calls
     # them all "results" reads as though they were.
     unit: str = 'result'
+    # Documents this call touched, in the order it returned them. A trace
+    # that says a search found twenty passages but not which documents they
+    # came from records that retrieval happened, not what it read.
+    refs: Tuple[str, ...] = ()
     seconds: float = 0.0
     error: str = ''
 
@@ -110,11 +114,13 @@ class Trace:
         count: int = 0,
         seconds: float = 0.0,
         error: str = '',
-        unit: str = 'result'
+        unit: str = 'result',
+        refs: Sequence[str] = ()
     ) -> TraceEntry:
         entry = TraceEntry(
             round=round_number, tool=tool, arguments=dict(arguments),
-            count=count, unit=unit, seconds=seconds, error=error
+            count=count, unit=unit, refs=tuple(refs), seconds=seconds,
+            error=error
         )
         self.entries.append(entry)
 

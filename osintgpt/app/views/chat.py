@@ -17,10 +17,14 @@ from typing import Any, Dict, List
 from osintgpt import agentic_answer
 
 from ..session import queue_question, remember, take_pending
-from ..styles import badge, escape
+from ..styles import badge, escape, escape_html
 
 # Enough of a passage to judge it without the chip becoming the page.
 PREVIEW_CHARS = 900
+
+# Documents listed under one call before the rest are counted instead. A
+# survey tool can return hundreds, and a list that long stops being read.
+MAX_TRACE_DOCUMENTS = 40
 
 
 # the passages an answer actually read
@@ -156,7 +160,12 @@ def _round(number: int) -> str:
 
 def _calls(entries) -> str:
     '''
-    One row per call: what ran, what it returned, and how long it took.
+    One row per call: what ran, what it returned, and how long it took —
+    opening onto the documents it touched.
+
+    A call that touched nothing stays a plain row. An affordance that opens
+    onto an empty list is worse than no affordance: it invites the one click
+    that proves there was nothing to see.
 
     Args:
         entries (List[TraceEntry]): The round's calls, in order.
@@ -171,21 +180,61 @@ def _calls(entries) -> str:
         outcome = entry.counted if entry.ok else entry.error
         arguments = entry.arguments_line
 
-        rows.append(
-            '<div class="trace-call">'
+        head = (
             '<div class="trace-head">'
-            f'<span class="trace-tool">{escape(entry.tool)}</span>'
-            f'<span class="trace-count{failed}">{escape(outcome)}</span>'
+            f'<span class="trace-tool">{escape_html(entry.tool)}</span>'
+            f'<span class="trace-count{failed}">{escape_html(outcome)}</span>'
             f'<span class="trace-time">{entry.seconds:.2f}s</span>'
             '</div>'
             + (
-                f'<div class="trace-args">{escape(arguments)}</div>'
+                f'<div class="trace-args">{escape_html(arguments)}</div>'
                 if arguments else ''
             )
-            + '</div>'
+        )
+
+        if not entry.refs:
+            rows.append(f'<div class="trace-call trace-flat">{head}</div>')
+            continue
+
+        rows.append(
+            '<details class="trace-call">'
+            f'<summary>{head}</summary>'
+            f'<div class="trace-detail">{_documents(entry.refs)}</div>'
+            '</details>'
         )
 
     return ''.join(rows)
+
+
+def _documents(refs) -> str:
+    '''
+    The documents a call touched, by the ref the index stores.
+
+    The full ref, not the shortened one the argument line carries: this is the
+    part of the trace an analyst checks an answer against, and a path they
+    cannot copy is a path they cannot open.
+
+    Args:
+        refs (Sequence[str]): Document refs, in the order returned.
+
+    Returns:
+        str: The list as HTML.
+    '''
+    shown = refs[:MAX_TRACE_DOCUMENTS]
+    rest = len(refs) - len(shown)
+
+    items = ''.join(
+        f'<span class="trace-doc">{escape_html(ref)}</span>' for ref in shown
+    )
+    more = (
+        f'<span class="trace-more">+{rest} more</span>' if rest > 0 else ''
+    )
+    label = 'document' + ('' if len(refs) == 1 else 's')
+
+    return (
+        f'<div class="trace-docs-label">{len(refs)} {label}</div>'
+        f'{items}{more}'
+    )
 
 
 def _quoted(text: str) -> str:

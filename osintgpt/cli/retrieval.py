@@ -267,6 +267,7 @@ def _agentic_payload(answer) -> Dict[str, object]:
                     'arguments': entry.arguments,
                     'results': entry.count,
                     'unit': entry.unit,
+                    'documents': list(entry.refs),
                     'seconds': round(entry.seconds, 3),
                     'error': entry.error
                 }

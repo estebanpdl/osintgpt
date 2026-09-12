@@ -239,7 +239,8 @@ def _run_calls(
         elapsed = time.perf_counter() - started
         trace.record(
             round_number, call.name, call.arguments,
-            count=count, seconds=elapsed, error=error, unit=unit
+            count=count, seconds=elapsed, error=error, unit=unit,
+            refs=_touched(payload)
         )
 
         for ref in _refs_in(payload):
@@ -254,6 +255,31 @@ def _run_calls(
         )
 
     return results
+
+
+def _touched(payload: Dict[str, Any]) -> List[str]:
+    '''
+    Every document a call reported, deduplicated in the order it returned them.
+
+    Deliberately not `_refs_in`. That collects what an answer cites, and a
+    directory listing is not a citation — so it reads only the dict entries
+    that carry evidence. This records what a call *touched*, which is the
+    question an audit asks, so a listing of bare refs counts here and a
+    listing of bare refs is exactly what `list_documents` returns.
+    '''
+    found: List[str] = []
+
+    for key in ('passages', 'documents', 'hops', 'claims', 'path'):
+        for item in payload.get(key, []) or []:
+            ref = item.get('ref') if isinstance(item, dict) else item
+            if isinstance(ref, str) and ref and ref not in found:
+                found.append(ref)
+
+    ref = payload.get('ref')
+    if isinstance(ref, str) and ref and ref not in found:
+        found.append(ref)
+
+    return found
 
 
 def _refs_in(payload: Dict[str, Any]) -> List[str]:
