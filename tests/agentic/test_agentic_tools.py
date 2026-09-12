@@ -7,8 +7,8 @@
 #
 # File: test_agentic_tools.py
 # Description: The tools a model may call. Two of them carry guarantees rather
-#   than features: fetch_source cannot escape the project, and refs mode
-#   returns no content at all.
+#   than features: fetch_source reads the registered corpus and nothing else,
+#   and refs mode returns no content at all.
 # =================================================================================
 
 # import modules
@@ -93,10 +93,12 @@ def context(project, embedder):
     return ToolContext(project=project, embedder=embedder)
 
 
-class TestFetchSourceCannotEscape:
+class TestFetchSourceReadsTheCorpus:
     '''
-    The boundary is the project root, not the machine. An agent that can read
-    outside it can read anything the process can.
+    The boundary is what a source registered, not where the project directory
+    happens to be. An agent that can read beyond the corpus can read anything
+    the process can; one confined to the project directory can read nothing at
+    all when the material lives elsewhere, which is the normal arrangement.
     '''
 
     @pytest.mark.parametrize('ref', [
@@ -114,7 +116,7 @@ class TestFetchSourceCannotEscape:
         assert not result.ok
         assert 'not a document in this project' in result.error
 
-    def test_an_absolute_path_from_elsewhere_is_refused(
+    def test_an_unregistered_absolute_path_is_refused(
         self, context, tmp_path
     ):
         outside = tmp_path / 'elsewhere.md'
@@ -130,6 +132,53 @@ class TestFetchSourceCannotEscape:
 
     def test_a_ref_that_does_not_exist_is_refused(self, context):
         assert not fetch_source(context, 'material/absent.md').ok
+
+    def test_a_registered_folder_outside_the_project_reads(
+        self, tmp_path, embedder
+    ):
+        '''
+        Material normally lives outside the project — a case folder on another
+        drive. The index stores an absolute ref for it, and refusing that ref
+        leaves the project searchable but none of it readable.
+        '''
+        elsewhere = tmp_path / 'evidence'
+        elsewhere.mkdir()
+        (elsewhere / 'delta.md').write_text(
+            '# Delta\n\nA note about pangolin shipments.', encoding='utf-8'
+        )
+
+        project = Project.create('Outside', home=tmp_path / 'home')
+        Corpus.load(project.paths.sources).register(str(elsewhere))
+        index_project(project, embedder)
+
+        context = ToolContext(project=project, embedder=embedder)
+        ref = (elsewhere / 'delta.md').resolve().as_posix()
+        result = fetch_source(context, ref)
+
+        assert result.ok
+        assert 'pangolin' in result.payload['text']
+
+    def test_the_ref_the_index_stores_is_the_ref_that_reads(
+        self, tmp_path, embedder
+    ):
+        '''
+        Whatever `index_project` recorded is what a search hands the model, so
+        that exact string has to be the one fetch_source accepts.
+        '''
+        elsewhere = tmp_path / 'evidence'
+        elsewhere.mkdir()
+        (elsewhere / 'delta.md').write_text(
+            '# Delta\n\nA note about pangolin shipments.', encoding='utf-8'
+        )
+
+        project = Project.create('Outside', home=tmp_path / 'home')
+        Corpus.load(project.paths.sources).register(str(elsewhere))
+        report = index_project(project, embedder)
+
+        context = ToolContext(project=project, embedder=embedder)
+
+        for document in report.indexed:
+            assert fetch_source(context, document.ref).ok
 
 
 class TestFetchSourceWindows:

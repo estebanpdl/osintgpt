@@ -207,10 +207,8 @@ class TestProviderRecording:
         recorder = UsageRecorder()
         provider = build_generation_provider('openai', keyed, recorder=recorder)
         provider.client = StubOpenAI()
-        provider.client.chat.completions.create = lambda **kwargs: (
-            SimpleNamespace(choices=[
-                SimpleNamespace(message=SimpleNamespace(content='hi'))
-            ])
+        provider.client.responses.create = lambda **kwargs: (
+            SimpleNamespace(output=[], output_text='hi')
         )
         provider.generate('s', 'u')
 

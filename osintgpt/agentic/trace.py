@@ -27,12 +27,26 @@ class TraceEntry:
     tool: str
     arguments: Dict[str, Any] = field(default_factory=dict)
     count: int = 0
+    # What `count` counts, singular, as the tool named it. Lines, passages
+    # and documents are not comparable quantities, and a trace that calls
+    # them all "results" reads as though they were.
+    unit: str = 'result'
     seconds: float = 0.0
     error: str = ''
 
     @property
     def ok(self) -> bool:
         return not self.error
+
+    @property
+    def counted(self) -> str:
+        '''
+        Returns:
+            str: The count with its unit, pluralized.
+        '''
+        unit = self.unit or 'result'
+
+        return f'{self.count} {unit}' + ('' if self.count == 1 else 's')
 
     @property
     def label(self) -> str:
@@ -45,7 +59,7 @@ class TraceEntry:
             f'{key}={_short(value)}' for key, value in self.arguments.items()
             if value not in (None, '', [], {})
         )
-        outcome = f'error: {self.error}' if self.error else f'{self.count} results'
+        outcome = f'error: {self.error}' if self.error else self.counted
 
         return f'{self.tool}({shown}) — {outcome}, {self.seconds:.2f}s'
 
@@ -70,11 +84,12 @@ class Trace:
         arguments: Dict[str, Any],
         count: int = 0,
         seconds: float = 0.0,
-        error: str = ''
+        error: str = '',
+        unit: str = 'result'
     ) -> TraceEntry:
         entry = TraceEntry(
             round=round_number, tool=tool, arguments=dict(arguments),
-            count=count, seconds=seconds, error=error
+            count=count, unit=unit, seconds=seconds, error=error
         )
         self.entries.append(entry)
 

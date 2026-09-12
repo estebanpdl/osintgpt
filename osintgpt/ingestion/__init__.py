@@ -23,7 +23,13 @@ from .loaders import (
 )
 from .office import extract_docx
 from .pdf import MIN_PAGE_CHARS, PdfExtraction, extract_pdf
-from .preview import DryRun, FilePreview, dry_run, preview_file
+from .preview import (
+    DryRun,
+    FilePreview,
+    dry_run,
+    preview_corpus,
+    preview_file
+)
 from .sources import MAX_FOLDER_FILES, Corpus, Source
 from .tabular import UnmappedSourceError, describe_fields
 from .text import HTML_SUFFIXES, TEXT_SUFFIXES

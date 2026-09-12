@@ -31,6 +31,7 @@ from .local import SentenceTransformerEmbedding
 from .locality import LocalityReport, ProviderLocality, audit_locality
 from .usage import Usage, UsageRecorder
 from .openai_compat import OpenAICompatEmbedding, OpenAICompatGeneration
+from .openai_responses import OpenAIResponsesGeneration
 from .registry import (
     ANTHROPIC,
     EMBEDDING_BACKENDS,
@@ -38,6 +39,7 @@ from .registry import (
     GENERATION_BACKENDS,
     BackendSpec,
     OPENAI_COMPAT,
+    OPENAI_RESPONSES,
     SENTENCE_TRANSFORMERS,
     backend_spec,
     connection_for
@@ -145,6 +147,13 @@ def build_generation_provider(
     if spec.kind == ANTHROPIC:
         return AnthropicGeneration(
             model=model, api_key=api_key, recorder=recorder
+        )
+
+    if spec.kind == OPENAI_RESPONSES:
+        return OpenAIResponsesGeneration(
+            model=model, api_key=api_key, base_url=base_url,
+            discovers_models=spec.discovers_models,
+            billable=not spec.local, provider=provider, recorder=recorder
         )
 
     return OpenAICompatGeneration(

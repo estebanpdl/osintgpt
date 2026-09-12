@@ -67,10 +67,43 @@ class ToolContext:
     # Only the graph tool needs it, and only when the project enabled one.
     generator: Any = None
     store: Any = None
+    # The corpus and the files it covers, built on first use. Checking a ref
+    # and reading a document both need them, and a corpus does not change
+    # while one question is being answered — so neither should re-walk it.
+    _corpus: Any = field(default=None, repr=False)
+    _covered: Any = field(default=None, repr=False)
 
     @property
     def root(self) -> Path:
         return Path(self.project.paths.root).resolve()
+
+    @property
+    def corpus(self) -> Any:
+        '''
+        Returns:
+            Corpus: The project's registered sources.
+        '''
+        if self._corpus is None:
+            from osintgpt.ingestion import Corpus
+
+            self._corpus = Corpus.load(self.project.paths.sources)
+
+        return self._corpus
+
+    @property
+    def covered(self) -> set:
+        '''
+        Returns:
+            set: Every file the registered corpus covers, resolved. The same \
+                set `index_project` walks, so what can be read is exactly \
+                what could have been indexed.
+        '''
+        if self._covered is None:
+            self._covered = {
+                path.resolve() for path in self.corpus.files(self.root)
+            }
+
+        return self._covered
 
 
 # ToolResult class
@@ -84,6 +117,11 @@ class ToolResult:
     # trace records that a call happened and this is the call's answer.
     payload: Dict[str, Any] = field(default_factory=dict)
     count: int = 0
+    # What `count` counts, singular. Set by the tool because only the tool
+    # knows: the same tool returns documents in one mode and passages in
+    # another, so naming the unit from the tool name would be wrong half the
+    # time. A trace reading "88 results" cannot be told from "88 passages".
+    unit: str = 'result'
     error: str = ''
 
     @property
@@ -130,7 +168,8 @@ def semantic_search(
             'passages': [_passage(r) for r in found],
             **_dating_note(days, undated)
         },
-        count=len(found)
+        count=len(found),
+        unit='passage'
     )
 
 
@@ -185,7 +224,8 @@ def exact_search(
                     )
                 ]
             },
-            count=len(counts)
+            count=len(counts),
+            unit='document'
         )
 
     kept, undated = _within_days(found, days)
@@ -197,7 +237,8 @@ def exact_search(
             'passages': [_passage(r) for r in kept[:_clamp(limit, 1, 30)]],
             **_dating_note(days, undated)
         },
-        count=len(kept)
+        count=len(kept),
+        unit='passage'
     )
 
 
@@ -249,7 +290,8 @@ def snowball_search(
                 for hop in walk.hops
             ]
         },
-        count=len(walk.hops)
+        count=len(walk.hops),
+        unit='hop'
     )
 
 
@@ -302,7 +344,8 @@ def graph_query(
             return ToolResult(
                 tool='graph_query',
                 payload={'connected': True, 'path': [_claim(e) for e in path.edges]},
-                count=path.length
+                count=path.length,
+                unit='step'
             )
 
         hits = neighbors(graph, entity, limit=_clamp(limit, 1, 60))
@@ -310,7 +353,8 @@ def graph_query(
         return ToolResult(
             tool='graph_query',
             payload={'claims': [_claim(hit.edge) for hit in hits]},
-            count=len(hits)
+            count=len(hits),
+            unit='claim'
         )
 
 
@@ -351,7 +395,8 @@ def list_documents(
     return ToolResult(
         tool='list_documents',
         payload={'documents': refs[:_clamp(limit, 1, 500)]},
-        count=len(refs)
+        count=len(refs),
+        unit='document'
     )
 
 
@@ -406,5 +451,6 @@ def fetch_source(
         payload['next_offset'] = end
 
     return ToolResult(
-        tool='fetch_source', payload=payload, count=len(window)
+        tool='fetch_source', payload=payload, count=len(window),
+        unit='line'
     )

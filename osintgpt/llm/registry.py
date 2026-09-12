@@ -70,6 +70,10 @@ class BackendSpec:
 
 
 OPENAI_COMPAT = 'openai-compat'
+# OpenAI's own endpoint. A separate kind rather than a flag on the compatible
+# one: /v1/responses is the only place OpenAI serves function tools together
+# with reasoning, and no other backend in this registry implements it.
+OPENAI_RESPONSES = 'openai-responses'
 ANTHROPIC = 'anthropic'
 GEMINI = 'gemini'
 SENTENCE_TRANSFORMERS = 'sentence-transformers'
@@ -97,7 +101,7 @@ EMBEDDING_BACKENDS: Dict[str, BackendSpec] = {
 
 GENERATION_BACKENDS: Dict[str, BackendSpec] = {
     'openai': BackendSpec(
-        OPENAI_COMPAT, 'openai_api_key', discovers_models=True
+        OPENAI_RESPONSES, 'openai_api_key', discovers_models=True
     ),
     'gemini': BackendSpec(OPENAI_COMPAT, 'gemini_api_key', GEMINI_COMPAT_URL),
     'ollama': BackendSpec(

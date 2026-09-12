@@ -292,6 +292,77 @@ def dry_run(
     )
 
 
+# preview a project's registered corpus
+def preview_corpus(
+    corpus,
+    root: Union[str, Path],
+    embedding_model: str = DEFAULT_EMBEDDING_MODEL,
+    max_chars: int = MAX_CHARS
+) -> DryRun:
+    '''
+    Report what indexing a project's corpus would produce.
+
+    Reads the same files, in the same order, under the same mappings as
+    `index_project` — a preview that walks a different tree than the pass it
+    predicts is worse than no preview, because it is believed.
+
+    Args:
+        corpus (Corpus): The project's registered sources.
+        root (Union[str, Path]): Project root. Sources record project-local \
+            paths relative to it.
+        embedding_model (str): Model whose tokenizer counts the tokens and \
+            whose price estimates the cost. Pass the one the project is \
+            configured for; encodings and prices both differ between models.
+        max_chars (int): Chunk ceiling.
+
+    Returns:
+        DryRun: Per-file previews plus totals.
+    '''
+    root = Path(root)
+    mappings = corpus.mappings(root)
+
+    files = [
+        preview_file(
+            path,
+            mapping=mappings.get(path.resolve()),
+            embedding_model=embedding_model,
+            max_chars=max_chars
+        )
+        for path in corpus.files(root)
+    ]
+
+    return DryRun(
+        root=root,
+        embedding_model=embedding_model,
+        files=files,
+        unsupported=_unsupported(corpus, root)
+    )
+
+
+def _unsupported(corpus, root: Path) -> List[Path]:
+    '''
+    Registered files no loader can read.
+
+    `Corpus.files` drops these silently, which is right for indexing and wrong
+    for a preview: an operator who registered a folder should learn what will
+    be left out of it before the pass, not by noticing an absence in an answer.
+    '''
+    found: List[Path] = []
+    seen = set()
+
+    for source in corpus:
+        for path in _walk(Path(root, source.path)):
+            if path.suffix.lower() in READABLE_SUFFIXES:
+                continue
+            resolved = path.resolve()
+            if resolved in seen:
+                continue
+            seen.add(resolved)
+            found.append(path)
+
+    return found
+
+
 def _walk(root: Path) -> List[Path]:
     if root.is_file():
         return [root]

@@ -14,7 +14,7 @@ from dataclasses import dataclass, field, replace
 from pathlib import Path
 
 # type hints
-from typing import Iterator, List, Optional, Union
+from typing import Dict, Iterator, List, Optional, Union
 
 # import osintgpt ingestion
 from .documents import FieldMapping
@@ -264,15 +264,49 @@ class Corpus:
 
         return found
 
+    # the source governing every covered file
+    def mappings(
+        self, root: Union[str, Path]
+    ) -> Dict[Path, FieldMapping]:
+        '''
+        The field roles that apply to each file the corpus covers.
+
+        A file registered directly beats the folder containing it, so a
+        spreadsheet inside a registered folder can name its own fields. Among
+        folders the first registration wins, matching `files`.
+
+        Every source is walked once. Asking per file instead costs a walk of
+        the whole corpus per lookup, which is affordable for one question and
+        quadratic for a pass over everything.
+
+        Args:
+            root (Union[str, Path]): Project root.
+
+        Returns:
+            Dict[Path, FieldMapping]: Resolved path to the mapping that \
+                governs it. Files no source covers are absent.
+        '''
+        chosen: Dict[Path, FieldMapping] = {}
+        direct: set = set()
+
+        for source in self._index_sources():
+            target = Path(root, source.path).resolve()
+            for path in source.resolve(root):
+                covered = path.resolve()
+                if covered == target:
+                    chosen[covered] = source.mapping
+                    direct.add(covered)
+                elif covered not in direct and covered not in chosen:
+                    chosen[covered] = source.mapping
+
+        return chosen
+
     # which source governs a file
     def mapping_for(
         self, path: Union[str, Path], root: Union[str, Path]
     ) -> FieldMapping:
         '''
         The field roles that apply to one file.
-
-        A file registered directly beats the folder containing it, so a
-        spreadsheet inside a registered folder can name its own fields.
 
         Args:
             path (Union[str, Path]): File to look up.
@@ -281,22 +315,9 @@ class Corpus:
         Returns:
             FieldMapping: The mapping, empty when nothing set one.
         '''
-        target = Path(path).resolve()
-
-        direct = None
-        folder = None
-        for source in self._index_sources():
-            covered = {p.resolve() for p in source.resolve(root)}
-            if target not in covered:
-                continue
-            if Path(root, source.path).resolve() == target:
-                direct = source
-            elif folder is None:
-                folder = source
-
-        chosen = direct or folder
-
-        return chosen.mapping if chosen else FieldMapping()
+        return self.mappings(root).get(
+            Path(path).resolve(), FieldMapping()
+        )
 
     def __iter__(self) -> Iterator[Source]:
         return iter(self._index_sources())

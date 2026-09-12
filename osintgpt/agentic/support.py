@@ -29,35 +29,31 @@ SNIPPET_CHARS = 700
 
 def _resolve(context, ref: str) -> Optional[Path]:
     '''
-    A ref to a path inside the project, or None.
+    A ref to a file the corpus covers, or None.
 
-    The boundary is the project root, not the machine: a ref that climbs out
-    with `..`, an absolute path from elsewhere, and a symlink pointing away
-    are all the same refusal. Resolving first is what makes that check real
-    rather than a string comparison a `..` walks straight through.
+    The boundary is the registered corpus, not the project directory. Material
+    normally lives outside the project — a case folder on another drive, a
+    shared collection — and the index stores an absolute ref for it, so
+    confining refs to the project root refuses every document such a project
+    has. What makes a path readable is that a source registered it.
+
+    That is a narrower test than a prefix check, not a looser one: membership
+    of the set `index_project` walks. A ref climbing out with `..`, an
+    absolute path nobody registered, and a symlink pointing away all fail it,
+    because none of them is a file the corpus covers. Resolving first is what
+    makes the comparison real rather than one a `..` walks straight through.
     '''
-    root = context.root
-
     try:
-        candidate = (root / ref).resolve()
+        candidate = (context.root / ref).resolve()
     except (OSError, ValueError):
         return None
 
-    if not _inside(candidate, root):
-        log.warning('refused a ref outside the project root: %r', ref)
+    if candidate not in context.covered:
+        log.warning('refused a ref the corpus does not cover: %r', ref)
 
         return None
 
     return candidate if candidate.is_file() else None
-
-
-def _inside(candidate: Path, root: Path) -> bool:
-    try:
-        candidate.relative_to(root)
-    except ValueError:
-        return False
-
-    return True
 
 
 def _read(context, path: Path, ref: str) -> str:
@@ -65,11 +61,10 @@ def _read(context, path: Path, ref: str) -> str:
     The document's text, through the same loaders that indexed it, so a PDF
     reads as the markdown the index holds rather than as bytes.
     '''
-    from osintgpt.ingestion import Corpus, load_documents
+    from osintgpt.ingestion import load_documents
 
-    corpus = Corpus.load(context.project.paths.sources)
     documents = load_documents(
-        path, corpus.mapping_for(path, context.project.paths.root)
+        path, context.corpus.mapping_for(path, context.root)
     )
 
     return '\n\n'.join(d.text for d in documents if d.text)

@@ -260,6 +260,59 @@ class TestTheTrace:
 
         assert 'aardvark' in answer.trace.entries[0].label
 
+    def test_each_tool_names_its_own_unit(self, project, embedder):
+        '''
+        Lines, passages and documents are not comparable quantities, and a
+        trace that calls them all "results" reads as though they were.
+        '''
+        model = ScriptedModel(
+            calls(('semantic_search', {'query': 'aardvark'}),
+                  ('list_documents', {}),
+                  ('fetch_source', {'ref': 'material/alpha.md'}),
+                  ('exact_search', {'terms': ['aardvark'], 'mode': 'refs'})),
+            ModelTurn(text='done')
+        )
+
+        answer = agentic_answer(project, 'q', embedder, model)
+        units = {e.tool: e.unit for e in answer.trace.entries}
+
+        assert units == {
+            'semantic_search': 'passage',
+            'list_documents': 'document',
+            'fetch_source': 'line',
+            'exact_search': 'document'
+        }
+
+    def test_a_single_result_is_not_pluralized(self, project, embedder):
+        model = ScriptedModel(
+            calls(('fetch_source', {'ref': 'material/alpha.md', 'limit': 1})),
+            ModelTurn(text='done')
+        )
+
+        answer = agentic_answer(project, 'q', embedder, model)
+
+        assert '1 line,' in answer.trace.entries[0].label
+
+    def test_the_same_tool_can_return_different_units(
+        self, project, embedder
+    ):
+        '''
+        exact_search returns documents in refs mode and passages in snippets
+        mode, so the unit cannot be derived from the tool name.
+        '''
+        model = ScriptedModel(
+            calls(('exact_search', {'terms': ['aardvark'], 'mode': 'refs'}),
+                  ('exact_search', {'terms': ['aardvark'],
+                                    'mode': 'snippets'})),
+            ModelTurn(text='done')
+        )
+
+        answer = agentic_answer(project, 'q', embedder, model)
+
+        assert [e.unit for e in answer.trace.entries] == [
+            'document', 'passage'
+        ]
+
     def test_the_model_s_narration_is_kept(self, project, embedder):
         speaking = ModelTurn(
             text='Let me survey first.',

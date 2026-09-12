@@ -28,6 +28,10 @@ from osintgpt.llm.calling import (
     tool_spec
 )
 from osintgpt.llm.openai_compat import OpenAICompatGeneration
+from osintgpt.llm.openai_responses import (
+    OpenAIResponsesGeneration,
+    _ResponsesTurn
+)
 
 SPEC = tool_spec(
     'semantic_search', 'find things',
@@ -95,6 +99,56 @@ def openai_reply(text='ok', calls=()):
 
 def anthropic_reply(blocks):
     return SimpleNamespace(content=blocks)
+
+
+def responses_provider(reply):
+    recorder = Recorder(reply)
+    provider = OpenAIResponsesGeneration.__new__(OpenAIResponsesGeneration)
+    provider.model, provider.provider = 'm', 'openai'
+    provider.billable, provider.recorder = True, None
+    provider.client = SimpleNamespace(responses=recorder)
+
+    return provider, recorder
+
+
+def responses_item(**fields):
+    item = SimpleNamespace(**fields)
+    item.model_dump = lambda exclude_none=False: dict(fields)
+
+    return item
+
+
+def responses_reply(text='ok', calls=()):
+    output = [
+        responses_item(
+            type='function_call', id=f'fc_{cid}', call_id=cid,
+            name=name, arguments=args
+        )
+        for cid, name, args in calls
+    ]
+
+    return SimpleNamespace(usage=None, output=output, output_text=text)
+
+
+# What a reasoning model returns alongside its calls, and what a later round
+# has to send back for the model to keep the thinking it already paid for.
+REASONING = responses_item(
+    type='reasoning', id='rs_1', summary=[], encrypted_content='opaque'
+)
+CALL_ITEM = responses_item(
+    type='function_call', id='fc_1', call_id='call_1',
+    name='semantic_search', arguments='{"query": "x"}'
+)
+
+RESPONSES_HISTORY = [Exchange(
+    turn=_ResponsesTurn(
+        text='surveying',
+        calls=[ToolCall(id='call_1', name='semantic_search',
+                        arguments={'query': 'x'})],
+        items=(REASONING.model_dump(), CALL_ITEM.model_dump())
+    ),
+    results={'call_1': '{"passages": []}'}
+)]
 
 
 class TestOpenAIShape:
@@ -169,6 +223,122 @@ class TestOpenAIShape:
         turn = provider.generate_with_tools('sys', 'q', [SPEC], [])
 
         assert turn.calls[0].arguments == {}
+
+
+class TestOpenAIResponsesShape:
+    '''
+    OpenAI's own endpoint, which is the only one that serves function tools
+    and reasoning together. Its wire format is not the compatible one.
+    '''
+
+    def test_the_system_prompt_is_instructions_not_a_message(self):
+        provider, recorder = responses_provider(responses_reply())
+        provider.generate_with_tools('sys', 'q', [SPEC], [])
+
+        assert recorder.seen['instructions'] == 'sys'
+        assert recorder.seen['input'] == [{'role': 'user', 'content': 'q'}]
+
+    def test_tools_are_flat_not_nested_under_a_function_key(self):
+        provider, recorder = responses_provider(responses_reply())
+        provider.generate_with_tools('sys', 'q', [SPEC], [])
+
+        assert recorder.seen['tools'][0]['name'] == 'semantic_search'
+        assert recorder.seen['tools'][0]['type'] == 'function'
+
+    def test_no_tools_key_when_none_are_offered(self):
+        provider, recorder = responses_provider(responses_reply())
+        provider.generate_with_tools('sys', 'q', [], [])
+
+        assert 'tools' not in recorder.seen
+
+    def test_a_result_follows_the_items_that_asked_for_it(self):
+        provider, recorder = responses_provider(responses_reply())
+        provider.generate_with_tools('sys', 'q', [SPEC], RESPONSES_HISTORY)
+
+        assert [
+            item.get('role') or item['type']
+            for item in recorder.seen['input']
+        ] == ['user', 'reasoning', 'function_call', 'function_call_output']
+
+    def test_the_result_carries_the_call_id_back(self):
+        provider, recorder = responses_provider(responses_reply())
+        provider.generate_with_tools('sys', 'q', [SPEC], RESPONSES_HISTORY)
+        output = recorder.seen['input'][-1]
+
+        assert output['call_id'] == 'call_1'
+        assert output['output'] == '{"passages": []}'
+
+    def test_reasoning_is_replayed_verbatim(self):
+        '''
+        Dropping it makes the model re-derive what it already worked out, so
+        the reasoning tokens are paid for once per round instead of once.
+        '''
+        provider, recorder = responses_provider(responses_reply())
+        provider.generate_with_tools('sys', 'q', [SPEC], RESPONSES_HISTORY)
+        replayed = [
+            item for item in recorder.seen['input']
+            if item.get('type') == 'reasoning'
+        ]
+
+        assert replayed == [REASONING.model_dump()]
+
+    def test_a_turn_from_another_provider_replays_no_items(self):
+        '''
+        The raw items ride on this provider's own turn; a neutral one carries
+        none, and asking for them must not raise.
+        '''
+        provider, recorder = responses_provider(responses_reply())
+        provider.generate_with_tools('sys', 'q', [SPEC], HISTORY)
+
+        assert [
+            item.get('role') or item['type']
+            for item in recorder.seen['input']
+        ] == ['user', 'function_call_output']
+
+    def test_the_conversation_is_never_stored_on_the_vendor(self):
+        provider, recorder = responses_provider(responses_reply())
+        provider.generate_with_tools('sys', 'q', [SPEC], [])
+
+        assert recorder.seen['store'] is False
+
+    def test_calls_come_back_parsed(self):
+        provider, _ = responses_provider(responses_reply(
+            text='', calls=[('c1', 'semantic_search', '{"query": "found"}')]
+        ))
+
+        turn = provider.generate_with_tools('sys', 'q', [SPEC], [])
+
+        assert turn.calls[0].id == 'c1'
+        assert turn.calls[0].arguments == {'query': 'found'}
+
+    def test_parallel_calls_all_come_back(self):
+        provider, _ = responses_provider(responses_reply(text='', calls=[
+            ('c1', 'semantic_search', '{"query": "a"}'),
+            ('c2', 'semantic_search', '{"query": "b"}')
+        ]))
+
+        turn = provider.generate_with_tools('sys', 'q', [SPEC], [])
+
+        assert [call.id for call in turn.calls] == ['c1', 'c2']
+
+    def test_malformed_arguments_do_not_fail_the_round(self):
+        provider, _ = responses_provider(responses_reply(
+            text='', calls=[('c1', 'semantic_search', '{not json')]
+        ))
+
+        turn = provider.generate_with_tools('sys', 'q', [SPEC], [])
+
+        assert turn.calls[0].arguments == {}
+
+    def test_the_turn_is_one_the_loop_understands(self):
+        provider, _ = responses_provider(responses_reply(
+            text='', calls=[('c1', 'semantic_search', '{}')]
+        ))
+
+        turn = provider.generate_with_tools('sys', 'q', [SPEC], [])
+
+        assert isinstance(turn, ModelTurn)
+        assert turn.wants_tools
 
 
 class TestAnthropicShape:

@@ -64,10 +64,10 @@ STYLESHEET = '''
     --graphite: #0f0c17;
     --graphite-deep: #0a0810;
     --graphite-raised: #191421;
-    --glass: rgba(255, 255, 255, 0.045);
-    --glass-strong: rgba(255, 255, 255, 0.075);
-    --border-faint: rgba(255, 255, 255, 0.07);
-    --border-soft: rgba(255, 255, 255, 0.13);
+    --glass: rgba(255, 255, 255, 0.09);
+    --glass-strong: rgba(255, 255, 255, 0.14);
+    --border-faint: rgba(255, 255, 255, 0.18);
+    --border-soft: rgba(255, 255, 255, 0.28);
     --text-bright: #f5f2fa;
     --text-secondary: #a39ab0;
 
@@ -167,7 +167,7 @@ html, body, [data-testid="stAppViewContainer"] {
     border-radius: 16px;
     padding: 0.5rem 1.5rem;
     font-weight: 500;
-    box-shadow: none;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.25);
     transition: background 0.2s ease, border-color 0.2s ease, transform 0.2s ease, box-shadow 0.25s ease;
 }
 
@@ -189,8 +189,8 @@ button[kind="primary"] {
     border: none;
     font-weight: 600;
     box-shadow:
-        0 6px 22px rgba(168, 85, 247, 0.35),
-        inset 0 1px 0 rgba(255, 255, 255, 0.4);
+        0 8px 26px rgba(168, 85, 247, 0.42),
+        inset 0 2px 0 rgba(255, 255, 255, 0.45);
     transition: background 0.2s ease, transform 0.2s ease, box-shadow 0.25s ease, filter 0.2s ease;
 }
 
@@ -244,13 +244,14 @@ button[kind="primary"]:hover {
     background: var(--glass);
     border: 1px solid var(--border-faint);
     border-radius: 12px;
+    box-shadow: inset 0 1px 0 rgba(255,255,255,0.06), 0 2px 8px rgba(0,0,0,0.25);
     transition: border-color 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
 }
 
 .stTextInput [data-baseweb="input"]:focus-within {
     border-color: var(--accent-primary);
-    box-shadow: 0 0 0 3px rgba(168, 85, 247, 0.16);
-    background: rgba(168, 85, 247, 0.05);
+    box-shadow: 0 0 0 4px rgba(168, 85, 247, 0.22), inset 0 1px 0 rgba(255,255,255,0.1);
+    background: rgba(168, 85, 247, 0.07);
 }
 
 .stTextInput input,
@@ -402,8 +403,8 @@ hr {
 
 [data-testid="stChatInput"]:focus-within {
     border-color: var(--accent-primary);
-    box-shadow: 0 0 0 3px rgba(168, 85, 247, 0.16);
-    background: rgba(168, 85, 247, 0.04);
+    box-shadow: 0 0 0 4px rgba(168, 85, 247, 0.22);
+    background: rgba(168, 85, 247, 0.07);
 }
 
 [data-testid="stSpinner"] div p {

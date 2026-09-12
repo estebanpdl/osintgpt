@@ -43,6 +43,10 @@ class Runtime:
     project: Project
     build_embedder: Callable[[], Any]
     build_generator: Callable[[], Any]
+    # The embedding model this project would index with, resolved the way the
+    # builder resolves it. Carried rather than read off `embedder`, because
+    # naming the model must not cost a credential or a client.
+    embedding_model: str = ''
     # Built providers, memoized. A rerun that asks a second question must
     # reuse the client rather than open a new one per keystroke.
     built: Dict[str, Any] = field(default_factory=dict)
@@ -175,6 +179,7 @@ def runtime_for(
     defaults = load_user_defaults(home)
     effective = project.effective_settings(defaults)
     config = project.settings_for(resolve_credentials(home), defaults)
+    embedding_model = _embedding_model(effective)
 
     if builder is not None:
         # One call produces both, so memoize the pair rather than calling it
@@ -190,7 +195,8 @@ def runtime_for(
         return Runtime(
             project=project,
             build_embedder=lambda: build_pair(0),
-            build_generator=lambda: build_pair(1)
+            build_generator=lambda: build_pair(1),
+            embedding_model=embedding_model
         )
 
     return Runtime(
@@ -202,8 +208,32 @@ def runtime_for(
         build_generator=lambda: build_generation_provider(
             effective.generation_provider, config,
             model=effective.generation_model or None
-        )
+        ),
+        embedding_model=embedding_model
     )
+
+
+def _embedding_model(effective) -> str:
+    '''
+    The model a project would embed with, without building anything.
+
+    Mirrors `build_embedding_provider`: the project's choice, then the
+    backend's own default. An unregistered provider resolves to nothing rather
+    than raising — this is used to count tokens, not to embed.
+
+    Args:
+        effective (ProjectSettings): The project's settings, defaults applied.
+
+    Returns:
+        str: The model name, empty when neither source names one.
+    '''
+    from osintgpt.llm import EMBEDDING_BACKENDS
+
+    spec = EMBEDDING_BACKENDS.get(effective.embedding_provider)
+
+    return effective.embedding_model or getattr(
+        spec, 'default_model', None
+    ) or ''
 
 
 # what a cached resource is keyed on

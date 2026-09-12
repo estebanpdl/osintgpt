@@ -227,14 +227,15 @@ def _run_calls(
             result = run_tool(context, call.name, call.arguments)
             error = result.error
             count = result.count
+            unit = result.unit
             payload = result.payload
         except Exception as failure:  # noqa: BLE001 — one call, not the loop
-            error, count, payload = str(failure), 0, {}
+            error, count, unit, payload = str(failure), 0, 'result', {}
 
         elapsed = time.perf_counter() - started
         trace.record(
             round_number, call.name, call.arguments,
-            count=count, seconds=elapsed, error=error
+            count=count, seconds=elapsed, error=error, unit=unit
         )
 
         for ref in _refs_in(payload):

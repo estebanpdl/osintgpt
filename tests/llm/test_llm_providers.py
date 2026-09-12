@@ -290,21 +290,28 @@ class TestGenerationCalls:
     def test_returns_the_reply(self, provider):
         assert provider.generate('be terse', 'a question') == 'STUB REPLY'
 
-    def test_sends_system_and_user_in_order(self, provider):
+    def test_sends_the_system_prompt_as_instructions(self, provider):
         provider.generate('be terse', 'a question')
-        messages = provider.client.chat.completions.calls[0]['messages']
+        request = provider.client.responses.calls[0]
 
-        assert [m['role'] for m in messages] == ['system', 'user']
-        assert messages[0]['content'] == 'be terse'
-        assert messages[1]['content'] == 'a question'
+        assert request['instructions'] == 'be terse'
+        assert request['input'] == [
+            {'role': 'user', 'content': 'a question'}
+        ]
+
+    def test_never_stores_the_conversation_on_the_vendor(self, provider):
+        '''
+        The default retains it server-side, which this tool cannot do quietly.
+        '''
+        provider.generate('be terse', 'a question')
+
+        assert provider.client.responses.calls[0]['store'] is False
 
     def test_an_empty_reply_becomes_an_empty_string(self, provider):
         from types import SimpleNamespace
 
-        provider.client.chat.completions.create = lambda **kwargs: (
-            SimpleNamespace(choices=[
-                SimpleNamespace(message=SimpleNamespace(content=None))
-            ])
+        provider.client.responses.create = lambda **kwargs: (
+            SimpleNamespace(output=[], output_text=None)
         )
 
         assert provider.generate('s', 'u') == ''

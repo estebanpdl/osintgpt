@@ -16,26 +16,40 @@ from typing import Any, Dict, List
 # import osintgpt
 from osintgpt import index_project
 
+# import osintgpt config
+from osintgpt.config import DEFAULT_EMBEDDING_MODEL
+
 # import osintgpt ingestion
-from osintgpt.ingestion import Corpus, FieldMapping, describe_fields, dry_run
+from osintgpt.ingestion import (
+    Corpus,
+    FieldMapping,
+    describe_fields,
+    preview_corpus
+)
 from osintgpt.ingestion.loaders import needs_mapping
 from osintgpt.ingestion.transcription import transcriber_for_project
 
 from ..browse import directory_input
 
 
-# what a folder would contribute
-def preview(folder) -> Dict[str, Any]:
+# what the registered corpus would contribute
+def preview(corpus, root, embedding_model: str = '') -> Dict[str, Any]:
     '''
-    Read a folder without embedding anything.
+    Read the registered sources without embedding anything.
 
     Args:
-        folder (Path): Directory to preview.
+        corpus (Corpus): The project's registered sources.
+        root (Path): Project root, which project-local sources are relative to.
+        embedding_model (str): Model whose tokenizer and price the estimate \
+            uses. Empty falls back to the library default, whose price is \
+            not this project's — encodings and prices both differ by model.
 
     Returns:
         Dict[str, Any]: The summary, plus files still needing field roles.
     '''
-    run = dry_run(folder)
+    run = preview_corpus(
+        corpus, root, embedding_model=embedding_model or DEFAULT_EMBEDDING_MODEL
+    )
 
     return {
         'summary': run.summary,
@@ -104,7 +118,7 @@ def render(st, runtime, state) -> None:
 
         return
 
-    _preview(st, project)
+    _preview(st, runtime, corpus)
 
     # Behind a button, never on page load: every widget interaction reruns
     # this script, and an indexing pass triggered by rendering runs again on
@@ -142,12 +156,14 @@ def _register(st, project, folder) -> None:
         st.rerun()
 
 
-def _preview(st, project) -> None:
+def _preview(st, runtime, corpus) -> None:
     if not st.checkbox('Preview what would be indexed'):
         return
 
     with st.spinner('Reading…'):
-        facts = preview(project.paths.root)
+        facts = preview(
+            corpus, runtime.project.paths.root, runtime.embedding_model
+        )
 
     st.text(facts['summary'])
     if facts['vision_pages']:

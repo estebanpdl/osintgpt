@@ -131,12 +131,90 @@ class StubCompletions:
         )
 
 
+class StubResponseUsage:
+    '''The Responses API counts in its own field names.'''
+
+    input_tokens = 11
+    output_tokens = 7
+    total_tokens = 18
+
+
+class StubResponseItem:
+    '''One item of a response's output, replayable the way a real one is.'''
+
+    def __init__(self, **fields):
+        self.__dict__.update(fields)
+
+    def model_dump(self, exclude_none=False):
+        return dict(self.__dict__)
+
+
+def function_call_item(call_id: str, name: str, arguments: str):
+    '''
+    Args:
+        call_id (str): The id a result travels back under.
+        name (str): Tool the model asked for.
+        arguments (str): Its arguments, as the JSON string the API returns.
+
+    Returns:
+        StubResponseItem: A function_call output item.
+    '''
+    return StubResponseItem(
+        type='function_call', id=f'fc_{call_id}', call_id=call_id,
+        name=name, arguments=arguments
+    )
+
+
+def reasoning_item(item_id: str = 'rs_stub'):
+    '''
+    Args:
+        item_id (str): The reasoning item's id.
+
+    Returns:
+        StubResponseItem: A reasoning item, as a reasoning model returns \
+            alongside its tool calls.
+    '''
+    return StubResponseItem(
+        type='reasoning', id=item_id, summary=[],
+        encrypted_content='opaque'
+    )
+
+
+class StubResponses:
+    '''Records every request; replies with a fixed message.'''
+
+    REPLY = 'STUB REPLY'
+
+    def __init__(self):
+        self.calls = []
+        # Output items for the next call, in order. Empty means one plain
+        # message, which is what a model answering without tools returns.
+        self.queue = []
+
+    def create(self, *, model, **kwargs):
+        self.calls.append({'model': model, **kwargs})
+        output = self.queue.pop(0) if self.queue else None
+        if output is None:
+            output = [StubResponseItem(type='message', id='msg_stub')]
+
+        return SimpleNamespace(
+            id='resp-stub',
+            model=model,
+            usage=StubResponseUsage(),
+            output=output,
+            output_text='' if any(
+                item.type == 'function_call' for item in output
+            ) else self.REPLY
+        )
+
+
 class StubOpenAI:
-    '''Stands in for openai.OpenAI across both call surfaces.'''
+    '''Stands in for openai.OpenAI across every call surface.'''
 
     def __init__(self):
         self.embeddings = StubEmbeddings()
         self.chat = SimpleNamespace(completions=StubCompletions())
+        self.responses = StubResponses()
 
 
 @pytest.fixture
