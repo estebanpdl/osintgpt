@@ -1,1 +1,1 @@
-from . import chat, ingest, projects, settings
+from . import chat, conversations, ingest, projects, settings

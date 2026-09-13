@@ -20,8 +20,15 @@ from osintgpt.llm import (
     build_embedding_provider,
     build_generation_provider
 )
+from osintgpt.agentic import answer_to_dict
 from osintgpt.llm.usage import CostLimitReached
-from osintgpt.projects import load_user_defaults
+from osintgpt.projects import (
+    append_turn,
+    load_user_defaults,
+    open_conversation,
+    recent_pairs,
+    start_conversation
+)
 from osintgpt.vector_store import SearchResult, store_for
 
 from .costs import (
@@ -100,8 +107,13 @@ class _LazyGenerator:
     def generate(self, system: str, user: str) -> str:
         return self.provider.generate(system, user)
 
-    def generate_with_tools(self, system, user, tools, history=None):
-        return self.provider.generate_with_tools(system, user, tools, history)
+    def generate_with_tools(self, system, user, tools, history=None, **extra):
+        # Forwarded rather than named: this wrapper adds laziness and nothing
+        # else, and a signature listing the provider's own parameters drops
+        # any it has not been taught, with no error to show for it.
+        return self.provider.generate_with_tools(
+            system, user, tools, history, **extra
+        )
 
 
 @contextmanager
@@ -174,6 +186,14 @@ def ask(
         False, '--static',
         help='Retrieve once and answer, instead of letting the model search.'
     ),
+    conversation_id: Optional[str] = typer.Option(
+        None, '--conversation',
+        help='Continue this thread, carrying its recent turns as context.'
+    ),
+    new_conversation: bool = typer.Option(
+        False, '--new-conversation',
+        help='Start a thread this answer is recorded in.'
+    ),
     trace: bool = typer.Option(
         False, '--trace', help='Show what the model did to reach the answer.'
     ),
@@ -182,6 +202,12 @@ def ask(
     project, effective, config = _runtime(
         context, project_slug, json_output
     )
+    thread = _thread(
+        project, question, conversation_id, new_conversation, json_output
+    )
+    # Read before this answer is recorded, so the window holds what came
+    # before the question and never the question itself.
+    carried = recent_pairs(thread, effective.conversation_window)
     recorder = recorder_for(effective)
     embedder = _embedder(effective, config, recorder, json_output)
     generator = _LazyGenerator(effective, config, recorder)
@@ -196,10 +222,14 @@ def ask(
                 data, lines = _static_payload(answer), []
             else:
                 answer = agentic_answer(
-                    project, question, embedder, generator, store=engine
+                    project, question, embedder, generator, store=engine,
+                    conversation=carried
                 )
                 data = _agentic_payload(answer)
                 lines = answer.trace.lines() + answer.trace.reading
+                if thread is not None:
+                    append_turn(thread, question, answer_to_dict(answer))
+                    data['conversation'] = thread.id
     except CostLimitReached as error:
         fail_for_cost(error, recorder, json_output)
     except Exception as error:  # noqa: BLE001 — provider and store boundary
@@ -245,41 +275,47 @@ def _static_payload(answer) -> Dict[str, object]:
     }
 
 
+def _thread(
+    project, question: str, conversation_id: Optional[str],
+    new_conversation: bool, json_output: bool
+):
+    '''
+    The thread this answer belongs to, or None for a one-shot question.
+
+    Asking without either flag stays exactly what it was — one question, no
+    memory, nothing written. Conversations are opted into, because a command
+    that silently started accumulating state would change what every existing
+    script does.
+    '''
+    if conversation_id:
+        thread = open_conversation(project, conversation_id)
+        if thread is None:
+            fail(
+                f'no conversation {conversation_id!r} in {project.slug}',
+                json_output
+            )
+
+        return thread
+
+    return start_conversation(project, question) if new_conversation else None
+
+
 def _agentic_payload(answer) -> Dict[str, object]:
     '''
     The trace travels with the answer in JSON always, never behind a flag.
     Reading traces is how retrieval gets tuned, and a script collecting
     answers should be collecting the reasoning with them.
+
+    The question is dropped: the caller typed it, and this payload's keys are
+    what scripts already parse. Everything else is the shape a stored
+    transcript holds, from the one serializer, so the two cannot drift.
     '''
-    return {
-        'answer': answer.text,
-        'sources': answer.sources,
-        # Each is a complete question, so an interface can send one as
-        # written — a numbered line in a terminal, a button in an app.
-        'followups': answer.followups,
-        'degraded': answer.trace.degraded,
-        'trace': {
-            'rounds': answer.trace.rounds,
-            'calls': [
-                {
-                    'round': entry.round,
-                    'tool': entry.tool,
-                    'arguments': entry.arguments,
-                    'results': entry.count,
-                    'unit': entry.unit,
-                    'documents': list(entry.refs),
-                    'seconds': round(entry.seconds, 3),
-                    'error': entry.error
-                }
-                for entry in answer.trace.entries
-            ],
-            'narration': [
-                {'round': said.round, 'text': said.text}
-                for said in answer.trace.narration
-            ],
-            'reading': answer.trace.reading
-        }
-    }
+    from osintgpt.agentic import answer_to_dict
+
+    payload = answer_to_dict(answer)
+    payload.pop('question', None)
+
+    return payload
 
 
 def search(

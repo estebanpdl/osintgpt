@@ -74,8 +74,16 @@ class AnthropicGeneration(GenerationProvider):
     supports_tools = True
     supports_vision = True
 
-    def generate_with_tools(self, system, user, tools, history=None):
-        messages = [{'role': 'user', 'content': user}]
+    def generate_with_tools(
+        self, system, user, tools, history=None, conversation=None
+    ):
+        messages = []
+
+        for asked, answered in conversation or []:
+            messages.append({'role': 'user', 'content': asked})
+            messages.append({'role': 'assistant', 'content': answered})
+
+        messages.append({'role': 'user', 'content': user})
 
         for exchange in history or []:
             content = []

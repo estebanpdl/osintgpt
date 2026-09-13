@@ -16,7 +16,16 @@ from typing import Any, Dict, List
 # import osintgpt
 from osintgpt import agentic_answer
 
-from ..session import queue_question, remember, take_pending
+# import osintgpt projects
+from osintgpt.projects import recent_pairs
+
+from ..session import (
+    CONVERSATION,
+    current_conversation,
+    queue_question,
+    remember,
+    take_pending
+)
 from ..styles import badge, escape, escape_html
 
 # Enough of a passage to judge it without the chip becoming the page.
@@ -70,10 +79,19 @@ def render(st, runtime, state) -> None:
         runtime (Runtime): Project and providers.
         state: Session state.
     '''
-    st.subheader(f'Ask — {runtime.project.name}')
+    from osintgpt.agentic import answer_from_dict
 
-    for turn in state.get('chat_history', []):
-        _turn(st, turn['question'], turn['answer'], state, replayed=True)
+    project = runtime.project
+    conversation = current_conversation(state, project)
+    st.subheader(f'Ask — {project.name}')
+    if conversation is not None and len(conversation):
+        st.caption(conversation.name)
+
+    for turn in (conversation.turns if conversation else []):
+        _turn(
+            st, turn.question, answer_from_dict(turn.answer), state,
+            replayed=True
+        )
 
     question = take_pending(state) or st.chat_input('Ask about this project')
     if not question:
@@ -81,10 +99,15 @@ def render(st, runtime, state) -> None:
 
     with st.spinner('Searching…'):
         answer = agentic_answer(
-            runtime.project, question, runtime.embedder, runtime.generator
+            project, question, runtime.embedder, runtime.generator,
+            # Read before the turn is recorded, so the window holds what came
+            # before this question and never the question itself.
+            conversation=recent_pairs(
+                conversation, project.settings.conversation_window
+            )
         )
 
-    remember(state, question, answer)
+    remember(state, project, question, answer)
     _turn(st, question, answer, state, replayed=False)
 
 
@@ -262,13 +285,17 @@ def _followups(st, answer, state) -> None:
     if not answer.followups:
         return
 
+    # Keyed on the turn: a key reused across turns carries the previous click.
+    turn = f'{state.get(CONVERSATION, "new")}-{abs(hash(answer.question))}'
+
     st.caption('Ask next')
-    st.markdown('<div class="followup-row">', unsafe_allow_html=True)
     for index, suggestion in enumerate(answer.followups):
+        # The key reaches the DOM as `st-key-<key>`, which is how these are
+        # styled. Streamlit renders each element in a container of its own, so
+        # a wrapper div never encloses the widgets written after it.
         st.button(
             suggestion,
-            key=f'followup-{len(state.get("chat_history", []))}-{index}',
+            key=f'followup-{turn}-{index}',
             on_click=queue_question,
             args=(state, suggestion)
         )
-    st.markdown('</div>', unsafe_allow_html=True)

@@ -39,6 +39,9 @@ class ProjectSettings:
     # against the answer it follows, and it surfaces connections an analyst
     # did not know to ask about, which is where findings usually are.
     suggest_followups: bool = True
+    # Question-and-answer pairs carried into a follow-up, most recent first.
+    # Zero is off; there is no separate switch.
+    conversation_window: int = 3
     storage_backend: str = 'sqlite'
     cost_ceiling_usd: Optional[float] = None
 

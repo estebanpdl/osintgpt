@@ -7,6 +7,9 @@ from .registry import TOOL_NAMES, TOOL_SPECS, run_tool
 # what a run did
 from .trace import Narration, Trace, TraceEntry
 
+# an answer as plain data, and back
+from .record import answer_from_dict, answer_to_dict
+
 # the tools a model may call
 from .tools import (
     REFS,

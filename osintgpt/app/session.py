@@ -24,13 +24,29 @@ from osintgpt.credentials import resolve_credentials
 from osintgpt.llm import build_embedding_provider, build_generation_provider
 
 # import osintgpt projects
-from osintgpt.projects import Project, Registry, load_user_defaults
+from osintgpt.projects import (
+    Project,
+    Registry,
+    append_turn,
+    load_user_defaults,
+    open_conversation,
+    start_conversation
+)
 
 # Session keys. Named rather than inlined because a typo in one silently
 # creates a second piece of state that nothing ever reads.
 SELECTED = 'selected_project'
-HISTORY = 'chat_history'
 PENDING = 'pending_question'
+# The view radio's own key, so opening a conversation can move the operator to
+# the one view that shows it.
+VIEW = 'view'
+PROJECTS, MATERIAL, ASK, SETTINGS = (
+    'Projects', 'Material', 'Ask', 'Settings'
+)
+VIEWS = [PROJECTS, MATERIAL, ASK, SETTINGS]
+# The conversation on screen, by id. Its turns are read from disk rather than
+# held here: session state does not survive the browser tab.
+CONVERSATION = 'conversation_id'
 
 
 # Runtime class
@@ -149,7 +165,7 @@ def select_project(state: Dict[str, Any], slug: Optional[str]) -> None:
     else:
         state.pop(SELECTED, None)
 
-    state.pop(HISTORY, None)
+    state.pop(CONVERSATION, None)
     state.pop(PENDING, None)
 
 
@@ -254,19 +270,79 @@ def cache_key(project: Project) -> str:
     return project.id
 
 
-# remember a question and its answer
-def remember(state: Dict[str, Any], question: str, answer: Any) -> None:
+# the conversation on screen
+def current_conversation(state: Dict[str, Any], project: Project):
     '''
-    Append to this project's chat history.
+    Read the selected conversation from disk.
+
+    Read rather than cached: a transcript kept in session state is a
+    transcript that ends with the browser tab, which is the whole reason this
+    lives in the project directory.
 
     Args:
         state (Dict[str, Any]): Session state.
-        question (str): What was asked.
-        answer: What came back.
+        project (Project): The project it belongs to.
+
+    Returns:
+        Optional[Conversation]: The conversation, or None when none is \
+            selected or the selected one has been deleted.
     '''
-    state.setdefault(HISTORY, []).append({
-        'question': question, 'answer': answer
-    })
+    conversation_id = state.get(CONVERSATION)
+    if not conversation_id:
+        return None
+
+    conversation = open_conversation(project, conversation_id)
+    if conversation is None:
+        # Selected, then deleted — from another tab, or from the sidebar.
+        # Forgetting beats raising on every rerun until someone notices.
+        state.pop(CONVERSATION, None)
+
+    return conversation
+
+
+# choose a conversation
+def select_conversation(
+    state: Dict[str, Any], conversation_id: Optional[str]
+) -> None:
+    '''
+    Args:
+        state (Dict[str, Any]): Session state.
+        conversation_id (str, optional): The conversation, or None to start a \
+            new one on the next question.
+    '''
+    if conversation_id:
+        state[CONVERSATION] = conversation_id
+    else:
+        state.pop(CONVERSATION, None)
+
+    state.pop(PENDING, None)
+
+
+# remember a question and its answer
+def remember(
+    state: Dict[str, Any], project: Project, question: str, answer: Any
+) -> None:
+    '''
+    Write the exchange into the selected conversation, starting one if there
+    is none.
+
+    The file is created by the first turn rather than by the selection, so a
+    thread the operator opened and abandoned leaves nothing behind.
+
+    Args:
+        state (Dict[str, Any]): Session state.
+        project (Project): The project asked.
+        question (str): What was asked.
+        answer (AgenticAnswer): What came back.
+    '''
+    from osintgpt.agentic import answer_to_dict
+
+    conversation = current_conversation(state, project)
+    if conversation is None:
+        conversation = start_conversation(project, question)
+
+    append_turn(conversation, question, answer_to_dict(answer))
+    state[CONVERSATION] = conversation.id
 
 
 # take a queued question

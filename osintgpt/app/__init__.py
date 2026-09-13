@@ -1,14 +1,16 @@
 # what the app remembers between reruns
 from .session import (
-    HISTORY,
+    CONVERSATION,
     PENDING,
     SELECTED,
     Runtime,
     cache_key,
+    current_conversation,
     list_projects,
     queue_question,
     remember,
     runtime_for,
+    select_conversation,
     select_project,
     selected_project,
     take_pending

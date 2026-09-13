@@ -205,11 +205,16 @@ class OpenAICompatGeneration(GenerationProvider):
 
         return response.choices[0].message.content or ''
 
-    def generate_with_tools(self, system, user, tools, history=None):
-        messages = [
-            {'role': 'system', 'content': system},
-            {'role': 'user', 'content': user}
-        ]
+    def generate_with_tools(
+        self, system, user, tools, history=None, conversation=None
+    ):
+        messages = [{'role': 'system', 'content': system}]
+
+        for asked, answered in conversation or []:
+            messages.append({'role': 'user', 'content': asked})
+            messages.append({'role': 'assistant', 'content': answered})
+
+        messages.append({'role': 'user', 'content': user})
 
         for exchange in history or []:
             # The assistant turn has to carry the calls it made, or the

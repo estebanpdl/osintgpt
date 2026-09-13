@@ -15,7 +15,7 @@ from abc import ABC, abstractmethod
 from enum import Enum
 
 # type hints
-from typing import List, Optional
+from typing import List, Optional, Tuple
 
 from .calling import Exchange, ModelTurn, ToolCallingUnsupported, ToolSpec
 from .usage import Usage, UsageRecorder
@@ -210,7 +210,8 @@ class GenerationProvider(ABC):
         system: str,
         user: str,
         tools: List['ToolSpec'],
-        history: Optional[List['Exchange']] = None
+        history: Optional[List['Exchange']] = None,
+        conversation: Optional[List[Tuple[str, str]]] = None
     ) -> 'ModelTurn':
         '''
         One round of a tool-calling conversation.
@@ -223,11 +224,21 @@ class GenerationProvider(ABC):
         the model is given no way to ask for more, so it must reply from what
         it already has.
 
+        `history` and `conversation` are different things and the names are
+        not interchangeable: `history` is the tool calls made while answering
+        *this* question, and `conversation` is what was asked and answered
+        *before* it. Confusing them sends a model the wrong material.
+
         Args:
             system (str): System instruction.
             user (str): The question, unchanged across rounds.
             tools (List[ToolSpec]): Tools the model may call this round.
             history (List[Exchange], optional): Completed rounds, in order.
+            conversation (List[Tuple[str, str]], optional): Earlier questions \
+                and the answers they got, oldest first, placed ahead of this \
+                question as prior turns. Carries no passages: the tools can \
+                retrieve those again, and re-sending them would crowd out the \
+                corpus material this answer has to be grounded in.
 
         Raises:
             ToolCallingUnsupported: If this backend cannot call tools.

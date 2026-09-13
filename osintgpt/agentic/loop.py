@@ -20,7 +20,15 @@ from dataclasses import dataclass, field
 from datetime import date
 
 # type hints
-from typing import Any, Callable, Dict, List, Optional
+from typing import (
+    Any,
+    Callable,
+    Dict,
+    List,
+    Optional,
+    Sequence,
+    Tuple
+)
 
 # import osintgpt llm
 from osintgpt.llm.base import EmbeddingProvider, GenerationProvider
@@ -75,7 +83,8 @@ def agentic_answer(
     generator: GenerationProvider,
     max_rounds: int = MAX_ROUNDS,
     store: Optional[Any] = None,
-    on_round: Optional[Callable[[int, ModelTurn], None]] = None
+    on_round: Optional[Callable[[int, ModelTurn], None]] = None,
+    conversation: Optional[Sequence[Tuple[str, str]]] = None
 ) -> AgenticAnswer:
     '''
     Give the model the retrieval tools and let it decide what to call.
@@ -95,6 +104,12 @@ def agentic_answer(
         store (BaseVectorEngine, optional): Defaults to the project's own.
         on_round (Callable, optional): Called with the round number and what \
             the model produced, for progress.
+        conversation (Sequence[Tuple[str, str]], optional): Earlier questions \
+            and the answers they got, oldest first. Without it every question \
+            is answered as though it were the first, which is right for a \
+            one-shot call and wrong inside a thread — a follow-up naming \
+            "the second one" has nothing to resolve it against. Carries no \
+            passages: the tools retrieve those again.
 
     Returns:
         AgenticAnswer: The answer, its sources, and the trace.
@@ -124,7 +139,14 @@ def agentic_answer(
         return _static(project, question, embedder, generator, trace, store,
                        'the model does not support tool calling')
 
-    system = prompt('agentic', today=date.today().isoformat())
+    system = prompt(
+        'agentic',
+        today=date.today().isoformat(),
+        continuing=bool(conversation)
+    )
+    # Omitted when empty, so a provider whose `generate_with_tools` does not
+    # accept `conversation` still serves every caller not using a thread.
+    carried = {'conversation': list(conversation)} if conversation else {}
     history: List[Exchange] = []
     sources: List[str] = []
     # Passages the tools actually returned, so a suggestion is grounded in
@@ -134,7 +156,7 @@ def agentic_answer(
     for round_number in range(1, max(int(max_rounds), 1) + 1):
         try:
             turn = generator.generate_with_tools(
-                system, question, TOOL_SPECS, history
+                system, question, TOOL_SPECS, history, **carried
             )
         except ToolCallingUnsupported as error:
             return _static(project, question, embedder, generator, trace,
@@ -168,7 +190,9 @@ def agentic_answer(
     # Rounds exhausted. One more request with no tools offered, so the model
     # has no way to ask for more and must answer from what it gathered.
     try:
-        final = generator.generate_with_tools(system, question, [], history)
+        final = generator.generate_with_tools(
+            system, question, [], history, **carried
+        )
         text = final.text.strip()
     except Exception as error:  # noqa: BLE001 — an answer is still owed
         log.warning('final round failed: %s', error)

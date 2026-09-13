@@ -26,13 +26,18 @@ from osintgpt.projects import default_home
 # than importing it as a module, so it has no parent package to resolve
 # against and a relative import fails at load.
 from osintgpt.app.session import (
+    MATERIAL,
+    PROJECTS,
+    SETTINGS,
+    VIEW,
+    VIEWS,
     Runtime,
     cache_key,
     runtime_for,
     selected_project
 )
 from osintgpt.app.styles import load_css
-from osintgpt.app.views import chat, ingest, projects, settings
+from osintgpt.app.views import chat, conversations, ingest, projects, settings
 
 
 # providers for a project, built once per project
@@ -59,14 +64,15 @@ def main() -> None:
         '<div class="osintgpt-subtitle">Ask your own documents</div>',
         unsafe_allow_html=True
     )
-    view = st.sidebar.radio(
-        'View', ['Projects', 'Material', 'Ask', 'Settings']
-    )
+    view = st.sidebar.radio('View', VIEWS, key=VIEW)
 
     project = selected_project(st.session_state, home)
 
-    if view == 'Projects' or project is None:
-        if project is None and view != 'Projects':
+    if project is not None:
+        conversations.render(st, project, st.session_state)
+
+    if view == PROJECTS or project is None:
+        if project is None and view != PROJECTS:
             st.info('Select a project first.')
         projects.render(st, home, st.session_state)
 
@@ -85,9 +91,9 @@ def main() -> None:
         return
 
     try:
-        if view == 'Material':
+        if view == MATERIAL:
             ingest.render(st, runtime, st.session_state)
-        elif view == 'Settings':
+        elif view == SETTINGS:
             settings.render(st, runtime, home, st.session_state)
         else:
             chat.render(st, runtime, st.session_state)

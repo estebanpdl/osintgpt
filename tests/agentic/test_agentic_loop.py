@@ -60,17 +60,23 @@ class ScriptedModel(GenerationProvider):
         self.offered = []
         self.systems = []
         self.histories = []
+        # None records a call made without the parameter at all, which is
+        # different from one made with an empty window.
+        self.conversations = []
 
     def generate(self, system, user, **kwargs):
         return 'static answer'
 
-    def generate_with_tools(self, system, user, tools, history=None):
+    def generate_with_tools(
+        self, system, user, tools, history=None, conversation=None
+    ):
         if self.error:
             raise self.error
 
         self.offered.append([t.name for t in tools])
         self.systems.append(system)
         self.histories.append(list(history or []))
+        self.conversations.append(conversation)
 
         if not self.turns:
             return ModelTurn(text='ran out of script')
@@ -235,6 +241,82 @@ class TestStoppingEarly:
         answer = agentic_answer(project, 'q', embedder, model)
 
         assert answer.trace.calls == 0
+
+
+class TestConversationContext:
+    '''
+    Earlier turns reach the model so a follow-up has something to resolve
+    against. Without them every question is answered as though it were the
+    first, which is right for a one-shot call and wrong inside a thread.
+    '''
+
+    def test_the_window_reaches_every_round(self, project, embedder):
+        model = ScriptedModel(
+            calls(('semantic_search', {'query': 'aardvark'})),
+            ModelTurn(text='done')
+        )
+        pairs = [('What is alpha?', 'Aardvarks.')]
+
+        agentic_answer(
+            project, 'and the second one?', embedder, model,
+            conversation=pairs
+        )
+
+        assert all(seen == pairs for seen in model.conversations)
+
+    def test_the_final_round_gets_it_too(self, project, embedder):
+        '''
+        The last request is where the answer is actually written, so leaving
+        the conversation out of it loses the context exactly when it matters.
+        '''
+        model = ScriptedModel(
+            *[calls(('list_documents', {}))] * 6,
+            ModelTurn(text='done')
+        )
+        pairs = [('What is alpha?', 'Aardvarks.')]
+
+        agentic_answer(
+            project, 'q', embedder, model, max_rounds=6, conversation=pairs
+        )
+
+        assert len(model.conversations) == 7
+        assert model.conversations[-1] == pairs
+
+    def test_without_one_nothing_is_passed(self, project, embedder):
+        '''
+        A provider written against the earlier signature has no such
+        parameter. Passing it unconditionally would break every caller rather
+        than only the ones using a thread.
+        '''
+        model = ScriptedModel(ModelTurn(text='done'))
+
+        agentic_answer(project, 'q', embedder, model)
+
+        assert model.conversations == [None]
+
+    def test_an_empty_window_passes_nothing(self, project, embedder):
+        model = ScriptedModel(ModelTurn(text='done'))
+
+        agentic_answer(project, 'q', embedder, model, conversation=[])
+
+        assert model.conversations == [None]
+
+    def test_a_provider_from_before_this_still_works(self, project, embedder):
+        '''
+        The guarantee for anyone who wrote their own backend against the
+        published interface.
+        '''
+        class OlderProvider:
+            model = 'older'
+            supports_tools = True
+
+            def generate_with_tools(self, system, user, tools, history=None):
+                return ModelTurn(text='answered')
+
+        answer = agentic_answer(project, 'q', embedder, OlderProvider())
+
+        assert answer.text == 'answered'
+        assert not answer.degraded
 
 
 class TestTheTrace:

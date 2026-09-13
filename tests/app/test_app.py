@@ -16,15 +16,15 @@ import pytest
 # import osintgpt
 from osintgpt import Project
 from osintgpt.app import (
-    HISTORY,
+    CONVERSATION,
     PENDING,
     SELECTED,
     cache_key,
     list_projects,
     queue_question,
-    remember,
     runtime_for,
     script_path,
+    select_conversation,
     select_project,
     selected_project,
     take_pending
@@ -94,17 +94,18 @@ class TestSelection:
 
     def test_switching_clears_the_previous_conversation(self, projects):
         '''
-        History is per project. Carrying it across a switch shows an analyst
-        answers from a corpus they are no longer looking at.
+        A conversation belongs to a project. Carrying the selection across a
+        switch would show an analyst a thread about a corpus they are no
+        longer looking at.
         '''
         first, second = projects
         state = {}
         select_project(state, first.slug)
-        remember(state, 'q', 'a')
+        select_conversation(state, 'some-conversation')
 
         select_project(state, second.slug)
 
-        assert state.get(HISTORY) is None
+        assert state.get(CONVERSATION) is None
 
     def test_reselecting_the_same_project_keeps_the_conversation(
         self, projects
@@ -112,11 +113,11 @@ class TestSelection:
         first, _ = projects
         state = {}
         select_project(state, first.slug)
-        remember(state, 'q', 'a')
+        select_conversation(state, 'some-conversation')
 
         select_project(state, first.slug)
 
-        assert len(state[HISTORY]) == 1
+        assert state[CONVERSATION] == 'some-conversation'
 
     def test_a_deleted_project_is_forgotten_rather_than_raising(
         self, projects, home
@@ -135,12 +136,12 @@ class TestSelection:
         first, _ = projects
         state = {}
         select_project(state, first.slug)
-        remember(state, 'q', 'a')
+        select_conversation(state, 'some-conversation')
 
         select_project(state, None)
 
         assert SELECTED not in state
-        assert HISTORY not in state
+        assert CONVERSATION not in state
 
 
 class TestFollowupButtons:

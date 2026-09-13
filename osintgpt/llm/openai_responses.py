@@ -103,18 +103,25 @@ class OpenAIResponsesGeneration(GenerationProvider):
         system: str,
         user: str,
         tools: List[ToolSpec],
-        history: Optional[List[Exchange]] = None
+        history: Optional[List[Exchange]] = None,
+        conversation: Optional[List[Tuple[str, str]]] = None
     ) -> ModelTurn:
-        conversation: List[Any] = [{'role': 'user', 'content': user}]
+        items: List[Any] = []
+
+        for asked, answered in conversation or []:
+            items.append({'role': 'user', 'content': asked})
+            items.append({'role': 'assistant', 'content': answered})
+
+        items.append({'role': 'user', 'content': user})
 
         for exchange in history or []:
             # Everything the model produced that round, verbatim: the calls it
             # made and the reasoning behind them. Rebuilding the calls from the
             # neutral form would drop the reasoning, which this endpoint
             # expects back alongside the results it produced.
-            conversation.extend(getattr(exchange.turn, 'items', ()))
+            items.extend(getattr(exchange.turn, 'items', ()))
             for call in exchange.turn.calls:
-                conversation.append({
+                items.append({
                     'type': 'function_call_output',
                     'call_id': call.id,
                     'output': exchange.results.get(call.id, '')
@@ -122,7 +129,7 @@ class OpenAIResponsesGeneration(GenerationProvider):
 
         request: Dict[str, Any] = {
             'instructions': system,
-            'input': conversation
+            'input': items
         }
         if tools:
             request['tools'] = [
