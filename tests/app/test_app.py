@@ -243,10 +243,9 @@ class TestSourceChips:
 
 
 class TestPackaging:
-    def test_streamlit_is_an_extra_not_a_core_dependency(self):
+    def test_streamlit_is_a_core_dependency(self):
         '''
-        A library that pulls a web framework into every dependency tree is a
-        library nobody embeds.
+        The app is a subcommand, not a hidden feature behind an extra.
         '''
         from pathlib import Path
 
@@ -258,8 +257,8 @@ class TestPackaging:
         core = ' '.join(config['project']['dependencies'])
         extras = config['project']['optional-dependencies']
 
-        assert 'streamlit' not in core
-        assert any('streamlit' in dep for dep in extras['app'])
+        assert 'streamlit' in core
+        assert 'app' not in extras
 
     def test_the_script_ships_with_the_package(self):
         '''
@@ -268,26 +267,6 @@ class TestPackaging:
         '''
         assert script_path().name == 'main.py'
         assert script_path().is_file()
-
-    def test_launching_without_streamlit_says_what_to_install(
-        self, monkeypatch, capsys
-    ):
-        import builtins
-
-        from osintgpt.app import launch
-
-        real = builtins.__import__
-
-        def refuse(name, *args, **kwargs):
-            if name.startswith('streamlit'):
-                raise ImportError('no streamlit')
-
-            return real(name, *args, **kwargs)
-
-        monkeypatch.setattr(builtins, '__import__', refuse)
-
-        assert launch.main([]) == 1
-        assert 'osintgpt[app]' in capsys.readouterr().err
 
 
 class TestReservedColours:
@@ -371,7 +350,6 @@ class TestOneEntryPoint:
         output = CliRunner().invoke(app, ['--help']).output
 
         assert 'app' in output
-        assert 'osintgpt[app]' in output
 
 
 class TestTheScriptLoadsAsAScript:

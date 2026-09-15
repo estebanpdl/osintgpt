@@ -19,10 +19,6 @@ from pathlib import Path
 # type hints
 from typing import List, Optional
 
-MISSING = (
-    'the app needs Streamlit: pip install osintgpt[app]'
-)
-
 
 # where the Streamlit script lives
 def script_path() -> Path:
@@ -45,12 +41,7 @@ def main(argv: Optional[List[str]] = None) -> int:
     Returns:
         int: Process exit code.
     '''
-    try:
-        from streamlit.web import cli as streamlit_cli
-    except ImportError:
-        print(MISSING, file=sys.stderr)
-
-        return 1
+    from streamlit.web import cli as streamlit_cli
 
     from .styles import theme_flags
 

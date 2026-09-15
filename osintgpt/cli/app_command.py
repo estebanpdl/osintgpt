@@ -37,8 +37,6 @@ def launch_app(
 
 def register_app_command(app: typer.Typer) -> None:
     app.command(
-        # The brackets are escaped: Rich reads [app] as markup and would
-        # print "Needs osintgpt." — which says nothing at all.
         'app',
-        help=r'Open the browser interface. Needs osintgpt\[app].'
+        help='Open the browser interface.'
     )(launch_app)
