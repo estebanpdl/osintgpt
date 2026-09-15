@@ -66,6 +66,8 @@ class Runtime:
     # Built providers, memoized. A rerun that asks a second question must
     # reuse the client rather than open a new one per keystroke.
     built: Dict[str, Any] = field(default_factory=dict)
+    embedding_provider: str = ''
+    config: Any = None
 
     @property
     def key(self) -> str:
@@ -195,7 +197,7 @@ def runtime_for(
     defaults = load_user_defaults(home)
     effective = project.effective_settings(defaults)
     config = project.settings_for(resolve_credentials(home), defaults)
-    embedding_model = _embedding_model(effective)
+    embedding_model = _embedding_model(effective, config)
 
     if builder is not None:
         # One call produces both, so memoize the pair rather than calling it
@@ -212,7 +214,7 @@ def runtime_for(
             project=project,
             build_embedder=lambda: build_pair(0),
             build_generator=lambda: build_pair(1),
-            embedding_model=embedding_model
+            embedding_model=embedding_model, embedding_provider=effective.embedding_provider, config=config
         )
 
     return Runtime(
@@ -225,11 +227,11 @@ def runtime_for(
             effective.generation_provider, config,
             model=effective.generation_model or None
         ),
-        embedding_model=embedding_model
+        embedding_model=embedding_model, embedding_provider=effective.embedding_provider, config=config
     )
 
 
-def _embedding_model(effective) -> str:
+def _embedding_model(effective, config=None) -> str:
     '''
     The model a project would embed with, without building anything.
 
@@ -247,9 +249,20 @@ def _embedding_model(effective) -> str:
 
     spec = EMBEDDING_BACKENDS.get(effective.embedding_provider)
 
-    return effective.embedding_model or getattr(
+    return effective.embedding_model or getattr(config, 'openai_embedding_model', '') or getattr(
         spec, 'default_model', None
     ) or ''
+
+
+def runtime_revision(project, home):
+    '''Invalidate cached clients when saved settings, defaults or credentials change.'''
+    from dataclasses import asdict
+    from osintgpt.ingestion.recipes import digest
+    defaults = load_user_defaults(home)
+    return digest({
+        'settings': asdict(project.effective_settings(defaults)),
+        'config': asdict(project.settings_for(resolve_credentials(home), defaults))
+    })
 
 
 # what a cached resource is keyed on

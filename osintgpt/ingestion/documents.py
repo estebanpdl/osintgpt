@@ -42,9 +42,9 @@ class Document:
     # different dates depending on where it was written, and guessing which
     # would be a locale assumption baked into a corpus.
     timestamp: str = ''
-    # Who or what produced the record. Filterable and lexically searchable,
-    # because a question about an account has to reach the records it wrote as
-    # well as the ones that mention it.
+    # Who or what produced the record. Matched by exact search alongside the
+    # text, because a question about an account has to reach the records it
+    # wrote and not only the ones that mention it.
     author: str = ''
 
 
@@ -57,6 +57,10 @@ class FieldMapping:
     quietly useless.
     '''
     # Joined in order when more than one is named, e.g. a title and a body.
+    # The first is the primary: a record whose primary field is empty is not a
+    # record, however much the others carry. Without that rule a blank body
+    # survives on whatever identifiers sit beside it, and indexes as
+    # boilerplate identical to every other blank row.
     content: Tuple[str, ...] = ()
     metadata: Tuple[str, ...] = ()
     # Field carrying when the record was made. Named rather than detected:
@@ -71,6 +75,11 @@ class FieldMapping:
     # Nested formats only: path to the array of records. Empty means the
     # document is itself the array, or a single record.
     records: str = ''
+    # Shortest content worth indexing. A record can satisfy its primary field
+    # and still say nothing — a bare handle, a lone emoji — and those embed to
+    # near-identical vectors that crowd out real material. Zero keeps
+    # everything: where the floor belongs depends on the source.
+    min_chars: int = 0
 
     @classmethod
     def from_dict(cls, data: Optional[dict]):
@@ -91,7 +100,8 @@ class FieldMapping:
             timestamp=str(data.get('timestamp') or ''),
             author=str(data.get('author') or ''),
             identity=str(data.get('identity') or ''),
-            records=str(data.get('records') or '')
+            records=str(data.get('records') or ''),
+            min_chars=_as_count(data.get('min_chars'))
         )
 
     def to_dict(self) -> dict:
@@ -113,6 +123,8 @@ class FieldMapping:
             recorded['identity'] = self.identity
         if self.records:
             recorded['records'] = self.records
+        if self.min_chars:
+            recorded['min_chars'] = self.min_chars
 
         return recorded
 
@@ -146,6 +158,35 @@ def value_at(record: Any, path: str) -> Any:
     return current
 
 
+# the text one record would contribute
+def content_for(record: Any, mapping: FieldMapping) -> str:
+    '''
+    Join a record's content fields in the order they were named.
+
+    Shared with the dry run, so what an operator is shown is decided by the
+    rule that will run.
+
+    Args:
+        record (Any): The record, typically a mapping.
+        mapping (FieldMapping): Which fields play which role.
+
+    Returns:
+        str: The joined text, empty when the primary content field is.
+    '''
+    if not mapping.content:
+        return ''
+
+    primary = _field_text(record, mapping.content[0])
+    if not primary:
+        return ''
+
+    parts = [primary] + [
+        _field_text(record, name) for name in mapping.content[1:]
+    ]
+
+    return '\n\n'.join(part for part in parts if part)
+
+
 # build a document from one structured record
 def document_from_record(
     record: Any,
@@ -164,16 +205,12 @@ def document_from_record(
             named.
 
     Returns:
-        Optional[Document]: The document, or None when every content field \
-            was empty — a record with nothing to search is not a document.
+        Optional[Document]: The document, or None when the record has nothing \
+            worth searching: no primary content, or less of it than \
+            `mapping.min_chars` asks for.
     '''
-    parts = [
-        str(value_at(record, name)).strip()
-        for name in mapping.content
-        if value_at(record, name) is not None
-    ]
-    text = '\n\n'.join(part for part in parts if part)
-    if not text:
+    text = content_for(record, mapping)
+    if not text or len(text) < mapping.min_chars:
         return None
 
     identifier = ''
@@ -202,6 +239,18 @@ def _field_text(record: Any, path: str) -> str:
     value = value_at(record, path)
 
     return '' if value is None else str(value).strip()
+
+
+def _as_count(value: Any) -> int:
+    '''
+    A recorded count, or zero. A hand-edited project file can hold anything at
+    that key, and refusing to load the corpus over it costs more than ignoring
+    it.
+    '''
+    try:
+        return max(int(value), 0)
+    except (TypeError, ValueError):
+        return 0
 
 
 def _as_list(value: Any) -> List[str]:

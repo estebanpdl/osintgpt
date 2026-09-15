@@ -25,16 +25,12 @@ from osintgpt.exceptions.errors import MissingEnvironmentVariableError
 
 from .base import BaseVectorEngine
 from .records import SearchResult, StoredChunk
+from .pgvector_schema import INDEX_SUFFIX, ensure_table, prepare
 
 # One table per project rather than a project column: isolation is structural
 # here as it is with a file per project, so a forgotten WHERE cannot leak one
 # case into another.
 TABLE_PREFIX = 'osintgpt_'
-
-# HNSW is what makes pgvector worth reaching for; without an index this is a
-# sequential scan the default store already does better. Built on the cosine
-# operator class, matching the distance every backend reports.
-INDEX_SUFFIX = '_vector_idx'
 
 # Named explicitly so a term containing it is doubled rather than silently
 # escaping the character after it.
@@ -88,13 +84,48 @@ class PgVectorStore(BaseVectorEngine):
     def close(self) -> None:
         self.connection.close()
 
+    def indexing_destination(self, root) -> dict:
+        info = self.connection.info
+        with self.connection.cursor() as cursor:
+            cursor.execute('SELECT current_schema()')
+            schema = cursor.fetchone()[0]
+        return {
+            'host': info.host, 'port': info.port, 'database': info.dbname,
+            'schema': schema, 'table': self.table
+        }
+
+    def index_inventory(self) -> dict:
+        if not self._table_exists():
+            return {}
+        with self.connection.cursor() as cursor:
+            cursor.execute(self._sql(
+                'SELECT ref, embedding_model, COUNT(*), COUNT(DISTINCT sequence), '
+                'MIN(sequence), MAX(sequence) FROM {} GROUP BY ref, embedding_model'
+            ))
+            inventory = {}
+            for ref, model, n, distinct_n, first, last in cursor.fetchall():
+                if (first, last, distinct_n) != (0, n - 1, n):
+                    inventory[ref] = None
+                elif ref not in inventory or inventory[ref] is not None:
+                    inventory.setdefault(ref, {})[model] = n
+            return inventory
+
     def __enter__(self):
         return self
 
     def __exit__(self, *exception) -> None:
         self.close()
 
-    def upsert(
+    def upsert(self, ref, chunks, vectors) -> int:
+        try:
+            return self._upsert(ref, chunks, vectors)
+        except BaseException:
+            # A refused replacement must not poison later reads or commit a
+            # preceding DELETE when the caller continues with another file.
+            self.connection.rollback()
+            raise
+
+    def _upsert(
         self,
         ref: str,
         chunks: Sequence[StoredChunk],
@@ -121,8 +152,8 @@ class PgVectorStore(BaseVectorEngine):
                     self._sql(
                         'INSERT INTO {} ('
                         '  ref, sequence, text, path, "timestamp", author,'
-                        '  metadata, embedding_model, vector'
-                        ') VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)'
+                        '  metadata, embedding_model, vector, document_ref'
+                        ') VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)'
                     ),
                     [
                         (
@@ -134,7 +165,8 @@ class PgVectorStore(BaseVectorEngine):
                             chunk.author,
                             json.dumps(chunk.metadata, ensure_ascii=False),
                             chunk.embedding_model,
-                            _vector_literal(vector)
+                            _vector_literal(vector),
+                            chunk.document_ref
                         )
                         for chunk, vector in zip(chunks, vectors)
                     ]
@@ -168,7 +200,7 @@ class PgVectorStore(BaseVectorEngine):
         # number every other backend reports.
         query = self._sql(
             'SELECT ref, sequence, text, path, "timestamp", author, metadata,'
-            '       embedding_model, 1 - (vector <=> %s) AS score '
+            '       embedding_model, document_ref, 1 - (vector <=> %s) AS score '
             'FROM {} WHERE ' + ' AND '.join(clauses) +
             ' ORDER BY vector <=> %s LIMIT %s'
         )
@@ -179,7 +211,7 @@ class PgVectorStore(BaseVectorEngine):
             rows = cursor.fetchall()
 
         return [
-            SearchResult(chunk=_to_chunk(row), score=float(row[8]))
+            SearchResult(chunk=_to_chunk(row), score=float(row[9]))
             for row in rows
         ]
 
@@ -196,8 +228,11 @@ class PgVectorStore(BaseVectorEngine):
         # ILIKE folds case per the database collation, which is Unicode-aware
         # on any modern install. LOWER() on both sides would be the same
         # comparison with an extra function call.
-        clauses = ['text ILIKE %s ESCAPE %s']
-        parameters: List[object] = [f'%{_escape_like(term)}%', LIKE_ESCAPE]
+        pattern = f'%{_escape_like(term)}%'
+        clauses = ['(text ILIKE %s ESCAPE %s OR author ILIKE %s ESCAPE %s)']
+        parameters: List[object] = [
+            pattern, LIKE_ESCAPE, pattern, LIKE_ESCAPE
+        ]
 
         if embedding_model is not None:
             clauses.append('embedding_model = %s')
@@ -212,11 +247,13 @@ class PgVectorStore(BaseVectorEngine):
 
         query = self._sql(
             'SELECT ref, sequence, text, path, "timestamp", author,'
-            '       metadata, embedding_model '
+            '       metadata, embedding_model, document_ref '
             'FROM {} WHERE ' + ' AND '.join(clauses) +
-            ' ORDER BY ref, sequence LIMIT %s'
+            ' ORDER BY (text ILIKE %s ESCAPE %s) DESC, ref, sequence LIMIT %s'
         )
-        parameters.append(limit)
+        # Text matches first: an author match is everything that account
+        # wrote, and ahead of them it would fill the limit on its own.
+        parameters += [pattern, LIKE_ESCAPE, limit]
 
         with self.connection.cursor() as cursor:
             cursor.execute(query, parameters)
@@ -290,7 +327,7 @@ class PgVectorStore(BaseVectorEngine):
             cursor.execute(
                 self._sql(
                     'SELECT ref, sequence, text, path, "timestamp", author,'
-                    '       metadata, embedding_model '
+                    '       metadata, embedding_model, document_ref '
                     'FROM {} WHERE ref = %s ORDER BY sequence'
                 ),
                 (ref,)
@@ -324,54 +361,10 @@ class PgVectorStore(BaseVectorEngine):
             return [row[0] for row in cursor.fetchall()]
 
     def _prepare(self) -> None:
-        '''
-        The extension has to exist before a vector column can. Creating it
-        needs privileges an operator may not have granted, so the failure says
-        what to run rather than what went wrong.
-        '''
-        try:
-            with self.connection.cursor() as cursor:
-                cursor.execute('CREATE EXTENSION IF NOT EXISTS vector')
-            self.connection.commit()
-        except Exception as error:
-            self.connection.rollback()
-            raise RuntimeError(
-                'the pgvector extension is not available: ask a database '
-                'owner to run CREATE EXTENSION vector on this database'
-            ) from error
-
-        self.register_vector(self.connection)
+        prepare(self)
 
     def _ensure_table(self, cursor, dimensions: int) -> None:
-        '''
-        Create on first write, when the vector size is finally known.
-        '''
-        cursor.execute(self._sql(
-            'CREATE TABLE IF NOT EXISTS {} ('
-            '  id              bigserial PRIMARY KEY,'
-            '  ref             text NOT NULL,'
-            '  sequence        integer NOT NULL,'
-            '  text            text NOT NULL,'
-            '  path            text NOT NULL DEFAULT \'\','
-            '  "timestamp"     text NOT NULL DEFAULT \'\','
-            '  author          text NOT NULL DEFAULT \'\','
-            '  metadata        jsonb NOT NULL DEFAULT \'{{}}\'::jsonb,'
-            '  embedding_model text NOT NULL,'
-            f'  vector          vector({dimensions}) NOT NULL'
-            ')'
-        ))
-        cursor.execute(self._sql(
-            'CREATE INDEX IF NOT EXISTS ' + self.table + '_ref_idx '
-            'ON {} (ref)'
-        ))
-        cursor.execute(self._sql(
-            'CREATE INDEX IF NOT EXISTS ' + self.table + '_model_idx '
-            'ON {} (embedding_model)'
-        ))
-        cursor.execute(self._sql(
-            'CREATE INDEX IF NOT EXISTS ' + self.table + INDEX_SUFFIX + ' '
-            'ON {} USING hnsw (vector vector_cosine_ops)'
-        ))
+        ensure_table(self, cursor, dimensions)
 
     def _table_exists(self) -> bool:
         with self.connection.cursor() as cursor:
@@ -447,5 +440,6 @@ def _to_chunk(row) -> StoredChunk:
         path=row[3],
         timestamp=row[4],
         author=row[5],
-        metadata=metadata or {}
+        metadata=metadata or {},
+        document_ref=row[8]
     )

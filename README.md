@@ -119,6 +119,19 @@ embedding model supports them. A fallback converter handles formats such as
 PowerPoint and EPUB. Structured files need a content-field mapping when they
 are registered; scanned PDF pages need a transcriber to recover text.
 
+`osintgpt convert <path>` prints the markdown a file would be chunked from,
+without registering, embedding, or storing anything. It needs no project and
+makes no API call: pages holding no extractable text come out as named gaps.
+Pass `--map content=<field>` for a structured file. `--out` writes instead of
+printing: converting a single file, it specifies the output filename;
+converting a directory, it must be a directory, where the resulting `.md`
+files are written with the original structure preserved.
+Adding `--vision` (or `--model <name>`, which implies it) is the only way to
+spend anything here — it transcribes those pages at one generation call each,
+caching into the project's `extracts/` when `--project` is given, so the same
+page is not paid for again at index time. The same panel is in the app's
+**Material** view.
+
 ## Use it as a library
 
 The [CLI quickstart](#quickstart) is the shortest route. The same project and
@@ -149,6 +162,161 @@ records registered locations and field mappings, and `store.sqlite` contains
 the default local vector store. Back up the project directory together with
 any registered material stored outside it; Qdrant and Postgres stores need
 their own backup.
+
+Indexing keeps successful embedding batches in `index-journal.sqlite` until
+the file is fully embedded and published to the vector store. If an OpenAI,
+Gemini, or Voyage embedding request fails, click **Index now** again or rerun
+`osintgpt index` for the same project to reuse the saved batches and process
+the remainder. Keep the workbook, field mapping, embedding configuration, and destination the same
+when resuming. `--force` discards pending checkpoints and starts a fresh pass;
+resume an interrupted forced pass without `--force`.
+
+Pending chunks are not searchable. Successful responses are checkpointed
+before a cost-ceiling stop, and the journal is cleared for a file only after
+publication and index-state persistence. A response lost before it reaches
+the checkpoint may still need repeating. Custom embedding providers retain
+whole-call behavior unless they implement `embed_checkpointed`.
+
+New index state records the source hash and fingerprints of the field mapping
+(including filters and identity), chunking rules, embedding provider/model/options,
+and destination. Changing these makes the next indexing pass rebuild the affected
+files automatically. Changing batch size, credentials, or a spending limit does
+not invalidate otherwise compatible work. An unchanged pass also checks that the
+destination still contains the expected chunks; missing or incomplete files are
+scheduled again. The provider selected when the pass starts stays in use for that
+pass. Record identities are now stored separately from the file reference.
+
+Older completion records get a one-time local comparison of every stored chunk
+against the current source, mapping, text, metadata and model. Matching indexes
+using a standard OpenAI embedding model at its default endpoint can be adopted
+without embedding calls. This infers the original endpoint and default options:
+older stores did not record them. Other providers, custom endpoints, or a mismatch
+require an explicit `osintgpt index --force`; the existing chunks are preserved
+until rebuilt. Older chunks acquire the new record-identity field on their next
+rebuild. Changing a Qdrant or Postgres vector size requires a destination that
+supports the new size.
+
+Paid embedding providers now support RPM/TPM pacing. In Streamlit, open
+**Settings → Embedding rate limits** after choosing OpenAI, Gemini, or Voyage.
+Enter that provider's requests-per-minute and tokens-per-minute quotas, or lower
+budgets reserved for this workload. These settings are stored separately for each
+provider. For example, an operator with a 2M TPM allocation can configure the
+selected project through the CLI:
+
+```bash
+osintgpt config set openai_embedding_tpm 2000000
+osintgpt config set openai_embedding_rpm 5000
+osintgpt config set openai_embedding_batch_tokens 50000
+```
+
+Use your actual allocation for each number; these commands are not tier defaults.
+Replace `openai` with `gemini` or `voyage` for those providers. `--user` saves user
+defaults; `unset` restores inheritance, and `0` removes an operator ceiling.
+The matching environment variables are `OSINTGPT_OPENAI_EMBEDDING_TPM`,
+`OSINTGPT_OPENAI_EMBEDDING_RPM`, and `OSINTGPT_OPENAI_EMBEDDING_BATCH_TOKENS`.
+Explicit environment/library settings take precedence over project and user values.
+
+OpenAI can learn quota ceilings and remaining capacity from
+[response headers](https://developers.openai.com/api/docs/guides/rate-limits).
+When limits are unknown, its first request embeds one input to obtain those
+headers; subsequent batches adapt to the reported limits. A configured lower
+ceiling still applies. Set Gemini and Voyage RPM/TPM explicitly from their
+[Gemini](https://ai.google.dev/gemini-api/docs/rate-limits) or
+[Voyage](https://docs.voyageai.com/docs/rate-limits) dashboard. An unset ceiling
+without usable provider headers cannot pace that quota; it does not infer a tier.
+
+The limiter spaces requests and checks a rolling minute of reserved requests and
+tokens. Batches respect both input count and token budgets, keeping input order
+and leaving text intact. Known OpenAI models use their tokenizer; Gemini, Voyage,
+and unknown models use a conservative UTF-8 byte estimate with a framing allowance.
+That estimate can reduce throughput and is never substituted for billing usage.
+Oversized individual inputs fail with an explanation instead of being truncated
+or waiting indefinitely. Provider request ceilings also apply, independently of TPM.
+
+CLI and Streamlit runs using the same osintgpt home coordinate through
+`embedding-rates.sqlite`. By default, quotas are grouped by provider, endpoint,
+API key and model. Set `openai_embedding_quota_scope` (or the corresponding Gemini
+or Voyage field) to the same label across keys/projects/models that share one
+provider quota. Only hashes, counts and timestamps are stored in the ledger.
+Separate homes can share an explicit `OSINTGPT_EMBEDDING_RATE_STATE_PATH` on the
+same machine. Standalone library providers use an in-process ledger unless given
+`Settings(embedding_rate_state_path=...)`.
+
+Pacing settings do not invalidate embeddings or checkpoints. Successful vectors
+reach their checkpoint before quota updates or cost accounting can stop a run.
+SDK retries are disabled for paid embedding calls; osintgpt owns the retry loop.
+OpenAI, Gemini, and Voyage automatically retry temporary rate limits, supported
+transient HTTP errors (408, 409, 429, 500, 502, 503, 504), and SDK transport failures.
+The default is **six total attempts per unfinished batch**, with a **five-minute
+retry scheduling budget** starting with the first HTTP attempt, including HTTP
+time and waits for retry quota capacity.
+Each HTTP attempt has a 60-second SDK timeout; an attempt already in progress can
+finish after the scheduling budget. Successful batches start a fresh budget.
+
+Retries follow valid `Retry-After` seconds or HTTP dates, `retry-after-ms`, Gemini
+`RetryInfo`, and explicit retry delays in provider messages. The largest valid
+hint is a minimum. Exponential backoff starts at one second, grows to 60 seconds,
+and adds up to one second of jitter. A provider's longer wait is never shortened
+to that backoff cap: if the wait cannot fit the remaining retry budget, indexing
+stops with the original provider error. This follows the providers' recovery
+guidance for [OpenAI](https://developers.openai.com/api/docs/guides/rate-limits),
+[Gemini](https://ai.google.dev/gemini-api/docs/troubleshooting), and
+[Voyage](https://docs.voyageai.com/docs/rate-limits).
+
+Every retry obtains a new RPM/TPM reservation. Failed attempts stay charged to the
+local rate window, and cooldowns are shared with other runs using the same quota
+group. If newly reported TPM requires smaller batches, the unfinished inputs are
+repartitioned in order. A single input that cannot fit still stops with an error.
+Waits remain interruptible; cancelling does not reserve or send another attempt.
+
+Invalid credentials, invalid requests, recognized billing/credit/spend errors,
+and identified daily or zero-quota errors stop immediately. Unknown 429 errors
+receive bounded retries; their status alone cannot identify every provider quota
+condition. Local storage failures, invalid embedding responses, and cost-ceiling
+stops are never retried. Only returned usage is recorded; a transport timeout can
+leave provider-side processing and charges uncertain.
+
+Retry limits apply automatically in the app and CLI. Library callers can pass
+`retry_policy=RetryPolicy(...)` from `osintgpt.llm.embedding_retry` to
+`OpenAICompatEmbedding` or `GeminiEmbedding`; `max_attempts=1` disables automatic
+retries. These operational options do not change the index fingerprint.
+After retry exhaustion, rerun indexing with the same vector configuration to
+resume completed checkpoints. Reserve headroom for other machines or applications
+that do not share this local quota ledger.
+
+The app's **Material → Indexing** panel shows the provider/model that will be
+used before any client is built. It warns when completed indexes or checkpoints
+record another provider/model. Settings changes made in another app session or
+through the CLI take effect on the next app rerun.
+
+During indexing, the current file shows chunks saved and pending, fully embedded
+records/documents, and reused checkpoints. Structured sources also show kept
+records and exclusions for missing content or the configured character minimum.
+Totals appear after extraction; file counts and record counts are separate.
+Pacing waits display the current delay, retries show their attempt number, and
+the last run retains a short activity history and reported usage across reruns.
+Failures and skipped files are presented as outcomes needing attention.
+
+**Saved indexing status** reads completed metadata and checkpoints from disk,
+so reopening the app shows recovery progress without contacting a provider.
+Completed counts describe the last published versions; checkpoints can replace
+those versions and become searchable when the entire file is published. Older
+runs may lack provider or record-count metadata; missing counts are not zeros.
+Indexing verifies the source, configuration and destination before reusing them.
+
+Use **Index now** to update or resume. Keep **Rebuild all files and discard saved
+checkpoints** off when resuming; selecting it explicitly recomputes unchanged
+files too. To resume work made with a previous provider/model, restore that
+configuration in Settings. Use the app's Stop control to interrupt indexing;
+successfully checkpointed batches remain available after interruption.
+
+The optional **Stop at estimated run cost (USD)** covers embedding and scanned-page
+transcription responses in this run. A response can cross the ceiling; it is
+saved before the run stops. Missing token usage or an unknown price also stops an
+active ceiling. Usage totals cover returned responses, so failed transport
+attempts may have unreported charges. **Preview what would be indexed** describes
+the full registered corpus, including already completed material; its cost is
+not an estimate of the remaining resume cost.
 
 ## Responsible use
 

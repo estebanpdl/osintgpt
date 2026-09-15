@@ -13,12 +13,16 @@
 # import submodules
 from abc import ABC, abstractmethod
 from enum import Enum
+from dataclasses import asdict
+from osintgpt.index_events import emit_index
 
 # type hints
-from typing import List, Optional, Tuple
+from typing import Callable, List, Optional, Tuple
 
 from .calling import Exchange, ModelTurn, ToolCallingUnsupported, ToolSpec
 from .usage import Usage, UsageRecorder
+
+BatchSink = Callable[[List[List[float]]], None]
 
 
 # EmbeddingPurpose class
@@ -52,9 +56,45 @@ class EmbeddingProvider(ABC):
     # and simply reports nothing.
     recorder: Optional[UsageRecorder] = None
 
+    def indexing_options(self) -> dict:
+        '''Vector-affecting options for index/checkpoint compatibility.
+
+        Custom providers must override this when options beyond their model
+        affect vectors. Do not include credentials, batching or usage limits.
+        '''
+        return {}
+
+    def can_adopt_legacy_index(self) -> bool:
+        '''Legacy stores do not record provider options; default to unknown.'''
+        return False
+
     def _record(self, usage: Usage) -> None:
-        if self.recorder is not None:
-            self.recorder.record(usage)
+        try:
+            if self.recorder is not None:
+                self.recorder.record(usage)
+        finally:
+            emit_index('usage', **asdict(usage))
+
+    def embed_checkpointed(
+        self, texts: List[str], *, on_batch: BatchSink,
+        purpose: EmbeddingPurpose = EmbeddingPurpose.DOCUMENT
+    ) -> None:
+        '''
+        Deliver successful vectors to a durable sink. Providers making several
+        requests override this to deliver each response before the next call.
+        Existing custom providers remain compatible at whole-call granularity.
+        '''
+        on_batch(self.embed(texts, purpose=purpose))
+
+    def _deliver_batch(
+        self, vectors: List[List[float]], usage: Usage, on_batch: BatchSink
+    ) -> None:
+        # Persist a successful response before accounting can stop the run.
+        # Even a failed disk write must account for the call already made.
+        try:
+            on_batch(vectors)
+        finally:
+            self._record(usage)
 
     def list_models(self) -> List[str]:
         '''
@@ -139,8 +179,11 @@ class GenerationProvider(ABC):
     recorder: Optional[UsageRecorder] = None
 
     def _record(self, usage: Usage) -> None:
-        if self.recorder is not None:
-            self.recorder.record(usage)
+        try:
+            if self.recorder is not None:
+                self.recorder.record(usage)
+        finally:
+            emit_index('usage', **asdict(usage))
 
     def list_models(self) -> List[str]:
         '''

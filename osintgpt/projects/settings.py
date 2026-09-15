@@ -15,10 +15,11 @@ from dataclasses import asdict, dataclass, fields
 
 # type hints
 from typing import Optional
+from osintgpt.rate_settings import EmbeddingRateSettings
 
 # ProjectSettings class
 @dataclass(frozen=True)
-class ProjectSettings:
+class ProjectSettings(EmbeddingRateSettings):
     '''
     Per-project configuration. An empty string means "not chosen here" and
     defers to whatever the caller supplies, so a project only records the

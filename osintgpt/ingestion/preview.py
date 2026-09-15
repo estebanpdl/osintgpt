@@ -62,6 +62,7 @@ class FilePreview:
     is_image: bool = False
     # Why this file would contribute nothing, if it would not.
     problem: str = ''
+    statistics: dict = field(default_factory=dict)
 
     @property
     def needs_configuration(self) -> bool:
@@ -211,8 +212,9 @@ def preview_file(
         except Exception as error:  # noqa: BLE001 — one bad file, not a stop
             return FilePreview(path=path, problem=str(error))
 
+    statistics = {}
     try:
-        documents = load_documents(path, mapping)
+        documents = load_documents(path, mapping, statistics=statistics)
     except UnmappedSourceError:
         return FilePreview(path=path, fields=describe_fields(path))
     except Exception as error:  # noqa: BLE001 — one bad file, not a stop
@@ -239,7 +241,8 @@ def preview_file(
         chunks=len(chunks),
         characters=characters,
         tokens=sum(count_tokens(chunk, embedding_model) for chunk in chunks),
-        vision_pages=vision_pages
+        vision_pages=vision_pages,
+        statistics=statistics
     )
 
 
@@ -271,7 +274,7 @@ def dry_run(
     files: List[FilePreview] = []
     unsupported: List[Path] = []
 
-    for path in _walk(root):
+    for path in walk_files(root):
         if path.suffix.lower() not in READABLE_SUFFIXES:
             unsupported.append(path)
             continue
@@ -351,7 +354,7 @@ def _unsupported(corpus, root: Path) -> List[Path]:
     seen = set()
 
     for source in corpus:
-        for path in _walk(Path(root, source.path)):
+        for path in walk_files(Path(root, source.path)):
             if path.suffix.lower() in READABLE_SUFFIXES:
                 continue
             resolved = path.resolve()
@@ -363,7 +366,16 @@ def _unsupported(corpus, root: Path) -> List[Path]:
     return found
 
 
-def _walk(root: Path) -> List[Path]:
+def walk_files(root: Path) -> List[Path]:
+    '''
+    Every file under a folder, in path order, skipping tooling directories.
+
+    Args:
+        root (Path): Folder to walk, or a single file.
+
+    Returns:
+        List[Path]: The files found. A file walks to itself.
+    '''
     if root.is_file():
         return [root]
 

@@ -248,6 +248,10 @@ def resolve_credentials(
         Settings: Ready to hand to a provider.
     '''
     environment = Settings.from_env()
+    if not environment.embedding_rate_state_path:
+        environment = environment.with_overrides(
+            embedding_rate_state_path=str(Path(home).resolve() / 'embedding-rates.sqlite')
+        )
     stored = {
         field: value for field, value in load_credentials(home).items()
         if not getattr(environment, field, '')

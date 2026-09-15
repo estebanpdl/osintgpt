@@ -15,6 +15,7 @@ from typing import Optional
 
 # import osintgpt config
 from osintgpt.config import Settings
+from osintgpt.rate_settings import limits_for
 
 from .anthropic_native import AnthropicGeneration
 from .base import EmbeddingProvider, EmbeddingPurpose, GenerationProvider
@@ -101,13 +102,17 @@ def build_embedding_provider(
 
     if spec.kind == GEMINI:
         return GeminiEmbedding(
-            model=model, api_key=api_key, recorder=recorder
+            model=model, api_key=api_key, recorder=recorder,
+            rate_limits=limits_for(settings, provider),
+            rate_state_path=settings.embedding_rate_state_path
         )
 
     return OpenAICompatEmbedding(
         model=model, api_key=api_key, base_url=base_url,
         discovers_models=spec.discovers_models,
-        billable=not spec.local, provider=provider, recorder=recorder
+        billable=not spec.local, provider=provider, recorder=recorder,
+        rate_limits=limits_for(settings, provider) if not spec.local else None,
+        rate_state_path=settings.embedding_rate_state_path
     )
 
 

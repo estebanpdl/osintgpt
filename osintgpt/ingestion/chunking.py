@@ -23,6 +23,8 @@ from typing import Iterator, List, Tuple
 # specific. Characters rather than tokens: the boundary has to be decided
 # before a tokenizer is chosen, and it must not differ per embedding model.
 MAX_CHARS = 1500
+# Bump when splitting/rendering semantics change without a parameter change.
+CHUNKING_VERSION = 1
 
 # Separates the headings a chunk sits under. Rare enough in prose that its
 # presence marks the line as osintgpt's rather than the document's.

@@ -71,7 +71,8 @@ def needs_mapping(path: Union[str, Path]) -> bool:
 def load_documents(
     path: Union[str, Path],
     mapping: Optional[FieldMapping] = None,
-    transcriber: Optional[Transcriber] = None
+    transcriber: Optional[Transcriber] = None,
+    *, statistics=None
 ) -> List[Document]:
     '''
     Read any supported file into documents.
@@ -95,7 +96,7 @@ def load_documents(
     suffix = path.suffix.lower()
 
     if suffix in STRUCTURED_SUFFIXES:
-        return list(load_records(path, mapping or FieldMapping()))
+        return list(load_records(path, mapping or FieldMapping(), statistics=statistics))
 
     if suffix == '.pdf':
         extraction = extract_pdf(path, transcriber)

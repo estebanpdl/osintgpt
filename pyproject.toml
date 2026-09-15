@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "osintgpt"
-version = "0.5.0"
+version = "0.6.0"
 description = "A Python OSINT tool using Large Language Models"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -33,61 +33,52 @@ classifiers = [
     "Topic :: Text Processing :: Indexing",
     "Topic :: Utilities"
 ]
-# An OSINT tool that cannot read a PDF out of the box is failing at its own
-# description, so every format an analyst routinely holds is here rather than
-# behind a flag. The one thing kept optional is the local embedding stack,
-# which is twenty times the size of everything else combined.
+# Common analyst file formats ship by default; local embeddings and extra backends stay optional below.
 dependencies = [
-    "anthropic>=0.40,<2",
-    "google-genai>=2,<3",
-    "markitdown[docx,pdf,pptx,xlsx]>=0.1,<1",
-    "openai>=1.0,<3",
-    "openpyxl",
-    "pandas",
-    "pillow>=10,<13",
-    "pypdf>=5,<8",
-    "pypdfium2>=4,<6",
-    "python-docx>=1,<2",
-    "python-dotenv",
-    "qdrant-client>=1.10,<2",
-    "rich>=13,<15",
-    "tiktoken",
-    "tomli-w",
+    "anthropic>=1.0.0",
+    "google-genai>=2.22.0",
+    "markitdown[docx,pdf,pptx,xlsx,xls,outlook]>=0.1.7",
+    "openai>=2.54.0",
+    "openpyxl>=3.1.5",
+    "pandas>=3.0.5",
+    "pillow>=12.3.0",
+    "pypdf>=6.16.1",
+    "pypdfium2>=5.13.0",
+    "python-docx>=1.2.0",
+    "python-dotenv>=1.2.3",
+    "rich>=14.3.4",
+    "streamlit>=1.62.0",
+    "tiktoken>=0.14.0",
+    "tomli-w>=1.2.0",
     "tomli; python_version < '3.11'",
-    "typer>=0.12,<1"
+    "typer>=0.27.1"
 ]
 
 [project.scripts]
 osintgpt = "osintgpt.cli.main:main"
 
 [project.optional-dependencies]
-# sentence-transformers pulls torch: ~650 MB against ~120 MB for everything
-# else. Offline embedding stays first-class as a capability and opt-in as a
-# download.
-# Streamlit is a web framework, and a library that pulls one into every
-# dependency tree is a library nobody embeds. The CLI is core because a hidden
-# CLI helps nobody; an app is a different decision.
-app = [
-    "streamlit>=1.36,<2"
-]
-local = [
-    "sentence-transformers>=3,<6"
-]
-# For operators who already run Postgres. Never the thing an error message
-# tells someone to go set up: the default store needs no server at all.
+# For operators who already run Postgres; the default store needs no server.
 postgres = [
-    "psycopg[binary]>=3.1,<4",
-    "pgvector>=0.3,<1"
+    "pgvector>=0.5.0",
+    "psycopg[binary]>=3.3.4"
 ]
-all = [
-    "osintgpt[app,local,postgres]"
+qdrant = [
+    "qdrant-client>=1.19.0"
+]
+# sentence-transformers pulls in torch (~650MB); kept opt-in, not default.
+local = [
+    "sentence-transformers>=5.7.0"
 ]
 dev = [
-    "pytest>=8",
-    "pytest-cov",
-    "pytest-mock",
-    "python-pptx",
+    "pytest>=9.1.1",
+    "pytest-cov>=7.1.0",
+    "pytest-mock>=3.15.1",
+    "python-pptx>=1.0.2",
     "tomli; python_version < '3.11'"
+]
+all = [
+    "osintgpt[local,postgres,qdrant]"
 ]
 
 [project.urls]

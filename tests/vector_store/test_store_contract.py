@@ -455,3 +455,70 @@ class TestMatchText:
         found = store.match_text('nimbus')
 
         assert [c.sequence for c in found] == [0, 1, 2, 3, 4]
+
+
+class TestMatchAuthor:
+    '''
+    A question about an account has to reach what it wrote, not only what
+    mentions it — the records it wrote never contain its own name.
+    '''
+
+    @pytest.fixture
+    def populated(self, store):
+        store.upsert(
+            'z.md', [chunk('z.md', 0, 'nimbus said something about it')],
+            [unit(1, 0)]
+        )
+        store.upsert(
+            'a.md',
+            [chunk('a.md', 0, 'a post that names nobody', author='nimbus')],
+            [unit(0, 1)]
+        )
+
+        return store
+
+    def test_what_an_account_wrote_is_reachable_by_its_name(self, populated):
+        assert 'a.md' in [c.ref for c in populated.match_text('nimbus')]
+
+    def test_text_matches_come_before_author_only_ones(self, populated):
+        '''
+        Ahead of them, an account's whole output would fill the limit and the
+        passages naming the term would never be reached.
+        '''
+        found = [c.ref for c in populated.match_text('nimbus')]
+
+        assert found == ['z.md', 'a.md']
+
+    def test_an_author_match_is_still_case_insensitive(self, populated):
+        assert 'a.md' in [c.ref for c in populated.match_text('NIMBUS')]
+
+    def test_an_unrelated_term_matches_neither(self, populated):
+        assert populated.match_text('cumulus') == []
+
+    def test_the_limit_covers_author_matches_too(self, store):
+        store.upsert(
+            'a.md',
+            [
+                chunk('a.md', i, f'post {i} naming nobody', author='nimbus')
+                for i in range(10)
+            ],
+            [unit(1, i) for i in range(10)]
+        )
+
+        assert len(store.match_text('nimbus', limit=3)) == 3
+
+
+def test_record_identity_survives_storage_and_retrieval(store):
+    original = chunk('records.csv', text='evidence', document_ref='records.csv#msg-4821')
+    store.upsert('records.csv', [original], [[1.0, 0.0]])
+    assert store.chunks_for('records.csv') == [original]
+    assert store.search([1.0, 0.0], MODEL)[0].chunk == original
+    assert store.match_text('evidence') == [original]
+    assert store.index_inventory() == {'records.csv': {MODEL: 1}}
+    assert store.delete(['records.csv']) == 1
+    assert store.index_inventory() == {}
+
+
+def test_inventory_rejects_missing_sequence_even_when_count_matches(store):
+    store.upsert('records.csv', [chunk('records.csv', 0), chunk('records.csv', 2)], [[1.0, 0.0]] * 2)
+    assert store.index_inventory() == {'records.csv': None}

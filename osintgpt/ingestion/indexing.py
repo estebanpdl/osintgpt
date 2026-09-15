@@ -13,14 +13,16 @@
 
 # import modules
 import hashlib
+import os
 
 # import submodules
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
+from uuid import uuid4
 
 # type hints
-from typing import Dict, Iterable, List, Union
+from typing import Dict, Iterable, List, Optional, Union
 
 # import osintgpt projects
 from osintgpt.projects.toml_io import read_toml, write_toml
@@ -69,6 +71,11 @@ class IndexedDocument:
     # without re-reading the document.
     chunks: int = 0
     indexed_at: str = ''
+    recipe: str = ''
+    destination: str = ''
+    embedding_model: str = ''
+    embedding_provider: str = ''
+    statistics: dict = field(default_factory=dict)
 
 
 # IndexPlan class
@@ -137,27 +144,43 @@ class IndexState:
                 ref=ref,
                 hash=str(row.get('hash', '')),
                 chunks=int(row.get('chunks', 0) or 0),
-                indexed_at=str(row.get('indexed_at', ''))
+                indexed_at=str(row.get('indexed_at', '')),
+                recipe=str(row.get('recipe', '')),
+                destination=str(row.get('destination', '')),
+                embedding_model=str(row.get('embedding_model', '')),
+                embedding_provider=str(row.get('embedding_provider', '')),
+                statistics=dict(row.get('statistics') or {})
             )
 
         return cls(path=Path(path), documents=documents)
 
     def save(self) -> None:
-        write_toml(
-            self.path,
-            {'document': [
-                {
-                    'ref': d.ref, 'hash': d.hash, 'chunks': d.chunks,
-                    'indexed_at': d.indexed_at
-                }
-                for d in sorted(self.documents.values(), key=lambda d: d.ref)
-            ]},
-            header=STATE_HEADER
-        )
+        temporary = self.path.with_name(f'.{self.path.name}.{uuid4().hex}.tmp')
+        try:
+            write_toml(
+                temporary,
+                {'document': [
+                    {
+                        'ref': d.ref, 'hash': d.hash, 'chunks': d.chunks,
+                        'indexed_at': d.indexed_at, 'recipe': d.recipe,
+                        'destination': d.destination,
+                        'embedding_model': d.embedding_model,
+                        'embedding_provider': d.embedding_provider, 'statistics': d.statistics
+                    }
+                    for d in sorted(self.documents.values(), key=lambda d: d.ref)
+                ]},
+                header=STATE_HEADER
+            )
+            with temporary.open('r+b') as handle:
+                os.fsync(handle.fileno())
+            temporary.replace(self.path)
+        finally:
+            temporary.unlink(missing_ok=True)
 
     # what a pass would do
     def plan(
-        self, files: Iterable[Path], root: Union[str, Path], force: bool = False
+        self, files: Iterable[Path], root: Union[str, Path], force: bool = False,
+        *, recipes=None, destination=None
     ) -> IndexPlan:
         '''
         Compare the corpus against what was indexed.
@@ -187,7 +210,13 @@ class IndexState:
 
             if known is None:
                 added.append(path)
-            elif force or known.hash != _hash_file(path):
+            elif (
+                force or known.hash != _hash_file(path)
+                or (known.recipe and recipes is not None
+                    and known.recipe != recipes[ref])
+                or (known.destination and destination is not None
+                    and known.destination != destination)
+            ):
                 changed.append(path)
             else:
                 unchanged.append(path)
@@ -201,7 +230,10 @@ class IndexState:
 
     # record what a pass did
     def record(
-        self, path: Union[str, Path], root: Union[str, Path], chunks: int
+        self, path: Union[str, Path], root: Union[str, Path], chunks: int,
+        *, source_hash: Optional[str] = None, recipe: str = '',
+        destination: str = '', embedding_model: str = '',
+        embedding_provider: str = '', statistics=None
     ) -> IndexedDocument:
         '''
         Args:
@@ -215,9 +247,11 @@ class IndexState:
         ref = _ref_for(Path(path), Path(root))
         entry = IndexedDocument(
             ref=ref,
-            hash=_hash_file(Path(path)),
+            hash=source_hash if source_hash is not None else _hash_file(Path(path)),
             chunks=chunks,
-            indexed_at=datetime.now(timezone.utc).isoformat(timespec='seconds')
+            indexed_at=datetime.now(timezone.utc).isoformat(timespec='seconds'),
+            recipe=recipe, destination=destination, embedding_model=embedding_model,
+            embedding_provider=embedding_provider, statistics=dict(statistics or {})
         )
         self.documents[ref] = entry
 

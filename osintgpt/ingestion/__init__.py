@@ -1,6 +1,13 @@
 # import class methods
 from .chunking import MAX_CHARS, Chunk, chunk_document, chunk_text
-from .documents import Document, FieldMapping, document_from_record, value_at
+from .conversion import Conversion, reader_for, to_markdown
+from .documents import (
+    Document,
+    FieldMapping,
+    content_for,
+    document_from_record,
+    value_at
+)
 from .images import (
     IMAGE_SUFFIXES,
     is_image,
@@ -28,10 +35,17 @@ from .preview import (
     FilePreview,
     dry_run,
     preview_corpus,
-    preview_file
+    preview_file,
+    walk_files
 )
 from .sources import MAX_FOLDER_FILES, Corpus, Source
-from .tabular import UnmappedSourceError, describe_fields
+from .tabular import (
+    MappingPreview,
+    UnmappedSourceError,
+    describe_fields,
+    preview_files,
+    preview_mapping
+)
 from .text import HTML_SUFFIXES, TEXT_SUFFIXES
 from .transcription import (
     cache_path,

@@ -18,8 +18,11 @@ from google.genai import types
 # type hints
 from typing import List, Optional, Sequence
 
-from .base import EmbeddingProvider, EmbeddingPurpose
+from .base import BatchSink, EmbeddingProvider, EmbeddingPurpose
 from .usage import Usage, UsageRecorder
+from .embedding_pacing import EmbeddingPacer
+from .embedding_retry import ATTEMPT_TIMEOUT_SECONDS
+from osintgpt.index_events import emit_index
 
 # Gemini rejects batches over 100 inputs.
 MAX_BATCH = 100
@@ -62,7 +65,10 @@ class GeminiEmbedding(EmbeddingProvider):
         api_key: str,
         batch_size: int = MAX_BATCH,
         task_style: Optional[str] = None,
-        recorder: Optional[UsageRecorder] = None
+        recorder: Optional[UsageRecorder] = None,
+        rate_limits=None,
+        rate_state_path: str = '',
+        retry_policy=None
     ) -> None:
         '''
         Args:
@@ -76,8 +82,16 @@ class GeminiEmbedding(EmbeddingProvider):
         Raises:
             ValueError: If `task_style` names neither style.
         '''
+        if batch_size < 1:
+            raise ValueError('batch_size must be positive')
         self.model = model
-        self.client = genai.Client(api_key=api_key)
+        self.client = genai.Client(
+            api_key=api_key,
+            http_options=types.HttpOptions(
+                timeout=ATTEMPT_TIMEOUT_SECONDS * 1000,
+                retry_options=types.HttpRetryOptions(attempts=1)
+            )
+        )
         self.batch_size = batch_size
         self.recorder = recorder
 
@@ -94,6 +108,23 @@ class GeminiEmbedding(EmbeddingProvider):
             )
 
         self.task_style = task_style
+        endpoint = self.indexing_options()['endpoint'] or 'https://generativelanguage.googleapis.com'
+        self.pacer = EmbeddingPacer('gemini', model, endpoint, api_key, rate_limits, rate_state_path, retry_policy=retry_policy)
+
+    def indexing_options(self) -> dict:
+        # Include the resolved template/task, not just its selector: changing
+        # our template also changes the vector space for an unchanged model.
+        api = getattr(self.client, '_api_client', None)
+        http = getattr(api, '_http_options', None)
+        return {
+            'task_style': self.task_style,
+            'document_task': TASK_TYPES[EmbeddingPurpose.DOCUMENT]
+                if self.task_style == TASK_TYPE_STYLE
+                else INSTRUCTIONS[EmbeddingPurpose.DOCUMENT],
+            'endpoint': str(getattr(http, 'base_url', '') or ''),
+            'api_version': str(getattr(http, 'api_version', '') or ''),
+            'request_version': 1
+        }
 
     def embed(
         self,
@@ -102,16 +133,32 @@ class GeminiEmbedding(EmbeddingProvider):
         purpose: EmbeddingPurpose = EmbeddingPurpose.DOCUMENT
     ) -> List[List[float]]:
         vectors: List[List[float]] = []
-        for start in range(0, len(texts), self.batch_size):
-            vectors.extend(
-                self._embed(texts[start:start + self.batch_size], purpose)
-            )
-
+        self.embed_checkpointed(texts, purpose=purpose, on_batch=vectors.extend)
         return vectors
 
-    def _embed(
-        self, batch: Sequence[str], purpose: EmbeddingPurpose
-    ) -> List[List[float]]:
+    def embed_checkpointed(
+        self, texts: List[str], *, on_batch: BatchSink,
+        purpose: EmbeddingPurpose = EmbeddingPurpose.DOCUMENT
+    ) -> None:
+        pacer = getattr(self, 'pacer', None)
+        render = (
+            (lambda text: INSTRUCTIONS[purpose].format(text=text))
+            if self.task_style == INSTRUCTION_STYLE else (lambda text: text)
+        )
+        def request(batch):
+            if not pacer:
+                emit_index('request', attempt=1, maximum=1, inputs=len(batch))
+            return self._request(batch, purpose)
+
+        if pacer:
+            responses = pacer.responses(texts, self.batch_size, request, render=render)
+        else:
+            batches = (texts[start:start + self.batch_size] for start in range(0, len(texts), self.batch_size))
+            responses = ((batch, request(batch), None) for batch in batches)
+        for batch, response, ticket in responses:
+            self._deliver_response(batch, response, on_batch, ticket)
+
+    def _request(self, batch: Sequence[str], purpose: EmbeddingPurpose):
         if self.task_style == TASK_TYPE_STYLE:
             contents = list(batch)
             config = types.EmbedContentConfig(task_type=TASK_TYPES[purpose])
@@ -128,26 +175,30 @@ class GeminiEmbedding(EmbeddingProvider):
             ]
             config = None
 
-        response = self.client.models.embed_content(
-            model=self.model, contents=contents, config=config
-        )
+        return self.client.models.embed_content(model=self.model, contents=contents, config=config)
 
+    def _deliver_response(self, batch, response, on_batch, ticket):
+        pacer = getattr(self, 'pacer', None)
         embeddings = response.embeddings or []
+        tokens = _token_count(embeddings)
         if len(embeddings) != len(batch):
             raise RuntimeError(
                 f'{self.model} returned {len(embeddings)} vectors for '
                 f'{len(batch)} inputs'
             )
 
-        tokens = _token_count(embeddings)
-        self._record(Usage(
+        def deliver(vectors):
+            on_batch(vectors)
+            if pacer:
+                http_response = getattr(response, 'sdk_http_response', None)
+                pacer.observe(ticket, tokens=tokens, headers=getattr(http_response, 'headers', None))
+
+        self._deliver_batch([list(e.values) for e in embeddings], Usage(
             provider='gemini',
             model=self.model,
             input_tokens=tokens or 0,
             counted=tokens is not None
-        ))
-
-        return [list(embedding.values) for embedding in embeddings]
+        ), deliver)
 
 
 def _token_count(embeddings) -> Optional[int]:

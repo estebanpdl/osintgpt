@@ -36,10 +36,15 @@ class StoredChunk:
     embedding_model: str
     # The heading path the chunk sits under, empty for unstructured text.
     path: str = ''
-    # Named separately from metadata because retrieval filters on them.
+    # Named separately from metadata because retrieval reaches them: the
+    # timestamp is what a date filter reads, the author what exact search
+    # matches alongside the text.
     timestamp: str = ''
     author: str = ''
     metadata: Dict[str, Any] = field(default_factory=dict)
+    # Original record identity (for example dataset.csv#message-id), distinct
+    # from the file ref used to replace/delete all of a dataset's chunks.
+    document_ref: str = ''
 
     @property
     def citation(self) -> str:

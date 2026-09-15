@@ -2,7 +2,7 @@
 
 import logging
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import List, Optional
 
 import typer
 from rich.table import Table
@@ -14,7 +14,8 @@ from osintgpt.ingestion import (
     Corpus,
     FieldMapping,
     IndexState,
-    describe_fields
+    describe_fields,
+    preview_mapping
 )
 from osintgpt.ingestion.loaders import needs_mapping
 from osintgpt.ingestion.transcription import transcriber_for_project
@@ -29,33 +30,9 @@ from .costs import (
     render_usage,
     usage_data
 )
+from .mapping import MAPPING_EXAMPLE, build_mapping
 from .output import console, emit, emit_record, fail
 from .selection import ProjectSelectionError, resolve_project, state_from
-
-LIST_KEYS = {'content', 'metadata'}
-SINGLE_KEYS = {'timestamp', 'author', 'identity', 'records'}
-
-
-def _mapping(pairs: Optional[List[str]]) -> FieldMapping:
-    roles: Dict[str, object] = {}
-    for pair in pairs or []:
-        key, separator, value = pair.partition('=')
-        key = key.strip()
-        if not separator or not value.strip():
-            raise ValueError(f'--map {pair!r} should look like key=value')
-
-        if key in LIST_KEYS:
-            values = tuple(
-                item.strip() for item in value.split(',') if item.strip()
-            )
-            roles[key] = tuple(roles.get(key, ())) + values
-        elif key in SINGLE_KEYS:
-            roles[key] = value.strip()
-        else:
-            valid = ', '.join(sorted(LIST_KEYS | SINGLE_KEYS))
-            raise ValueError(f'unknown mapping key {key!r}; use one of: {valid}')
-
-    return FieldMapping(**roles)
 
 
 def _open_project(
@@ -82,10 +59,18 @@ def add_source(
     context: typer.Context,
     path: Path = typer.Argument(..., help='File or folder to register.'),
     maps: Optional[List[str]] = typer.Option(
-        None, '--map', help='Field role as key=value; repeatable.'
+        None, '--map',
+        help='Field role as key=value; repeatable. Keys: content, metadata '
+             '(comma-separated lists), timestamp, author, identity, records, '
+             'min_chars. The first content field is the primary one.'
     ),
     project_slug: Optional[str] = typer.Option(
         None, '--project', help='Project slug or id; overrides selection.'
+    ),
+    dry_run: bool = typer.Option(
+        False, '--dry-run',
+        help='Report what the mapping would keep and discard; register '
+             'nothing. Structured files only.'
     ),
     json_output: bool = typer.Option(False, '--json', help='Print JSON only.')
 ) -> None:
@@ -94,20 +79,29 @@ def add_source(
         fail(f'no such path: {path}', json_output)
 
     try:
-        mapping = _mapping(maps)
+        mapping = build_mapping(maps)
     except ValueError as error:
         fail(str(error), json_output)
 
     if path.is_file() and needs_mapping(path) and not mapping.is_set:
         fields = describe_fields(path)
         command = (
-            f'osintgpt add "{path}" --project {project.slug} '
-            '--map content=<field>'
+            f'osintgpt add "{path}" --project {project.slug} {MAPPING_EXAMPLE}'
         )
         fail(
             f'{path.name} needs a content field mapping', json_output,
             {'fields': fields, 'try': command}
         )
+
+    if dry_run:
+        if not (path.is_file() and needs_mapping(path)):
+            fail(
+                '--dry-run reports on a structured file; '
+                f'{path.name} is not one', json_output
+            )
+        _report_mapping(path, mapping, json_output)
+
+        return
 
     source = Corpus.load(project.paths.sources).register(
         _source_key(project, path), mapping
@@ -117,6 +111,30 @@ def add_source(
         json_output,
         title='Source registered'
     )
+
+
+def _report_mapping(path: Path, mapping: FieldMapping, json_output: bool) -> None:
+    preview = preview_mapping(path, mapping)
+    data = {
+        'file': path.name,
+        'fields': mapping.to_dict(),
+        'records': preview.records,
+        'kept': preview.kept,
+        'without_content': preview.without_content,
+        'too_short': preview.too_short,
+        'shortest': preview.shortest,
+        'example': preview.example,
+        'summary': preview.summary
+    }
+
+    def render(target) -> None:
+        target.print(f'{path.name} — nothing registered', style='bold')
+        target.print(preview.summary)
+        if preview.example:
+            target.print('shortest kept record:', style='dim')
+            target.print(preview.example, soft_wrap=True)
+
+    emit(data, json_output, render)
 
 
 def list_sources(
@@ -270,6 +288,9 @@ def index_corpus(
         'embedding_model': report.embedding_model,
         'indexed': [vars(result) for result in report.indexed],
         'failed': [vars(result) for result in report.failed],
+        'skipped': [vars(result) for result in report.skipped],
+        'notices': report.notices,
+        'adopted': report.adopted,
         'unchanged': report.unchanged,
         'removed': report.removed,
         'purged': report.purged
@@ -282,6 +303,8 @@ def index_corpus(
             target.print(
                 f'{failed_result.ref}: {failed_result.problem}', style='bold red'
             )
+        for notice in report.notices:
+            target.print(notice, style='yellow')
         render_usage(target, recorder)
 
     emit(data, json_output, render)

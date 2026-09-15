@@ -45,6 +45,7 @@ CREATE TABLE IF NOT EXISTS chunks (
     timestamp       TEXT    NOT NULL DEFAULT '',
     author          TEXT    NOT NULL DEFAULT '',
     metadata        TEXT    NOT NULL DEFAULT '{}',
+    document_ref    TEXT    NOT NULL DEFAULT '',
     embedding_model TEXT    NOT NULL,
     dimensions      INTEGER NOT NULL,
     vector          BLOB    NOT NULL
@@ -82,7 +83,36 @@ class SQLiteVectorStore(BaseVectorEngine):
         # Unicode-aware, and an OSINT corpus is not written in one alphabet.
         self.connection.create_function('unicode_lower', 1, _lower)
         self.connection.executescript(SCHEMA)
+        columns = {row[1] for row in self.connection.execute('PRAGMA table_info(chunks)')}
+        if 'document_ref' not in columns:
+            self.connection.execute("ALTER TABLE chunks ADD COLUMN document_ref TEXT NOT NULL DEFAULT ''")
         self.connection.commit()
+
+    def indexing_destination(self, root) -> dict:
+        if str(self.path) == ':memory:':
+            return super().indexing_destination(root)
+        path = self.path.resolve()
+        try:
+            path = path.relative_to(Path(root).resolve())
+        except ValueError:
+            pass
+        return {'path': path.as_posix()}
+
+    def index_inventory(self) -> dict:
+        inventory = {}
+        for row in self.connection.execute('''
+            SELECT ref, embedding_model, COUNT(*) AS n,
+                COUNT(DISTINCT sequence) AS distinct_n, MIN(sequence) AS first,
+                MAX(sequence) AS last,
+                MIN(dimensions > 0 AND length(vector) = 4 * dimensions) AS valid
+            FROM chunks GROUP BY ref, embedding_model
+        '''):
+            ref, model, n = row['ref'], row['embedding_model'], row['n']
+            if not row['valid'] or (row['first'], row['last'], row['distinct_n']) != (0, n - 1, n):
+                inventory[ref] = None
+            elif ref not in inventory or inventory[ref] is not None:
+                inventory.setdefault(ref, {})[model] = n
+        return inventory
 
     def close(self) -> None:
         self.connection.close()
@@ -116,8 +146,8 @@ class SQLiteVectorStore(BaseVectorEngine):
                 '''
                 INSERT INTO chunks (
                     ref, sequence, text, path, timestamp, author, metadata,
-                    embedding_model, dimensions, vector
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    embedding_model, dimensions, vector, document_ref
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ''',
                 [
                     (
@@ -130,7 +160,8 @@ class SQLiteVectorStore(BaseVectorEngine):
                         json.dumps(chunk.metadata, ensure_ascii=False),
                         chunk.embedding_model,
                         len(vector),
-                        _pack(vector)
+                        _pack(vector),
+                        chunk.document_ref
                     )
                     for chunk, vector in zip(chunks, vectors)
                 ]
@@ -189,11 +220,17 @@ class SQLiteVectorStore(BaseVectorEngine):
         if not term:
             return []
 
+        pattern = f'%{_escape_like(term.lower())}%'
+        # Parenthesised: AND binds tighter than OR, so the model and ref
+        # filters appended below would otherwise constrain only the author
+        # leg, and every text match in the store would escape them.
         query = (
-            'SELECT * FROM chunks WHERE unicode_lower(text) LIKE ? ESCAPE ?'
+            'SELECT * FROM chunks WHERE ('
+            'unicode_lower(text) LIKE ? ESCAPE ? '
+            'OR unicode_lower(author) LIKE ? ESCAPE ?)'
         )
         parameters: List[object] = [
-            f'%{_escape_like(term.lower())}%', LIKE_ESCAPE
+            pattern, LIKE_ESCAPE, pattern, LIKE_ESCAPE
         ]
 
         if embedding_model is not None:
@@ -207,8 +244,13 @@ class SQLiteVectorStore(BaseVectorEngine):
             query += f' AND ref IN ({",".join("?" * len(wanted))})'
             parameters += wanted
 
-        query += ' ORDER BY ref, sequence LIMIT ?'
-        parameters.append(limit)
+        # Text matches first: an author match is everything that account
+        # wrote, and ahead of them it would fill the limit on its own.
+        query += (
+            ' ORDER BY (unicode_lower(text) LIKE ? ESCAPE ?) DESC, '
+            'ref, sequence LIMIT ?'
+        )
+        parameters += [pattern, LIKE_ESCAPE, limit]
 
         rows = self.connection.execute(query, parameters).fetchall()
 
@@ -280,7 +322,8 @@ class SQLiteVectorStore(BaseVectorEngine):
             List[StoredChunk]: Its chunks, in the order they were stored.
         '''
         rows = self.connection.execute(
-            'SELECT * FROM chunks WHERE ref = ? ORDER BY sequence', (ref,)
+            'SELECT ref, sequence, text, path, timestamp, author, metadata, '
+            'embedding_model, document_ref FROM chunks WHERE ref = ? ORDER BY sequence', (ref,)
         ).fetchall()
 
         return [_to_chunk(row) for row in rows]
@@ -332,5 +375,6 @@ def _to_chunk(row: sqlite3.Row) -> StoredChunk:
         path=row['path'],
         timestamp=row['timestamp'],
         author=row['author'],
-        metadata=json.loads(row['metadata'])
+        metadata=json.loads(row['metadata']),
+        document_ref=row['document_ref']
     )

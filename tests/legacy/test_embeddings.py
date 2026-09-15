@@ -91,7 +91,11 @@ class TestCalculateEmbeddings:
         generator.load_text([f'doc {i}' for i in range(2_500)])
         generator.calculate_embeddings()
 
-        assert generator.client.embeddings.batches == [MAX_BATCH] * 25
+        batches = generator.client.embeddings.batches
+        # Quota discovery can start with one input; all later batches must
+        # still honor the provider ceiling and preserve the entire corpus.
+        assert sum(batches) == 2_500
+        assert all(0 < size <= MAX_BATCH for size in batches)
 
     def test_sends_the_configured_model(self, settings, stub_client):
         instance = OpenAIEmbeddingGenerator(

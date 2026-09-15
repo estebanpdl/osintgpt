@@ -24,6 +24,7 @@ from typing import Optional, Union
 
 # import exceptions
 from osintgpt.exceptions.errors import MissingEnvironmentVariableError
+from osintgpt.rate_settings import EmbeddingRateSettings, RATE_ENV_VARS
 
 # Current, cheap, and available to every account.
 DEFAULT_EMBEDDING_MODEL = 'text-embedding-3-small'
@@ -50,6 +51,8 @@ DEFAULT_OLLAMA_BASE_URL = 'http://localhost:11434'
 # Maps each setting to the environment variable `Settings.from_env` reads it
 # from. Single source of truth for both the loader and the error messages.
 ENV_VARS = {
+    **RATE_ENV_VARS,
+    'embedding_rate_state_path': 'OSINTGPT_EMBEDDING_RATE_STATE_PATH',
     'openai_api_key': 'OPENAI_API_KEY',
     'openai_gpt_model': 'OPENAI_GPT_MODEL',
     'openai_embedding_model': 'OPENAI_EMBEDDING_MODEL',
@@ -67,7 +70,7 @@ ENV_VARS = {
 
 # Settings class
 @dataclass(frozen=True)
-class Settings:
+class Settings(EmbeddingRateSettings):
     '''
     Settings class
 
@@ -93,6 +96,9 @@ class Settings:
     # this format, operators who run Postgres already have one, and splitting
     # it would mean re-deciding how sslmode and a socket path are spelled.
     postgres_dsn: str = ''
+    # Explicit shared ledger location; callers choose the home. Empty uses a
+    # process-local ledger for standalone library providers.
+    embedding_rate_state_path: str = ''
 
     # build settings from the environment
     @classmethod
@@ -127,6 +133,13 @@ class Settings:
 
         if 'qdrant_port' in values:
             values['qdrant_port'] = _parse_port(values['qdrant_port'])
+
+        for field in RATE_ENV_VARS:
+            if field in values and not field.endswith('_scope'):
+                try:
+                    values[field] = int(values[field])
+                except ValueError:
+                    raise ValueError(f'{RATE_ENV_VARS[field]} must be a whole number') from None
 
         values.update(overrides)
 

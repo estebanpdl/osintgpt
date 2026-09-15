@@ -12,6 +12,7 @@
 
 # import submodules
 from abc import ABC, abstractmethod
+from uuid import uuid4
 
 # type hints
 from typing import Iterable, List, Optional, Sequence
@@ -29,6 +30,37 @@ class BaseVectorEngine(ABC):
     text does and leaving the old ones behind is how a store fills with
     passages no document still contains.
     '''
+
+    def indexing_destination(self, root) -> dict:
+        '''Override with a stable destination identity for a durable store.
+
+        Unknown/in-memory destinations are conservatively instance-specific.
+        Only a hash of the returned value is persisted in index state.
+        '''
+        if not hasattr(self, '_index_instance'):
+            self._index_instance = uuid4().hex
+        return {'instance': self._index_instance}
+
+    def index_inventory(self) -> dict:
+        '''Counts per file/model, including only contiguous chunk sequences.
+
+        No embedding calls. SQL backends override this to avoid reading text.
+        '''
+        inventory = {}
+        for ref in self.refs():
+            chunks = self.chunks_for(ref)
+            if [c.sequence for c in chunks] != list(range(len(chunks))):
+                inventory[ref] = None
+                continue
+            models = {}
+            for chunk in chunks:
+                models[chunk.embedding_model] = models.get(chunk.embedding_model, 0) + 1
+            inventory[ref] = models
+        return inventory
+
+    def chunks_for(self, ref: str) -> List[StoredChunk]:
+        '''Read provenance without vectors, for index reconciliation.'''
+        raise NotImplementedError('This store cannot verify existing index contents.')
 
     # replace a document's chunks
     @abstractmethod
@@ -90,12 +122,18 @@ class BaseVectorEngine(ABC):
         refs: Optional[Iterable[str]] = None
     ) -> List[StoredChunk]:
         '''
-        Chunks whose text contains `term`, matched case-insensitively.
+        Chunks whose text or author contains `term`, matched
+        case-insensitively.
 
         Substring rather than token matching, because the tokens this exists
         to catch — handles, hashes, URLs, account ids — are the ones a
         tokenizer splits and an embedding blurs. `@acct_1` must be findable
         inside `contacted @acct_1 twice`.
+
+        The author is matched too, because a question about an account has to
+        reach the records it wrote and not only the ones that mention it.
+        Those come last: an author match is every chunk that account wrote,
+        and ahead of the text matches it would fill the limit on its own.
 
         Args:
             term (str): Literal text to find. Not a pattern; a caller wanting                 regex filters the results.

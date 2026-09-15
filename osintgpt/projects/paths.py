@@ -19,6 +19,7 @@ CONFIG_FILE = 'project.toml'
 STORE_FILE = 'store.sqlite'
 SOURCES_FILE = 'sources.toml'
 INDEX_STATE_FILE = 'index.toml'
+INDEX_JOURNAL_FILE = 'index-journal.sqlite'
 EXTRACTS_DIR = 'extracts'
 CANON_DIR = 'canon'
 
@@ -76,6 +77,10 @@ class ProjectPaths:
     @property
     def index_state(self) -> Path:
         return self.root / INDEX_STATE_FILE
+
+    @property
+    def index_journal(self) -> Path:
+        return self.root / INDEX_JOURNAL_FILE
 
     @property
     def extracts(self) -> Path:

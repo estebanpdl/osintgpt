@@ -67,6 +67,89 @@ def test_add_refuses_to_guess_a_structured_mapping(runner, home, records):
     assert '--map content=<field>' in result.output
 
 
+def test_the_hint_offers_the_roles_beyond_content(runner, home, records):
+    '''
+    A hint naming only content is how a corpus ends up with every field
+    embedded and no date to filter on.
+    '''
+    create_project(runner, home, 'Caso A')
+
+    result = invoke(runner, home, 'add', str(records), '--project', 'caso-a')
+
+    for role in ('timestamp=', 'author=', 'identity=', 'min_chars='):
+        assert role in result.output, role
+
+
+def test_add_accepts_a_minimum_content_length(runner, home, records):
+    create_project(runner, home, 'Caso A')
+
+    added = invoke(
+        runner, home, 'add', str(records), '--project', 'caso-a',
+        '--map', 'content=body', '--map', 'min_chars=40'
+    )
+    project = Registry.load(home).open('caso-a')
+    mapping = Corpus.load(project.paths.sources).mapping_for(
+        records, project.paths.root
+    )
+
+    assert added.exit_code == 0
+    assert mapping.min_chars == 40
+
+
+def test_a_non_numeric_minimum_is_reported_rather_than_ignored(
+    runner, home, records
+):
+    create_project(runner, home, 'Caso A')
+
+    result = invoke(
+        runner, home, 'add', str(records), '--project', 'caso-a',
+        '--map', 'content=body', '--map', 'min_chars=forty'
+    )
+
+    assert result.exit_code != 0
+    assert 'whole number' in result.output
+
+
+def test_dry_run_reports_without_registering(runner, home, records):
+    create_project(runner, home, 'Caso A')
+
+    result = invoke(
+        runner, home, 'add', str(records), '--project', 'caso-a',
+        '--map', 'content=body', '--dry-run'
+    )
+    project = Registry.load(home).open('caso-a')
+
+    assert result.exit_code == 0
+    assert '2 of 2 records' in result.output
+    assert not Corpus.load(project.paths.sources).sources
+
+
+def test_dry_run_shows_what_a_floor_would_discard(runner, home, records):
+    create_project(runner, home, 'Caso A')
+
+    result = invoke(
+        runner, home, 'add', str(records), '--project', 'caso-a', '--json',
+        '--map', 'content=body', '--map', 'min_chars=16', '--dry-run'
+    )
+    data = json.loads(result.output)
+
+    assert data['kept'] == 1
+    assert data['too_short'] == 1
+
+
+def test_dry_run_says_when_a_path_is_not_structured(runner, home, tmp_path):
+    create_project(runner, home, 'Caso A')
+    prose = tmp_path / 'note.md'
+    prose.write_text('# Heading\n\nSome prose.\n', encoding='utf-8')
+
+    result = invoke(
+        runner, home, 'add', str(prose), '--project', 'caso-a', '--dry-run'
+    )
+
+    assert result.exit_code != 0
+    assert 'not one' in result.output
+
+
 def test_add_requires_content_even_when_another_role_was_mapped(
     runner, home, records
 ):

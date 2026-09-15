@@ -200,7 +200,7 @@ class TestProviderRecording:
         provider.client = StubOpenAI()
         provider.embed([f'doc {i}' for i in range(250)])
 
-        assert recorder.calls == 3
+        assert recorder.calls == len(provider.client.embeddings.batches)
         assert recorder.total_tokens == 250 * 5
 
     def test_a_response_without_usage_is_recorded_as_uncounted(self, keyed):

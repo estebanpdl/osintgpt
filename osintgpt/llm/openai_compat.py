@@ -20,9 +20,12 @@ from openai import OpenAI
 # type hints
 from typing import List, Optional
 
-from .base import EmbeddingProvider, EmbeddingPurpose, GenerationProvider
+from .base import BatchSink, EmbeddingProvider, EmbeddingPurpose, GenerationProvider
 from .calling import ModelTurn, ToolCall
 from .usage import Usage, UsageRecorder
+from .embedding_pacing import EmbeddingPacer
+from .embedding_retry import ATTEMPT_TIMEOUT_SECONDS
+from osintgpt.index_events import emit_index
 
 
 # list the models an OpenAI-compatible endpoint reports
@@ -64,7 +67,10 @@ class OpenAICompatEmbedding(EmbeddingProvider):
         discovers_models: bool = False,
         billable: bool = True,
         provider: str = '',
-        recorder: Optional[UsageRecorder] = None
+        recorder: Optional[UsageRecorder] = None,
+        rate_limits=None,
+        rate_state_path: str = '',
+        retry_policy=None
     ) -> None:
         '''
         Args:
@@ -75,13 +81,48 @@ class OpenAICompatEmbedding(EmbeddingProvider):
             discovers_models (bool): Whether this endpoint answers a
                 list-models request.
         '''
+        if batch_size < 1:
+            raise ValueError('batch_size must be positive')
         self.model = model
-        self.client = OpenAI(api_key=api_key, base_url=base_url)
+        paid = billable and provider in ('', 'openai', 'voyage')
+        options = {'max_retries': 0, 'timeout': ATTEMPT_TIMEOUT_SECONDS} if paid else {}
+        self.client = OpenAI(api_key=api_key, base_url=base_url, **options)
         self.batch_size = batch_size
         self.supports_model_discovery = discovers_models
         self.billable = billable
         self.provider = provider
         self.recorder = recorder
+        self.pacer = None
+        if paid:
+            endpoint = str(getattr(self.client, 'base_url', base_url or 'https://api.openai.com/v1'))
+            self.pacer = EmbeddingPacer(
+                provider or 'openai', model, endpoint, api_key,
+                rate_limits, rate_state_path, retry_policy=retry_policy,
+                discover=provider in ('', 'openai')
+                    and hasattr(self.client.embeddings, 'with_raw_response')
+            )
+
+    def indexing_options(self) -> dict:
+        return {
+            'endpoint': str(self.client.base_url).rstrip('/')
+                if hasattr(self.client, 'base_url') else '',
+            'request_version': 1
+        }
+
+    def can_adopt_legacy_index(self) -> bool:
+        # Legacy chunks name only the model. Only the uncustomized OpenAI
+        # route has a default recipe we can infer from these model names.
+        return (
+            type(self) is OpenAICompatEmbedding
+            and self.provider == 'openai'
+            and self.indexing_options() == {
+                'endpoint': 'https://api.openai.com/v1', 'request_version': 1
+            }
+            and self.model in {
+                'text-embedding-ada-002', 'text-embedding-3-small',
+                'text-embedding-3-large'
+            }
+        )
 
     def embed(
         self,
@@ -89,27 +130,56 @@ class OpenAICompatEmbedding(EmbeddingProvider):
         *,
         purpose: EmbeddingPurpose = EmbeddingPurpose.DOCUMENT
     ) -> List[List[float]]:
+        vectors: List[List[float]] = []
+        self.embed_checkpointed(texts, purpose=purpose, on_batch=vectors.extend)
+        return vectors
+
+    def embed_checkpointed(
+        self, texts: List[str], *, on_batch: BatchSink,
+        purpose: EmbeddingPurpose = EmbeddingPurpose.DOCUMENT
+    ) -> None:
         # Accepted and ignored: the OpenAI embeddings request has no field for
         # it, and inventing one as an unknown parameter would be dropped by
         # some endpoints and rejected by others.
-        vectors: List[List[float]] = []
-        for start in range(0, len(texts), self.batch_size):
-            response = self.client.embeddings.create(
-                model=self.model,
-                input=texts[start:start + self.batch_size]
-            )
+        pacer = getattr(self, 'pacer', None)
+        def request(batch):
+            if not pacer:
+                emit_index('request', attempt=1, maximum=1, inputs=len(batch))
+            raw_api = getattr(self.client.embeddings, 'with_raw_response', None) if pacer else None
+            if raw_api is not None:
+                raw = raw_api.create(model=self.model, input=batch)
+                return raw.parse(), raw.headers
+            return self.client.embeddings.create(model=self.model, input=batch), {}
+
+        if pacer:
+            responses = pacer.responses(texts, self.batch_size, request)
+        else:
+            batches = (texts[start:start + self.batch_size] for start in range(0, len(texts), self.batch_size))
+            responses = ((batch, request(batch), None) for batch in batches)
+        for batch, (response, headers), ticket in responses:
             # Providers are not required to return the batch in order.
             ordered = sorted(response.data, key=lambda item: item.index)
-            vectors.extend(item.embedding for item in ordered)
-            self._record(Usage(
+            if [item.index for item in ordered] != list(range(len(batch))):
+                raise RuntimeError(
+                    f'{self.model} returned invalid vector indices for '
+                    f'{len(batch)} inputs'
+                )
+            def deliver(vectors):
+                # Durable indexing must receive this successful response even
+                # if writing the quota ledger fails afterwards.
+                on_batch(vectors)
+                if pacer:
+                    usage = getattr(response, 'usage', None)
+                    pacer.observe(ticket, tokens=getattr(usage, 'prompt_tokens', None)
+                                  or getattr(usage, 'total_tokens', None), headers=headers)
+
+            self._deliver_batch([item.embedding for item in ordered], Usage(
                 provider=self.provider,
                 model=self.model,
                 input_tokens=_prompt_tokens(response),
                 billable=self.billable,
                 counted=getattr(response, 'usage', None) is not None
-            ))
-
-        return vectors
+            ), deliver)
 
     def list_models(self) -> List[str]:
         return _list_models(self.client)

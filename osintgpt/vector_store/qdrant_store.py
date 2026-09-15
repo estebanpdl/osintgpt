@@ -44,6 +44,7 @@ PATH = 'path'
 TIMESTAMP = 'timestamp'
 AUTHOR = 'author'
 METADATA = 'metadata'
+DOCUMENT_REF = 'document_ref'
 EMBEDDING_MODEL = 'embedding_model'
 
 # Scrolled in pages rather than read whole: a collection large enough to want
@@ -80,6 +81,16 @@ class QdrantVectorStore(BaseVectorEngine):
         else:
             self.client, self.kind = client, 'injected'
 
+    def indexing_destination(self, root) -> dict:
+        if self.kind == 'injected':
+            # An injected client need not target the configured server.
+            return {**super().indexing_destination(root), 'collection': self.collection}
+        endpoint = (
+            self.settings.qdrant_url if self.kind == 'remote'
+            else f'{self.settings.qdrant_host}:{self.settings.qdrant_port}'
+        )
+        return {'endpoint': endpoint, 'collection': self.collection}
+
     def upsert(
         self,
         ref: str,
@@ -93,6 +104,10 @@ class QdrantVectorStore(BaseVectorEngine):
                 'text to the wrong vector.'
             )
 
+        if chunks:
+            # Validate the destination size before deleting the old document.
+            self._ensure_collection(len(vectors[0]))
+
         # Delete before inserting rather than relying on derived ids: a
         # document that shrank from five chunks to three would otherwise keep
         # the two it no longer has.
@@ -105,7 +120,6 @@ class QdrantVectorStore(BaseVectorEngine):
         if not chunks:
             return 0
 
-        self._ensure_collection(len(vectors[0]))
         self.client.upsert(
             collection_name=self.collection,
             points=[
@@ -182,6 +196,10 @@ class QdrantVectorStore(BaseVectorEngine):
         # here, over payloads read without their vectors.
         needle = term.lower()
         found: List[StoredChunk] = []
+        # Author-only matches are held back rather than mixed in: an author
+        # match is everything that account wrote, and ahead of the text
+        # matches it would fill the limit on its own.
+        by_author: List[StoredChunk] = []
         for payload in self._scroll(
             rest.Filter(must=conditions) if conditions else None
         ):
@@ -189,8 +207,17 @@ class QdrantVectorStore(BaseVectorEngine):
                 found.append(_from_payload(payload))
                 if len(found) >= limit:
                     break
+            elif len(by_author) < limit and (
+                needle in str(payload.get(AUTHOR, '')).lower()
+            ):
+                by_author.append(_from_payload(payload))
 
-        return sorted(found, key=lambda chunk: (chunk.ref, chunk.sequence))
+        ordered = sorted(found, key=lambda chunk: (chunk.ref, chunk.sequence))
+        ordered += sorted(
+            by_author, key=lambda chunk: (chunk.ref, chunk.sequence)
+        )[:limit - len(ordered)]
+
+        return ordered
 
     def delete(self, refs: Iterable[str]) -> int:
         wanted = list(refs)
@@ -259,6 +286,8 @@ class QdrantVectorStore(BaseVectorEngine):
         Returns:
             List[StoredChunk]: Its chunks, in the order they were stored.
         '''
+        if not self._collection_exists():
+            return []
         chunks = [
             _from_payload(payload)
             for payload in self._scroll(self._by_ref([ref]))
@@ -310,6 +339,12 @@ class QdrantVectorStore(BaseVectorEngine):
         model, and most also filter on the document.
         '''
         if self._collection_exists():
+            configured = self.client.get_collection(self.collection).config.params.vectors
+            if not isinstance(configured, rest.VectorParams) or configured.size != dimensions:
+                raise ValueError(
+                    'This Qdrant collection uses a different vector size. '
+                    'Choose a new destination for the new embedding model.'
+                )
             return
 
         self.client.create_collection(
@@ -361,6 +396,7 @@ def _to_payload(chunk: StoredChunk) -> dict:
         TIMESTAMP: chunk.timestamp,
         AUTHOR: chunk.author,
         METADATA: dict(chunk.metadata),
+        DOCUMENT_REF: chunk.document_ref,
         EMBEDDING_MODEL: chunk.embedding_model
     }
 
@@ -376,5 +412,6 @@ def _from_payload(payload: Optional[dict]) -> StoredChunk:
         path=payload.get(PATH, ''),
         timestamp=payload.get(TIMESTAMP, ''),
         author=payload.get(AUTHOR, ''),
-        metadata=payload.get(METADATA) or {}
+        metadata=payload.get(METADATA) or {},
+        document_ref=payload.get(DOCUMENT_REF, '')
     )

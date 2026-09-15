@@ -16,11 +16,13 @@ import pytest
 
 # import osintgpt ingestion
 from osintgpt.ingestion import (
-    Document,
     FieldMapping,
+    MappingPreview,
     UnmappedSourceError,
     describe_fields,
     load_documents,
+    preview_files,
+    preview_mapping,
     value_at
 )
 from osintgpt.ingestion.loaders import needs_mapping
@@ -229,6 +231,153 @@ class TestStructuredLoading:
         )
 
         assert documents[0].text == 'alpha\n\nFirst record content.'
+
+
+class TestRecordsWorthIndexing:
+    def test_an_empty_primary_field_drops_the_record(self, csv_file):
+        '''
+        The third record has a handle and a date but no body. Keeping it would
+        index a document made of nothing but the fields that repeat across
+        every record.
+        '''
+        documents = load_documents(
+            csv_file, FieldMapping(content=('body', 'handle', 'at'))
+        )
+
+        assert len(documents) == 2
+
+    def test_a_later_content_field_cannot_rescue_it(self, csv_file):
+        documents = load_documents(
+            csv_file, FieldMapping(content=('body', 'handle'))
+        )
+
+        assert 'gamma' not in [d.text for d in documents]
+
+    def test_min_chars_drops_what_is_too_short_to_match_on(self, csv_file):
+        documents = load_documents(
+            csv_file, FieldMapping(content=('handle',), min_chars=5)
+        )
+
+        assert [d.text for d in documents] == ['alpha', 'gamma']
+
+    def test_min_chars_measures_the_joined_text(self, csv_file):
+        '''
+        The same floor, and nothing is dropped: what gets embedded is every
+        content field together, so the floor is read against that. A mapping
+        that appends boilerplate to a thin body raises its own floor past the
+        point of being a check.
+        '''
+        documents = load_documents(
+            csv_file, FieldMapping(content=('handle', 'at'), min_chars=5)
+        )
+
+        assert len(documents) == 3
+
+    def test_zero_keeps_every_record_with_content(self, csv_file):
+        documents = load_documents(csv_file, FieldMapping(content=('handle',)))
+
+        assert len(documents) == 3
+
+
+class TestPreviewingAMapping:
+    '''
+    The counts an operator reads before committing to a mapping. They come
+    from the rule that loads the file, or they describe a pass that will not
+    happen.
+    '''
+
+    def test_each_cause_of_a_drop_is_counted_apart(self, csv_file):
+        preview = preview_mapping(
+            csv_file, FieldMapping(content=('body',), min_chars=22)
+        )
+
+        assert preview.records == 3
+        assert preview.kept == 1
+        assert preview.without_content == 1
+        assert preview.too_short == 1
+
+    def test_it_agrees_with_what_loading_produces(self, csv_file):
+        mapping = FieldMapping(content=('body',), min_chars=22)
+        preview = preview_mapping(csv_file, mapping)
+
+        assert preview.kept == len(load_documents(csv_file, mapping))
+
+    def test_the_example_is_the_shortest_record_that_survives(self, csv_file):
+        preview = preview_mapping(csv_file, FieldMapping(content=('body',)))
+
+        assert preview.example == 'First record content.'
+        assert preview.shortest == len('First record content.')
+
+    def test_every_record_is_read(self, csv_file):
+        preview = preview_mapping(csv_file, FieldMapping(content=('body',)))
+
+        assert preview.records == len(RECORDS)
+
+    def test_a_mapping_naming_no_content_previews_nothing(self, csv_file):
+        preview = preview_mapping(csv_file, FieldMapping(identity='id'))
+
+        assert preview.records == 0
+        assert preview.summary == 'no records'
+
+    def test_the_summary_names_what_would_be_discarded(self, csv_file):
+        summary = preview_mapping(
+            csv_file, FieldMapping(content=('body',), min_chars=22)
+        ).summary
+
+        assert '1 with no content' in summary
+        assert '1 under the floor' in summary
+
+
+class TestPreviewingSeveralFiles:
+    @pytest.fixture
+    def pair(self, tmp_path):
+        '''Two files of one shape, the shorter record in the second.'''
+        first = tmp_path / 'one.csv'
+        first.write_text(
+            'id,body\nx1,A reasonably long record here.\nx2,\n',
+            encoding='utf-8'
+        )
+        second = tmp_path / 'two.csv'
+        second.write_text('id,body\ny1,Short.\n', encoding='utf-8')
+
+        return [first, second]
+
+    def test_the_counts_are_of_every_file(self, pair):
+        preview = preview_files(pair, FieldMapping(content=('body',)))
+
+        assert preview.records == 3
+        assert preview.kept == 2
+        assert preview.without_content == 1
+
+    def test_the_shortest_can_come_from_any_of_them(self, pair):
+        preview = preview_files(pair, FieldMapping(content=('body',)))
+
+        assert preview.example == 'Short.'
+
+    def test_a_floor_is_applied_across_all_of_them(self, pair):
+        preview = preview_files(
+            pair, FieldMapping(content=('body',), min_chars=10)
+        )
+
+        assert preview.kept == 1
+        assert preview.too_short == 1
+
+    def test_merging_nothing_is_an_empty_preview(self):
+        assert MappingPreview.merged([]).records == 0
+
+
+class TestMappingRoundTrip:
+    def test_min_chars_is_recorded_and_read_back(self):
+        mapping = FieldMapping(content=('body',), min_chars=40)
+
+        assert FieldMapping.from_dict(mapping.to_dict()) == mapping
+
+    def test_an_unset_floor_is_not_recorded(self):
+        assert 'min_chars' not in FieldMapping(content=('body',)).to_dict()
+
+    def test_a_hand_edited_file_cannot_break_the_corpus(self):
+        assert FieldMapping.from_dict({'min_chars': 'forty'}).min_chars == 0
+        assert FieldMapping.from_dict({'min_chars': -5}).min_chars == 0
 
 
 class TestNestedRecords:

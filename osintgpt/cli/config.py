@@ -75,6 +75,12 @@ def _parse_value(key: str, raw: str):
         except ValueError:
             raise ValueError(f'{key} must be a number, got {raw!r}') from None
 
+    if value_type is int:
+        try:
+            return int(raw)
+        except ValueError:
+            raise ValueError(f'{key} must be a whole number, got {raw!r}') from None
+
     return raw
 
 

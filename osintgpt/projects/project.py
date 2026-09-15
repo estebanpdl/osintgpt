@@ -235,6 +235,11 @@ class Project:
         settings = self.effective_settings(defaults)
         overrides = {'sql_db_file_path': str(self.paths.store)}
 
+        from osintgpt.rate_settings import RATE_FIELDS
+        for name in RATE_FIELDS:
+            if getattr(base, name) in (None, '') and getattr(settings, name) not in (None, ''):
+                overrides[name] = getattr(settings, name)
+
         for field, target in (
             ('generation_model', 'openai_gpt_model'),
             ('embedding_model', 'openai_embedding_model')

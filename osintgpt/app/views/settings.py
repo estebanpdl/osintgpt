@@ -27,6 +27,11 @@ from osintgpt.llm import (
 from osintgpt.vector_store import BACKENDS as STORAGE_BACKENDS
 
 from ..styles import badge
+from .embedding_rates import controls as embedding_rate_controls
+from .index_progress import model_notice
+from osintgpt.index_status import saved_index_status
+from ..session import _embedding_model
+from dataclasses import replace
 
 # One id per provider and role, shown to convey the shape of the string a
 # field wants rather than to recommend a model. Keyed on the role too, because
@@ -122,6 +127,10 @@ def render(st, runtime, home, state) -> None:
 
     changes = {}
     changes.update(_providers(st, effective))
+    selected = replace(effective, **changes)
+    proposed = project.with_settings(**changes).settings_for(resolve_credentials(home), defaults)
+    model_notice(st, saved_index_status(project), selected.embedding_provider, _embedding_model(selected, proposed))
+    changes.update(embedding_rate_controls(st, effective, changes['embedding_provider']))
     changes.update(_legs(st, effective))
     changes.update(_storage(st, effective))
 

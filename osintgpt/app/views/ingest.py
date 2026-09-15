@@ -10,26 +10,31 @@
 #   shown before anything is spent.
 # =================================================================================
 
-# type hints
-from typing import Any, Dict, List
+# import submodules
+from pathlib import Path
 
-# import osintgpt
-from osintgpt import index_project
+# type hints
+from typing import Any, Dict
 
 # import osintgpt config
 from osintgpt.config import DEFAULT_EMBEDDING_MODEL
 
 # import osintgpt ingestion
-from osintgpt.ingestion import (
-    Corpus,
-    FieldMapping,
-    describe_fields,
-    preview_corpus
-)
-from osintgpt.ingestion.loaders import needs_mapping
-from osintgpt.ingestion.transcription import transcriber_for_project
+from osintgpt.ingestion import Corpus, preview_corpus, to_markdown
+from osintgpt.ingestion.transcription import transcriber_for
 
 from ..browse import directory_input
+from .mapping import assign_roles, described_fields, schema_groups
+from . import index_progress
+
+# Registering ends in a rerun, which discards what the current pass drew, so
+# anything the operator has to read about it survives into the next one.
+NOTICE = 'ingest-notice'
+
+# The last conversion, held because downloading it reruns the script and the
+# button that produced it would then read as unpressed.
+RESULT = 'convert-result'
+PROBLEM = 'convert-problem'
 
 
 # what the registered corpus would contribute
@@ -58,29 +63,10 @@ def preview(corpus, root, embedding_model: str = '') -> Dict[str, Any]:
         'tokens': run.tokens,
         'cost': run.estimated_cost,
         'vision_pages': run.vision_pages,
+        'record_counts': [{'Source': str(f.path), **f.statistics} for f in run.files if f.statistics],
         'unconfigured': [f.path for f in run.unconfigured],
         'failed': [(f.path, f.problem) for f in run.failed]
     }
-
-
-# what a structured file needs before it can be indexed
-def field_roles(path) -> List[str]:
-    '''
-    Args:
-        path (Path): A structured file.
-
-    Returns:
-        List[str]: Its field names, empty when the file needs no mapping. \
-            The analyst chooses which carry content; nothing here guesses, \
-            and a wrong guess would embed identifiers as if they were prose.
-    '''
-    if not needs_mapping(path):
-        return []
-
-    try:
-        return list(describe_fields(path))
-    except Exception:  # noqa: BLE001 — a view, not a pass
-        return []
 
 
 # render the ingest view
@@ -91,10 +77,14 @@ def render(st, runtime, state) -> None:
         runtime (Runtime): Project and providers.
         state: Session state.
     '''
-    from pathlib import Path
-
     project = runtime.project
     st.subheader(f'Material — {project.name}')
+
+    notice = state.pop(NOTICE, '')
+    if notice:
+        st.warning(notice)
+
+    _convert(st, runtime, state)
 
     folder = directory_input(
         st, 'Folder to register', 'ingest-folder', state,
@@ -103,7 +93,7 @@ def render(st, runtime, state) -> None:
     )
     if folder:
         if Path(folder).is_dir():
-            _register(st, project, Path(folder))
+            _register(st, project, Path(folder), state)
         else:
             st.error(f'{folder} is not a directory.')
 
@@ -123,37 +113,128 @@ def render(st, runtime, state) -> None:
     # Behind a button, never on page load: every widget interaction reruns
     # this script, and an indexing pass triggered by rendering runs again on
     # each one.
-    if st.button('Index now', type='primary'):
-        _index(st, runtime)
+    index_progress.render(st, runtime, state)
 
 
-def _register(st, project, folder) -> None:
-    from pathlib import Path
+def _convert(st, runtime, state) -> None:
+    '''
+    Read one file the way indexing would and show the markdown. Nothing is
+    registered, embedded or stored, and no model is contacted unless the
+    operator asks for one.
+    '''
+    with st.expander('Convert a document'):
+        typed = st.text_input(
+            'File to convert', key='convert-path',
+            help='Any readable file. The markdown shown is what chunking '
+                 'would be given.'
+        ).strip()
+        transcribe = st.checkbox(
+            'Transcribe scanned pages', key='convert-vision',
+            help='One generation call per page holding no extractable text. '
+                 'Left off, nothing leaves this machine.'
+        )
 
-    unmapped = [
-        path for path in folder.rglob('*')
-        if path.is_file() and field_roles(path)
+        path = Path(typed) if typed else None
+        mapping = None
+        if path is not None and path.is_file():
+            described = described_fields(path)
+            if described:
+                mapping = assign_roles(st, [path], described, 'convert-map')
+
+        if st.button('Convert', key='convert-run'):
+            _run_conversion(st, runtime, state, path, mapping, transcribe)
+
+        _show_conversion(st, state, path)
+
+
+def _run_conversion(st, runtime, state, path, mapping, transcribe) -> None:
+    state.pop(RESULT, None)
+    state.pop(PROBLEM, None)
+
+    if path is None or not path.is_file():
+        state[PROBLEM] = 'Give the path to a file.'
+
+        return
+
+    transcriber = transcriber_for(
+        runtime.generator, runtime.project.paths.extracts
+    ) if transcribe else None
+
+    try:
+        with st.spinner(f'Reading {path.name}…'):
+            state[RESULT] = to_markdown(path, mapping, transcriber)
+    except Exception as error:  # noqa: BLE001 — one file, reported in place
+        state[PROBLEM] = str(error)
+
+
+def _show_conversion(st, state, path) -> None:
+    problem = state.get(PROBLEM, '')
+    if problem:
+        st.error(problem)
+
+    conversion = state.get(RESULT)
+    # A result stays on screen across the reruns a download or a checkbox
+    # causes, but not after the path changes under it.
+    if conversion is None or (path is not None and path != conversion.path):
+        return
+
+    detail = (
+        f'Read by {conversion.reader} — {conversion.documents} document(s)'
+    )
+    if conversion.pages:
+        detail += f', {conversion.pages} page(s)'
+    st.caption(detail)
+
+    if conversion.empty_pages:
+        st.warning(
+            f'{conversion.empty_pages} page(s) hold no extractable text. '
+            'Transcribing them costs one generation call each.'
+        )
+
+    st.download_button(
+        'Download markdown', conversion.markdown,
+        file_name=f'{conversion.path.name}.md', mime='text/markdown',
+        key='convert-download'
+    )
+    st.code(conversion.markdown, language='markdown', wrap_lines=True)
+
+
+def _register(st, project, folder, state) -> None:
+    groups = schema_groups(folder)
+    if groups:
+        st.warning(
+            f'{sum(len(paths) for paths, _ in groups)} structured file(s) need '
+            'you to say which fields carry content before they can be indexed.'
+        )
+
+    mappings = [
+        (paths, assign_roles(st, paths, described, f'map-{position}'))
+        for position, (paths, described) in enumerate(groups)
     ]
 
-    mapping = None
-    if unmapped:
-        st.warning(
-            f'{len(unmapped)} structured file(s) need you to say which fields '
-            'carry content before they can be indexed.'
-        )
-        sample = unmapped[0]
-        fields = field_roles(sample)
-        chosen = st.multiselect(
-            f'Content fields in {sample.name}', fields, key='content-fields'
-        )
-        if chosen:
-            mapping = FieldMapping(content=tuple(chosen))
+    if not st.button('Register this folder'):
+        return
 
-    if st.button('Register this folder'):
-        Corpus.load(project.paths.sources).register(
-            str(folder), mapping
+    corpus = Corpus.load(project.paths.sources)
+    # The folder carries the prose; each structured file is registered on its
+    # own because a mapping belongs to a schema, not to a directory.
+    # `Corpus.mappings` lets a file's own registration win over its folder.
+    corpus.register(str(folder))
+    mapped = 0
+    for paths, mapping in mappings:
+        if mapping is None:
+            continue
+        for path in paths:
+            corpus.register(path, mapping)
+            mapped += 1
+
+    unmapped = sum(len(paths) for paths, _ in groups) - mapped
+    if unmapped:
+        state[NOTICE] = (
+            f'{unmapped} structured file(s) were left without a content '
+            'field and will be skipped until one is named.'
         )
-        st.rerun()
+    st.rerun()
 
 
 def _preview(st, runtime, corpus) -> None:
@@ -166,6 +247,9 @@ def _preview(st, runtime, corpus) -> None:
         )
 
     st.text(facts['summary'])
+    st.caption('Full registered corpus preview, including material already indexed or checkpointed. This is not an estimate of the remaining run cost.')
+    if facts['record_counts']:
+        st.dataframe(facts['record_counts'], hide_index=True, use_container_width=True)
     if facts['vision_pages']:
         st.warning(
             f'{facts["vision_pages"]} PDF page(s) would need a vision model, '
@@ -173,29 +257,3 @@ def _preview(st, runtime, corpus) -> None:
         )
     for path, problem in facts['failed']:
         st.error(f'{path.name}: {problem}')
-
-
-def _index(st, runtime) -> None:
-    progress = st.progress(0.0)
-    status = st.empty()
-
-    def report(ref, position, total):
-        progress.progress(position / max(total, 1))
-        status.text(f'{position}/{total}  {ref}')
-
-    # The generator is built only if a scanned page is actually found, so a
-    # corpus of born-digital documents never needs a generation credential.
-    report_result = index_project(
-        runtime.project, runtime.embedder, on_progress=report,
-        transcriber=transcriber_for_project(
-            runtime.project, lambda: runtime.generator
-        )
-    )
-    progress.empty()
-    status.empty()
-
-    st.success(report_result.summary)
-    for failure in report_result.failed:
-        st.error(f'{failure.ref}: {failure.problem}')
-    for notice in report_result.notices:
-        st.warning(notice)

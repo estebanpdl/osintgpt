@@ -34,6 +34,7 @@ from osintgpt.app.session import (
     Runtime,
     cache_key,
     runtime_for,
+    runtime_revision,
     selected_project
 )
 from osintgpt.app.styles import load_css
@@ -42,7 +43,7 @@ from osintgpt.app.views import chat, conversations, ingest, projects, settings
 
 # providers for a project, built once per project
 @st.cache_resource(show_spinner=False)
-def _cached_runtime(project_id: str, project_path: str, home: str) -> Runtime:
+def _cached_runtime(project_id: str, project_path: str, home: str, revision: str = '') -> Runtime:
     '''
     Keyed on the project id rather than the object, because Streamlit caches
     on argument values and a Project is not a stable key. A cached client from
@@ -80,7 +81,7 @@ def main() -> None:
 
     try:
         runtime = _cached_runtime(
-            cache_key(project), str(project.paths.root), str(home)
+            cache_key(project), str(project.paths.root), str(home), runtime_revision(project, home)
         )
     except Exception as error:  # noqa: BLE001 — the operator's to fix
         # Reading settings needs no provider, so reaching here means the

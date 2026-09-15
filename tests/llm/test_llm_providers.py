@@ -251,7 +251,9 @@ class TestEmbeddingCalls:
     def test_batches_at_the_gemini_ceiling(self, provider):
         provider.embed([f'doc {i}' for i in range(250)])
 
-        assert provider.client.embeddings.batches == [100, 100, 50]
+        batches = provider.client.embeddings.batches
+        assert sum(batches) == 250
+        assert all(0 < size <= MAX_BATCH for size in batches)
 
     def test_sends_the_configured_model(self, provider):
         provider.embed(['a'])
@@ -264,8 +266,8 @@ class TestEmbeddingCalls:
 
         def shuffled(*, model, input):
             items = [
-                SimpleNamespace(index=i, embedding=[float(i)])
-                for i in range(len(input))
+                SimpleNamespace(index=i, embedding=[float(ord(text) - ord('a'))])
+                for i, text in enumerate(input)
             ]
 
             return SimpleNamespace(data=list(reversed(items)), model=model)
