@@ -312,9 +312,11 @@ def _report(
         elif len(written) == 1:
             # Named rather than counted: a destination directory decides the
             # filename, and the operator has not seen it yet.
-            target.print(f'written to {written[0]}')
+            target.print(f'written to {written[0]}', soft_wrap=True)
         else:
-            target.print(f'{len(written)} file(s) written to {out}')
+            target.print(
+                f'{len(written)} file(s) written to {out}', soft_wrap=True
+            )
 
         _notes(results, problems, skipped, single, recorder is not None)
         if recorder is not None:

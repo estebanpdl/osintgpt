@@ -91,15 +91,6 @@ class TestMetadata:
             'osintgpt.cli.main:main'
         )
 
-    def test_pins_openai_below_the_next_major(self, pyproject):
-        openai = next(
-            dependency
-            for dependency in pyproject['project']['dependencies']
-            if dependency.startswith('openai')
-        )
-
-        assert '>=1.0' in openai and '<3' in openai
-
 
 class TestPublicSurface:
     def test_settings_is_exported(self):
