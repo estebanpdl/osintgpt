@@ -260,23 +260,22 @@ class Trace:
         return out
 
 
-def _argument(key: str, value: Any, width: int = 48) -> str:
+def _argument(key: str, value: Any) -> str:
     '''
-    One argument as `key=value`, with a ref shown by where it ends.
+    One argument as `key=value`, whole.
 
-    A ref is a path, and one long enough to need truncating loses its filename
-    to it — leaving the drive and the case folder, which every ref in a
-    project shares. The last two segments identify the document instead.
+    The terms and queries here are what the model chose, and the trace is read
+    to tune retrieval against exactly those — a clipped one cannot be compared
+    with the next round's, or pasted back into a search.
+
+    A ref is the exception, and not a value the model wrote: every ref in a
+    project shares its leading path, so the last two segments identify the
+    document where the whole path would only repeat the case folder. The full
+    ref is carried alongside, under the call that read it.
     '''
     if key == 'ref' and isinstance(value, str):
         parts = PurePosixPath(value.replace('\\', '/')).parts
         if len(parts) > 2:
             value = '…/' + '/'.join(parts[-2:])
 
-    return f'{key}={_short(value, width)}'
-
-
-def _short(value: Any, width: int = 48) -> str:
-    text = repr(value)
-
-    return text if len(text) <= width else text[:width - 1] + '…'
+    return f'{key}={value!r}'
