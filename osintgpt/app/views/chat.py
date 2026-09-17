@@ -28,6 +28,12 @@ from ..session import (
 )
 from ..styles import badge, escape, escape_html
 
+# Streamlit's own defaults are a red and an orange plate, and red is reserved
+# here for an answer that cannot be trusted. Named icons render in body text
+# colour instead, so the two sides are told apart by glyph.
+USER_AVATAR = ':material/person:'
+ASSISTANT_AVATAR = ':material/robot_2:'
+
 # Enough of a passage to judge it without the chip becoming the page.
 PREVIEW_CHARS = 900
 
@@ -112,10 +118,10 @@ def render(st, runtime, state) -> None:
 
 
 def _turn(st, question, answer, state, replayed: bool) -> None:
-    with st.chat_message('user'):
+    with st.chat_message('user', avatar=USER_AVATAR):
         st.write(question)
 
-    with st.chat_message('assistant'):
+    with st.chat_message('assistant', avatar=ASSISTANT_AVATAR):
         st.write(answer.text)
 
         if getattr(answer, 'degraded', ''):
