@@ -249,7 +249,7 @@ def _preview(st, runtime, corpus) -> None:
     st.text(facts['summary'])
     st.caption('Full registered corpus preview, including material already indexed or checkpointed. This is not an estimate of the remaining run cost.')
     if facts['record_counts']:
-        st.dataframe(facts['record_counts'], hide_index=True, use_container_width=True)
+        st.dataframe(facts['record_counts'], hide_index=True, width='stretch')
     if facts['vision_pages']:
         st.warning(
             f'{facts["vision_pages"]} PDF page(s) would need a vision model, '

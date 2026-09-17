@@ -32,7 +32,7 @@ def show_saved(st, status):
     columns[0].metric('Last completed chunks', 'Unknown' if status['problems'] else f'{sum(r["chunks"] for r in status["published"]):,}')
     columns[1].metric('Saved checkpoint chunks', 'Unknown' if status['problems'] else f'{sum(r["completed"] for r in status["pending"]):,}')
     columns[2].metric('Pending embedding chunks', 'Unknown' if status['problems'] else f'{sum(r["total"] - r["completed"] for r in status["pending"]):,}')
-    st.dataframe(status_rows(status), hide_index=True, use_container_width=True)
+    st.dataframe(status_rows(status), hide_index=True, width='stretch')
     st.caption(
         'Completed counts describe the last published versions. Checkpoints '
         'may replace those versions and become searchable only after the whole '
