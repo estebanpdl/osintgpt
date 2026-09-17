@@ -40,6 +40,8 @@ from osintgpt.app.session import (
 from osintgpt.app.styles import load_css
 from osintgpt.app.views import chat, conversations, ingest, projects, settings
 
+LOGO = Path(__file__).parent / 'assets' / 'osintgpt.png'
+
 
 # providers for a project, built once per project
 @st.cache_resource(show_spinner=False)
@@ -56,12 +58,13 @@ def _cached_runtime(project_id: str, project_path: str, home: str, revision: str
 
 
 def main() -> None:
-    st.set_page_config(page_title='osintgpt', layout='wide')
+    st.set_page_config(page_title='OsintGPT', page_icon=str(LOGO), layout='wide')
     load_css(st)
     home = default_home()
 
+    st.sidebar.image(str(LOGO), width=132)
     st.sidebar.markdown(
-        '<div class="osintgpt-title">osintgpt</div>'
+        '<div class="osintgpt-title">OsintGPT</div>'
         '<div class="osintgpt-subtitle">Ask your own documents</div>',
         unsafe_allow_html=True
     )

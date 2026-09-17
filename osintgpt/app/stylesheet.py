@@ -66,7 +66,18 @@ html, body, [data-testid="stAppViewContainer"] {
 
 ::selection { background: rgba(168, 85, 247, 0.35); }
 
-/* The mark. Sora is set apart from the working type, and carries the same
+/* The mark carries its own dark ground, which is not the sidebar's. Rounding
+   and a hairline make that edge read as a plate rather than a seam. */
+section[data-testid="stSidebar"] [data-testid="stImage"] {
+    margin-bottom: 0.7rem;
+}
+
+section[data-testid="stSidebar"] [data-testid="stImage"] img {
+    border-radius: 12px;
+    border: 1px solid var(--border-faint);
+}
+
+/* The wordmark. Sora is set apart from the working type, and carries the same
    gradient as the primary buttons so the brand and the call to action agree. */
 .osintgpt-title {
     font-family: 'Sora', 'Inter', sans-serif;
@@ -482,7 +493,7 @@ details.trace-call[open] > summary .trace-head::before {
     background: linear-gradient(180deg, var(--glass) 0%, rgba(255, 255, 255, 0.02) 100%);
     border: 1px solid var(--border-faint);
     border-radius: 18px;
-    padding: 0.3rem 1rem 0.3rem 0.2rem;
+    padding: 0.55rem 1rem;
     box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
     margin-bottom: 0.5rem;
 }
