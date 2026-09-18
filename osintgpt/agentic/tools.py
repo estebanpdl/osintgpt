@@ -18,7 +18,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 # type hints
-from typing import Any, Dict, Optional, Sequence
+from typing import Any, Dict, List, Optional, Sequence
 
 # import osintgpt graph
 from osintgpt.graph import graph_for, neighbors, path_between
@@ -210,15 +210,27 @@ def exact_search(
     if mode == REFS:
         dated, _ = _within_days(found, days)
         counts: Dict[str, int] = {}
+        # Which terms hit each document, in the order they were searched. A
+        # count says how loud a document is; the terms say what it is loud
+        # about, and two documents with the same count can differ entirely.
+        matched: Dict[str, List[str]] = {}
         for result in dated:
             counts[result.ref] = counts.get(result.ref, 0) + 1
+            seen = matched.setdefault(result.ref, [])
+            for term in result.terms:
+                if term not in seen:
+                    seen.append(term)
 
         return ToolResult(
             tool='exact_search',
             payload={
                 'mode': REFS,
                 'documents': [
-                    {'ref': ref, 'matches': n}
+                    {
+                        'ref': ref,
+                        'matches': n,
+                        **({'terms': matched[ref]} if matched.get(ref) else {})
+                    }
                     for ref, n in sorted(
                         counts.items(), key=lambda i: (-i[1], i[0])
                     )
@@ -280,9 +292,18 @@ def snowball_search(
             'hops': [
                 {
                     'depth': hop.depth,
+                    'ref': hop.result.ref,
                     'citation': hop.result.chunk.citation,
                     'text': hop.text[:SNIPPET_CHARS],
                     'score': round(hop.result.score, 4),
+                    **(
+                        {'timestamp': hop.result.chunk.timestamp}
+                        if hop.result.chunk.timestamp else {}
+                    ),
+                    **(
+                        {'author': hop.result.chunk.author}
+                        if hop.result.chunk.author else {}
+                    ),
                     'drift_from_question': (
                         round(hop.drift, 4) if hop.drift is not None else None
                     )

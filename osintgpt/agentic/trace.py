@@ -18,6 +18,47 @@ from pathlib import PurePosixPath
 from typing import Any, Dict, List, Sequence, Tuple
 
 
+# TouchedDocument class
+@dataclass(frozen=True)
+class TouchedDocument:
+    '''
+    A document one call reached, and what the call learned about it.
+
+    Everything but `ref` is reported where the tool produced it and left empty
+    where it did not: a directory listing knows nothing about relevance, and
+    an invented zero would read as a real measurement.
+    '''
+    ref: str
+    # Results from this document. The ranking shows only the best one, so a
+    # document carrying six good passages and one carrying a single lucky hit
+    # are indistinguishable without this.
+    passages: int = 0
+    # The best score among them. Cosine within one call, and meaningless
+    # against another call's — the unit is not shared.
+    best: Optional[float] = None
+    # Heading path of the best-scoring passage: where in a long document the
+    # match actually sits.
+    section: str = ''
+    timestamp: str = ''
+    author: str = ''
+    # Chunks matched, for exact search. A count, not a score.
+    matches: int = 0
+    # Which searched terms this document contains.
+    terms: Tuple[str, ...] = ()
+
+    @property
+    def scored(self) -> bool:
+        '''
+        Returns:
+            bool: Whether the call measured this document at all. False for a \
+                listing, which reports existence and nothing else.
+        '''
+        return bool(
+            self.passages or self.best is not None or self.matches
+            or self.terms or self.timestamp or self.author or self.section
+        )
+
+
 # TraceEntry class
 @dataclass(frozen=True)
 class TraceEntry:
@@ -35,13 +76,22 @@ class TraceEntry:
     # Documents this call touched, in the order it returned them. A trace
     # that says a search found twenty passages but not which documents they
     # came from records that retrieval happened, not what it read.
-    refs: Tuple[str, ...] = ()
+    documents: Tuple[TouchedDocument, ...] = ()
     seconds: float = 0.0
     error: str = ''
 
     @property
     def ok(self) -> bool:
         return not self.error
+
+    @property
+    def refs(self) -> Tuple[str, ...]:
+        '''
+        Returns:
+            Tuple[str, ...]: The documents by ref alone, for every caller that \
+                wants the list rather than what was measured about it.
+        '''
+        return tuple(document.ref for document in self.documents)
 
     @property
     def counted(self) -> str:
@@ -115,12 +165,12 @@ class Trace:
         seconds: float = 0.0,
         error: str = '',
         unit: str = 'result',
-        refs: Sequence[str] = ()
+        documents: Sequence[TouchedDocument] = ()
     ) -> TraceEntry:
         entry = TraceEntry(
             round=round_number, tool=tool, arguments=dict(arguments),
-            count=count, unit=unit, refs=tuple(refs), seconds=seconds,
-            error=error
+            count=count, unit=unit, documents=tuple(documents),
+            seconds=seconds, error=error
         )
         self.entries.append(entry)
 

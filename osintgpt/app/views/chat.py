@@ -10,6 +10,9 @@
 #   traces to a passage the analyst can open.
 # =================================================================================
 
+# import submodules
+from collections import defaultdict
+
 # type hints
 from typing import Any, Dict, List
 
@@ -40,6 +43,20 @@ PREVIEW_CHARS = 900
 # Documents listed under one call before the rest are counted instead. A
 # survey tool can return hundreds, and a list that long stops being read.
 MAX_TRACE_DOCUMENTS = 40
+
+# A score is only readable next to what produced it. The semantic tools rank
+# by cosine against the query vector; exact search ranks by how many of the
+# searched terms a chunk contains, which is a share and not a similarity.
+SIMILARITY = 'Best passage similarity in this call using cosine similarity.'
+COVERAGE = (
+    'Best passage score in this call: the share of the searched terms it '
+    'contains.'
+)
+SCORE_MEANS = defaultdict(lambda: SIMILARITY, {'exact_search': COVERAGE})
+
+# The refs survey has no score to show, so its count is what it ranked on.
+# Chunks, not occurrences: forty mentions inside one chunk count once.
+MATCHES_MEAN = 'Chunks containing at least one of the searched terms.'
 
 
 # the passages an answer actually read
@@ -224,49 +241,99 @@ def _calls(entries) -> str:
             )
         )
 
-        if not entry.refs:
+        if not entry.documents:
             rows.append(f'<div class="trace-call trace-flat">{head}</div>')
             continue
 
         rows.append(
             '<details class="trace-call">'
             f'<summary>{head}</summary>'
-            f'<div class="trace-detail">{_documents(entry.refs)}</div>'
+            '<div class="trace-detail">'
+            f'{_documents(entry.documents, entry.tool)}</div>'
             '</details>'
         )
 
     return ''.join(rows)
 
 
-def _documents(refs) -> str:
+def _documents(documents, tool: str = '') -> str:
     '''
-    The documents a call touched, by the ref the index stores.
+    The documents a call touched, each with what the call measured about it.
 
     The full ref, not the shortened one the argument line carries: this is the
     part of the trace an analyst checks an answer against, and a path they
     cannot copy is a path they cannot open.
 
     Args:
-        refs (Sequence[str]): Document refs, in the order returned.
+        documents (Sequence[TouchedDocument]): Documents, in the order \
+            returned — which is the order the call ranked them in.
+        tool (str): Which tool produced them, because the score means a \
+            different thing depending on which one did.
 
     Returns:
         str: The list as HTML.
     '''
-    shown = refs[:MAX_TRACE_DOCUMENTS]
-    rest = len(refs) - len(shown)
+    shown = documents[:MAX_TRACE_DOCUMENTS]
+    rest = len(documents) - len(shown)
 
     items = ''.join(
-        f'<span class="trace-doc">{escape_html(ref)}</span>' for ref in shown
+        '<div class="trace-docfile">'
+        f'<span class="trace-doc">{escape_html(document.ref)}</span>'
+        f'{_measures(document, tool)}'
+        '</div>'
+        for document in shown
     )
     more = (
         f'<span class="trace-more">+{rest} more</span>' if rest > 0 else ''
     )
-    label = 'document' + ('' if len(refs) == 1 else 's')
+    label = 'document' + ('' if len(documents) == 1 else 's')
 
     return (
-        f'<div class="trace-docs-label">{len(refs)} {label}</div>'
+        f'<div class="trace-docs-label">{len(documents)} {label}</div>'
         f'{items}{more}'
     )
+
+
+def _measures(document, tool: str = '') -> str:
+    '''
+    What the call learned about one document, as a row beneath its ref.
+
+    A document the call only listed gets no row at all rather than an empty
+    one — `list_documents` reports existence, and a blank line under every ref
+    would imply it had measured something and found nothing.
+    '''
+    if not document.scored:
+        return ''
+
+    parts = []
+
+    if document.best is not None:
+        parts.append(
+            f'<span class="trace-meta-score" title="{SCORE_MEANS[tool]}">'
+            f'{document.best:.2f}</span>'
+        )
+
+    if document.passages:
+        unit = 'passage' + ('' if document.passages == 1 else 's')
+        parts.append(f'<span>{document.passages} {unit}</span>')
+
+    if document.matches:
+        unit = 'match' + ('' if document.matches == 1 else 'es')
+        parts.append(
+            f'<span class="trace-meta-counted" title="{MATCHES_MEAN}">'
+            f'{document.matches} {unit}</span>'
+        )
+
+    for value in (document.section, document.timestamp, document.author):
+        if value:
+            parts.append(f'<span>{escape_html(value)}</span>')
+
+    parts += [
+        f'<span class="trace-meta-term">{escape_html(term)}</span>'
+        for term in document.terms
+    ]
+
+    return f'<span class="trace-doc-meta">{"".join(parts)}</span>'
 
 
 def _quoted(text: str) -> str:

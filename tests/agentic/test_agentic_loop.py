@@ -463,6 +463,97 @@ class TestTheTrace:
 
         assert answer.trace.entries[0].refs == ('material/alpha.md',)
 
+    def test_a_document_carries_what_the_call_measured(
+        self, project, embedder
+    ):
+        '''
+        The ranking shows only a document's best passage, so without the count
+        beside it a document carrying several is indistinguishable from one
+        that got lucky once.
+        '''
+        model = ScriptedModel(
+            calls(('semantic_search', {'query': 'aardvark'})),
+            ModelTurn(text='done')
+        )
+
+        answer = agentic_answer(project, 'q', embedder, model)
+        document = answer.trace.entries[0].documents[0]
+
+        assert document.ref == 'material/alpha.md'
+        assert document.passages >= 1
+        assert document.best is not None
+        assert document.scored
+
+    def test_a_document_reached_twice_is_one_entry_counted_twice(
+        self, project, embedder
+    ):
+        model = ScriptedModel(
+            calls(('semantic_search', {'query': 'aardvark', 'limit': 30})),
+            ModelTurn(text='done')
+        )
+
+        answer = agentic_answer(project, 'q', embedder, model)
+        documents = answer.trace.entries[0].documents
+        refs = [document.ref for document in documents]
+
+        assert len(refs) == len(set(refs))
+        assert sum(d.passages for d in documents) == answer.trace.entries[0].count
+
+    def test_the_best_score_is_the_first_one_returned(
+        self, project, embedder
+    ):
+        '''
+        Results arrive ranked, so the first passage from a document is its
+        best. Taking any later one would understate the document.
+        '''
+        model = ScriptedModel(
+            calls(('semantic_search', {'query': 'aardvark', 'limit': 30})),
+            ModelTurn(text='done')
+        )
+
+        answer = agentic_answer(project, 'q', embedder, model)
+        scores = [
+            d.best for d in answer.trace.entries[0].documents
+            if d.best is not None
+        ]
+
+        assert scores == sorted(scores, reverse=True)
+
+    def test_an_exact_search_records_its_matches_and_terms(
+        self, project, embedder
+    ):
+        model = ScriptedModel(
+            calls(('exact_search', {
+                'terms': ['aardvark', 'unfindable-string'], 'mode': 'refs'
+            })),
+            ModelTurn(text='done')
+        )
+
+        answer = agentic_answer(project, 'q', embedder, model)
+        document = answer.trace.entries[0].documents[0]
+
+        assert document.matches >= 1
+        assert document.terms == ('aardvark',)
+
+    def test_a_listing_is_recorded_without_inventing_measurements(
+        self, project, embedder
+    ):
+        '''
+        A listing reports existence and nothing else. Zeroes here would read
+        as "measured, found nothing", which is a different claim.
+        '''
+        model = ScriptedModel(
+            calls(('list_documents', {})),
+            ModelTurn(text='done')
+        )
+
+        answer = agentic_answer(project, 'q', embedder, model)
+        document = answer.trace.entries[0].documents[0]
+
+        assert document.ref == 'material/alpha.md'
+        assert document.best is None
+        assert document.scored is False
+
     def test_a_listing_of_bare_refs_is_recorded_too(
         self, project, embedder
     ):

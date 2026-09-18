@@ -462,6 +462,14 @@ details.trace-call[open] > summary .trace-head::before {
     margin-bottom: 0.35rem;
 }
 
+.trace-docfile {
+    margin-bottom: 0.5rem;
+}
+
+.trace-docfile:last-of-type {
+    margin-bottom: 0;
+}
+
 .trace-doc {
     display: block;
     font-family: ui-monospace, 'Cascadia Code', 'Consolas', monospace;
@@ -470,6 +478,45 @@ details.trace-call[open] > summary .trace-head::before {
     color: var(--text-bright);
     overflow-wrap: anywhere;
     user-select: text;
+}
+
+/* What the call measured, under the ref it measured. Proportional rather
+   than monospace, so the measurements never read as part of the path, and
+   aligned to the same left edge rather than indented again. */
+.trace-doc-meta {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 0.15rem 0.8rem;
+    margin-top: 0.1rem;
+    font-size: 0.68rem;
+    line-height: 1.5;
+    color: var(--text-secondary);
+}
+
+/* The one number worth scanning down a column, so it takes the accent the
+   tool names use and tabular figures to keep the column straight. */
+.trace-meta-score {
+    color: var(--accent-secondary);
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+    cursor: help;
+}
+
+/* The refs survey ranks on this count instead of a score, so it carries the
+   same affordance without taking the accent a score would. */
+.trace-meta-counted {
+    font-variant-numeric: tabular-nums;
+    cursor: help;
+}
+
+.trace-meta-term {
+    padding: 0.02rem 0.4rem;
+    border-radius: 6px;
+    background: var(--glass);
+    color: var(--text-bright);
+    font-family: ui-monospace, 'Cascadia Code', 'Consolas', monospace;
+    font-size: 0.66rem;
 }
 
 .trace-more {

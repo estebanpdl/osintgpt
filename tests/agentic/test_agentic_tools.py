@@ -221,7 +221,20 @@ class TestSurveyPrimitive:
 
         assert 'passages' not in result.payload
         for row in result.payload['documents']:
-            assert set(row) == {'ref', 'matches'}
+            # The terms are the model's own, not the corpus's, so echoing
+            # which ones landed costs nothing this mode exists to avoid.
+            assert set(row) <= {'ref', 'matches', 'terms'}
+            assert 'text' not in row
+
+    def test_refs_mode_says_which_terms_each_document_holds(self, context):
+        result = exact_search(
+            context, ['aardvark', 'unfindable-string'], mode=REFS
+        )
+
+        rows = result.payload['documents']
+
+        assert rows
+        assert all(row['terms'] == ['aardvark'] for row in rows)
 
     def test_refs_mode_says_how_many_matches_each_document_holds(self, context):
         result = exact_search(context, ['aardvark'], mode=REFS)
@@ -429,6 +442,16 @@ class TestSnowball:
 
         assert 'stopped' in result.payload
         assert isinstance(result.payload['hops'], list)
+
+    def test_a_hop_names_the_document_it_read(self, context):
+        '''
+        Every other search tool records what it touched. A walk that reports
+        only hop counts leaves the documents it actually read out of the
+        trace and out of the answer's sources.
+        '''
+        result = snowball_search(context, 'aardvark', depth=2, threshold=0.0)
+
+        assert all(hop['ref'] for hop in result.payload['hops'])
 
 
 def _result(ref, timestamp):

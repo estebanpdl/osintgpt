@@ -19,7 +19,12 @@ from osintgpt.agentic import (
     answer_from_dict,
     answer_to_dict
 )
-from osintgpt.agentic.trace import Trace
+from osintgpt.agentic.trace import TouchedDocument, Trace
+
+ALPHA = TouchedDocument(
+    ref='material/alpha.md', passages=3, best=0.8125, section='Findings',
+    timestamp='2026-02-01', author='M. Ruiz', terms=('aardvark',)
+)
 
 
 def built() -> AgenticAnswer:
@@ -27,7 +32,7 @@ def built() -> AgenticAnswer:
     trace.say(1, 'Let me survey first.')
     trace.record(
         1, 'semantic_search', {'query': 'aardvark', 'limit': 8},
-        count=3, unit='passage', refs=('material/alpha.md',), seconds=0.42
+        count=3, unit='passage', documents=(ALPHA,), seconds=0.42
     )
     trace.record(
         2, 'fetch_source', {'ref': 'material/alpha.md'},
@@ -61,6 +66,30 @@ class TestRoundTrip:
         assert first.count == 3
         assert first.unit == 'passage'
         assert first.refs == ('material/alpha.md',)
+
+    def test_what_a_call_measured_survives(self):
+        '''
+        The measurements are why the ranking can be read rather than only
+        trusted, so a replayed trace has to carry them as the live one did.
+        '''
+        restored = answer_from_dict(answer_to_dict(built()))
+
+        assert restored.trace.entries[0].documents[0] == ALPHA
+
+    def test_a_transcript_without_them_still_replays(self):
+        '''
+        Transcripts written before documents carried measurements hold refs
+        alone. Those turns reached documents and measured nothing, which is
+        what they should replay as.
+        '''
+        data = answer_to_dict(built())
+        for call in data['trace']['calls']:
+            call.pop('document_details')
+
+        first = answer_from_dict(data).trace.entries[0]
+
+        assert first.refs == ('material/alpha.md',)
+        assert first.documents[0].scored is False
 
     def test_the_rendered_lines_are_identical(self):
         '''

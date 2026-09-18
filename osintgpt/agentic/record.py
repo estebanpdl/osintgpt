@@ -11,10 +11,10 @@
 # =================================================================================
 
 # type hints
-from typing import Any, Dict
+from typing import Any, Dict, Tuple
 
 from .loop import AgenticAnswer
-from .trace import Narration, Trace, TraceEntry
+from .trace import Narration, TouchedDocument, Trace, TraceEntry
 
 
 # an answer as plain data
@@ -52,7 +52,13 @@ def answer_to_dict(answer: AgenticAnswer) -> Dict[str, Any]:
                     'arguments': entry.arguments,
                     'results': entry.count,
                     'unit': entry.unit,
+                    # Refs alone, still, so a transcript written here opens in
+                    # an osintgpt that predates the measurements beside them.
                     'documents': list(entry.refs),
+                    'document_details': [
+                        _document_to_dict(document)
+                        for document in entry.documents
+                    ],
                     # Full precision. The trace rounds once for display,
                     # and rounding again here moves the number: 1.9548 stored
                     # as 1.955 displays as 1.96 rather than 1.95.
@@ -122,10 +128,63 @@ def _entry(call: Dict[str, Any]) -> TraceEntry:
         arguments=arguments if isinstance(arguments, dict) else {},
         count=_whole(call.get('results')),
         unit=str(call.get('unit') or 'result'),
-        refs=tuple(str(ref) for ref in call.get('documents') or []),
+        documents=_documents(call),
         seconds=_number(call.get('seconds')),
         error=str(call.get('error') or '')
     )
+
+
+def _documents(call: Dict[str, Any]) -> Tuple[TouchedDocument, ...]:
+    '''
+    The call's documents, measurements included where the transcript has them.
+
+    A transcript written before those were recorded carries refs alone, and
+    those turns replay as documents that were reached and not measured — which
+    is what happened, rather than a row of zeroes claiming otherwise.
+    '''
+    details = call.get('document_details')
+    if isinstance(details, list) and details:
+        return tuple(
+            _document(item) for item in details if isinstance(item, dict)
+        )
+
+    return tuple(
+        TouchedDocument(ref=str(ref)) for ref in call.get('documents') or []
+    )
+
+
+def _document(item: Dict[str, Any]) -> TouchedDocument:
+    best = item.get('best')
+
+    return TouchedDocument(
+        ref=str(item.get('ref', '')),
+        passages=_whole(item.get('passages')),
+        best=_number(best) if best is not None else None,
+        section=str(item.get('section') or ''),
+        timestamp=str(item.get('timestamp') or ''),
+        author=str(item.get('author') or ''),
+        matches=_whole(item.get('matches')),
+        terms=tuple(str(term) for term in item.get('terms') or [])
+    )
+
+
+def _document_to_dict(document: TouchedDocument) -> Dict[str, Any]:
+    '''
+    Only what was measured. An absent field is absent rather than zero, so a
+    reader cannot mistake "not reported" for "none found".
+    '''
+    stored: Dict[str, Any] = {'ref': document.ref}
+    for key in ('passages', 'matches', 'section', 'timestamp', 'author'):
+        value = getattr(document, key)
+        if value:
+            stored[key] = value
+
+    if document.best is not None:
+        stored['best'] = document.best
+    if document.terms:
+        stored['terms'] = list(document.terms)
+
+    return stored
 
 
 def _whole(value: Any) -> int:

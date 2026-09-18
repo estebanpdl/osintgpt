@@ -44,7 +44,7 @@ from osintgpt.prompts import prompt
 
 from .registry import TOOL_SPECS, run_tool
 from .tools import ToolContext
-from .trace import Trace
+from .trace import TouchedDocument, Trace
 
 log = logging.getLogger('osintgpt.agentic')
 
@@ -264,7 +264,7 @@ def _run_calls(
         trace.record(
             round_number, call.name, call.arguments,
             count=count, seconds=elapsed, error=error, unit=unit,
-            refs=_touched(payload)
+            documents=_touched(payload)
         )
 
         for ref in _refs_in(payload):
@@ -281,29 +281,68 @@ def _run_calls(
     return results
 
 
-def _touched(payload: Dict[str, Any]) -> List[str]:
+def _touched(payload: Dict[str, Any]) -> List[TouchedDocument]:
     '''
-    Every document a call reported, deduplicated in the order it returned them.
+    Every document a call reported, gathered in the order it returned them.
 
     Deliberately not `_refs_in`. That collects what an answer cites, and a
     directory listing is not a citation — so it reads only the dict entries
     that carry evidence. This records what a call *touched*, which is the
     question an audit asks, so a listing of bare refs counts here and a
     listing of bare refs is exactly what `list_documents` returns.
+
+    A document reached more than once is one entry: the first result sets what
+    is shown, because results arrive ranked and the first is the best, and the
+    rest are counted. Only the first sets `section` for the same reason — the
+    heading that earned the document its place.
     '''
-    found: List[str] = []
+    found: Dict[str, Dict[str, Any]] = {}
 
     for key in ('passages', 'documents', 'hops', 'claims', 'path'):
         for item in payload.get(key, []) or []:
-            ref = item.get('ref') if isinstance(item, dict) else item
-            if isinstance(ref, str) and ref and ref not in found:
-                found.append(ref)
+            _gather(found, item if isinstance(item, dict) else {'ref': item})
 
-    ref = payload.get('ref')
-    if isinstance(ref, str) and ref and ref not in found:
-        found.append(ref)
+    if payload.get('ref'):
+        _gather(found, {'ref': payload['ref']})
 
-    return found
+    return [TouchedDocument(**fields) for fields in found.values()]
+
+
+def _gather(found: Dict[str, Dict[str, Any]], item: Dict[str, Any]) -> None:
+    '''
+    Fold one returned result into the document it came from.
+    '''
+    ref = item.get('ref')
+    if not isinstance(ref, str) or not ref:
+        return
+
+    score = item.get('score')
+    first = ref not in found
+    fields = found.setdefault(ref, {'ref': ref, 'passages': 0, 'terms': ()})
+
+    if score is not None:
+        fields['passages'] += 1
+        if first:
+            fields['best'] = score
+
+    if first:
+        # `citation` is `ref › section` where a section exists, and the ref on
+        # its own where none does; the second form carries no section to show.
+        citation = str(item.get('citation') or '')
+        _, _, section = citation.partition(' › ')
+        for key, value in (
+            ('section', section), ('timestamp', item.get('timestamp') or ''),
+            ('author', item.get('author') or '')
+        ):
+            if value:
+                fields[key] = str(value)
+
+    if item.get('matches'):
+        fields['matches'] = int(item['matches'])
+
+    for term in item.get('terms') or []:
+        if term not in fields['terms']:
+            fields['terms'] = fields['terms'] + (str(term),)
 
 
 def _refs_in(payload: Dict[str, Any]) -> List[str]:

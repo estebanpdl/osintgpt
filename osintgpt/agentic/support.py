@@ -146,7 +146,10 @@ def _passage(result) -> Dict[str, Any]:
         'text': result.text[:SNIPPET_CHARS],
         'score': round(result.score, 4),
         **({'timestamp': chunk.timestamp} if chunk.timestamp else {}),
-        **({'author': chunk.author} if chunk.author else {})
+        **({'author': chunk.author} if chunk.author else {}),
+        # Which terms put this chunk in the result, so the model reads why it
+        # ranked rather than inferring it from position.
+        **({'terms': list(result.terms)} if getattr(result, 'terms', ()) else {})
     }
 
 
