@@ -58,7 +58,7 @@ def _cached_runtime(project_id: str, project_path: str, home: str, revision: str
 
 
 def main() -> None:
-    st.set_page_config(page_title='OsintGPT', page_icon=str(LOGO), layout='wide')
+    st.set_page_config(page_title='OsintGPT', layout='wide')
     load_css(st)
     home = default_home()
 
