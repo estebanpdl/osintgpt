@@ -15,7 +15,7 @@
 from dataclasses import dataclass, field
 
 # type hints
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, Tuple
 
 
 # StoredChunk class
@@ -66,6 +66,10 @@ class SearchResult:
     # Cosine similarity: 1.0 is identical, 0.0 unrelated. Comparable within
     # one search and meaningless between searches on different models.
     score: float
+    # Which of the searched terms this chunk contains. The lexical leg fills
+    # it; the semantic leg has no terms to report and leaves it empty, which
+    # is why it defaults rather than being required.
+    terms: Tuple[str, ...] = ()
 
     @property
     def ref(self) -> str:

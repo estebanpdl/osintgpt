@@ -175,7 +175,11 @@ def lexical_search(
     )
 
     return [
-        SearchResult(chunk=hit.chunk, score=hit.score(len(usable)))
+        SearchResult(
+            chunk=hit.chunk,
+            score=hit.score(len(usable)),
+            terms=tuple(hit.terms)
+        )
         for hit in hits
     ]
 

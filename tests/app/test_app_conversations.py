@@ -16,7 +16,7 @@ import pytest
 # import osintgpt
 from osintgpt import Project
 from osintgpt.agentic import AgenticAnswer
-from osintgpt.agentic.trace import Trace
+from osintgpt.agentic.trace import TouchedDocument, Trace
 from osintgpt.app import (
     CONVERSATION,
     current_conversation,
@@ -35,7 +35,10 @@ def answered(question: str, text: str) -> AgenticAnswer:
     trace = Trace()
     trace.record(
         1, 'semantic_search', {'query': question},
-        count=1, unit='passage', refs=('material/alpha.md',), seconds=0.1
+        count=1, unit='passage', seconds=0.1,
+        documents=(
+            TouchedDocument(ref='material/alpha.md', passages=1, best=0.71),
+        )
     )
 
     return AgenticAnswer(
