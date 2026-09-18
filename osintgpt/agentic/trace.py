@@ -15,7 +15,7 @@ from dataclasses import dataclass, field
 from pathlib import PurePosixPath
 
 # type hints
-from typing import Any, Dict, List, Sequence, Tuple
+from typing import Any, Dict, List, Optional, Sequence, Tuple
 
 
 # TouchedDocument class
