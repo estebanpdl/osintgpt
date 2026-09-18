@@ -242,6 +242,92 @@ class TestSourceChips:
         assert passages_of(answer) == []
 
 
+class TestTouchedDocumentsRender:
+    '''
+    The ranking the model fetched in is only readable if the numbers behind
+    it are on screen beside each document.
+    '''
+
+    def test_it_shows_what_the_call_measured(self):
+        from osintgpt.agentic import TouchedDocument
+        from osintgpt.app.views.chat import _documents
+
+        html = _documents([TouchedDocument(
+            ref='material/alpha.md', passages=3, best=0.6231,
+            section='Findings › France', timestamp='2026-06-17',
+            author='M. Ruiz', terms=('Blackcore',)
+        )])
+
+        assert '0.62' in html
+        assert '3 passages' in html
+        assert 'Findings › France' in html
+        assert '2026-06-17' in html
+        assert 'M. Ruiz' in html
+        assert 'Blackcore' in html
+
+    def test_a_single_passage_is_not_pluralized(self):
+        from osintgpt.agentic import TouchedDocument
+        from osintgpt.app.views.chat import _documents
+
+        html = _documents([
+            TouchedDocument(ref='a.md', passages=1, best=0.5)
+        ])
+
+        assert '1 passage<' in html
+
+    def test_a_listing_gets_no_empty_row(self):
+        '''
+        list_documents reports existence and nothing else. A blank row under
+        every ref would imply it measured something and found nothing.
+        '''
+        from osintgpt.agentic import TouchedDocument
+        from osintgpt.app.views.chat import _documents
+
+        html = _documents([TouchedDocument(ref='material/alpha.md')])
+
+        assert 'material/alpha.md' in html
+        assert 'trace-doc-meta' not in html
+
+    def test_the_score_says_what_it_measured(self):
+        '''
+        exact_search ranks by the share of searched terms a chunk contains,
+        not by similarity. One label for both would be wrong for one of them.
+        '''
+        from osintgpt.agentic import TouchedDocument
+        from osintgpt.app.views.chat import _documents
+
+        document = TouchedDocument(ref='a.md', passages=1, best=0.5)
+
+        assert 'cosine' in _documents([document], 'semantic_search')
+        assert 'cosine' in _documents([document], 'snowball')
+        assert 'share of the searched terms' in _documents(
+            [document], 'exact_search'
+        )
+
+    def test_the_match_count_says_it_counts_chunks(self):
+        '''
+        refs mode has no score, so the count is what it ranked on — and it
+        counts chunks, not occurrences, which the bare number hides.
+        '''
+        from osintgpt.agentic import TouchedDocument
+        from osintgpt.app.views.chat import _documents
+
+        html = _documents(
+            [TouchedDocument(ref='a.md', matches=14)], 'exact_search'
+        )
+
+        assert '14 matches' in html
+        assert 'Chunks containing at least one' in html
+
+    def test_a_ref_is_escaped(self):
+        from osintgpt.agentic import TouchedDocument
+        from osintgpt.app.views.chat import _documents
+
+        html = _documents([TouchedDocument(ref='<script>.md')])
+
+        assert '<script>' not in html
+
+
 class TestPackaging:
     def test_streamlit_is_a_core_dependency(self):
         '''

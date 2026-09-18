@@ -194,6 +194,22 @@ class TestRanking:
         assert best.score == pytest.approx(1.0)
         assert other.score == pytest.approx(0.5)
 
+    def test_a_result_names_the_terms_that_found_it(
+        self, project, embedder
+    ):
+        '''
+        The coverage score says how many terms landed. Which ones is what
+        tells an analyst whether the document is about the right thing.
+        '''
+        results = lexical_search(
+            project, ['@acct_1', '3f2a9c1b'], embedding_model=MODEL
+        )
+        best = next(r for r in results if 'alpha' in r.ref)
+        other = next(r for r in results if 'beta' in r.ref)
+
+        assert set(best.terms) == {'@acct_1', '3f2a9c1b'}
+        assert len(other.terms) == 1
+
     def test_a_chunk_found_by_several_terms_appears_once(
         self, project, embedder
     ):
