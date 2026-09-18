@@ -93,10 +93,11 @@ def render(st, runtime, state) -> None:
     if conversation is not None and len(conversation):
         st.caption(conversation.name)
 
-    for turn in (conversation.turns if conversation else []):
+    turns = conversation.turns if conversation else []
+    for index, turn in enumerate(turns):
         _turn(
             st, turn.question, answer_from_dict(turn.answer), state,
-            replayed=True
+            index=index, suggest=index == len(turns) - 1
         )
 
     question = take_pending(state) or st.chat_input('Ask about this project')
@@ -114,10 +115,12 @@ def render(st, runtime, state) -> None:
         )
 
     remember(state, project, question, answer)
-    _turn(st, question, answer, state, replayed=False)
+    # `turns` was read before the answer was appended, so the new turn takes
+    # the position after the last one replayed above.
+    _turn(st, question, answer, state, index=len(turns), suggest=True)
 
 
-def _turn(st, question, answer, state, replayed: bool) -> None:
+def _turn(st, question, answer, state, index: int, suggest: bool) -> None:
     with st.chat_message('user', avatar=USER_AVATAR):
         st.write(question)
 
@@ -136,8 +139,8 @@ def _turn(st, question, answer, state, replayed: bool) -> None:
 
         _sources(st, answer)
         _trace(st, answer)
-        if not replayed:
-            _followups(st, answer, state)
+        if suggest:
+            _followups(st, answer, state, index)
 
 
 def _sources(st, answer) -> None:
@@ -283,25 +286,33 @@ def _quoted(text: str) -> str:
     )
 
 
-def _followups(st, answer, state) -> None:
+def _followups(st, answer, state, index: int) -> None:
     '''
     Each suggestion is a complete question, which is why a click can submit it
     unchanged rather than having to reconstruct what it referred to.
+
+    Offered on the newest turn, whether it was just answered or read back from
+    the transcript — where they were written with the answer. Suggestions
+    outlive the rerun that produced them, so leaving the view, refreshing, or
+    restarting the server does not take them; an older turn still offers none,
+    because those questions have been moved past.
     '''
     if not answer.followups:
         return
 
-    # Keyed on the turn: a key reused across turns carries the previous click.
-    turn = f'{state.get(CONVERSATION, "new")}-{abs(hash(answer.question))}'
+    # Keyed on the turn's position rather than on the question: two identical
+    # questions in one thread would share a key, and a key reused across turns
+    # carries the previous click.
+    turn = f'{state.get(CONVERSATION, "new")}-{index}'
 
     st.caption('Ask next')
-    for index, suggestion in enumerate(answer.followups):
+    for number, suggestion in enumerate(answer.followups):
         # The key reaches the DOM as `st-key-<key>`, which is how these are
         # styled. Streamlit renders each element in a container of its own, so
         # a wrapper div never encloses the widgets written after it.
         st.button(
             suggestion,
-            key=f'followup-{turn}-{index}',
+            key=f'followup-{turn}-{number}',
             on_click=queue_question,
             args=(state, suggestion)
         )

@@ -73,6 +73,21 @@ def conversation_with(project, question: str, turns: int = 1):
     return conversation
 
 
+def conversation_suggesting(project, question: str, *followups: str):
+    '''
+    A thread whose every turn was written with suggestions, so which turn
+    offers them on screen is the view's decision and not the transcript's.
+    '''
+    conversation = start_conversation(project, question)
+    for turn in ('first', 'second'):
+        append_turn(
+            conversation, f'{question} ({turn})',
+            {**ANSWER, 'followups': list(followups)}
+        )
+
+    return conversation
+
+
 def run(project=None, **state):
     app = AppTest.from_file(SCRIPT, default_timeout=60)
     if project is not None:
@@ -157,17 +172,33 @@ class TestTheConversationSidebar:
         assert 'trace-tool' in rendered
         assert 'semantic_search' in rendered
 
-    def test_a_replayed_turn_offers_no_stale_followups(self, project):
+    def test_the_newest_turn_still_suggests_when_replayed(self, project):
         '''
-        Suggestions belong to the newest turn. Replaying an old one must not
+        Suggestions are written into the transcript, so they have to survive
+        the rerun that produced them — leaving the view, a refresh, a
+        restarted server all come back through this replay.
+        '''
+        conversation = conversation_suggesting(
+            project, 'What is alpha?', 'What is beta?'
+        )
+
+        app = run(project, **{CONVERSATION: conversation.id, VIEW: ASK})
+
+        assert 'What is beta?' in [b.label for b in app.button]
+
+    def test_an_older_turn_offers_no_stale_followups(self, project):
+        '''
+        Suggestions belong to the newest turn. Replaying an older one must not
         re-offer questions the analyst has already moved past.
         '''
-        conversation = conversation_with(project, 'What is alpha?')
+        conversation = conversation_suggesting(
+            project, 'What is alpha?', 'What is beta?'
+        )
 
         app = run(project, **{CONVERSATION: conversation.id, VIEW: ASK})
         keys = [b.key for b in app.button if b.key]
 
-        assert not [key for key in keys if key.startswith('followup-')]
+        assert len([key for key in keys if key.startswith('followup-')]) == 1
 
     def test_a_conversation_from_another_project_is_not_listed(self, home):
         first = Project.create('Case Alpha', home=home)
