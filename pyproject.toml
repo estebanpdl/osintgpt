@@ -66,6 +66,11 @@ postgres = [
 qdrant = [
     "qdrant-client>=1.19.0"
 ]
+# One client for the providers without a dedicated backend (Bedrock, Vertex AI,
+# Azure, Mistral, Cohere, ...), or for a LiteLLM Proxy.
+litellm = [
+    "litellm>=1.92.0,<1.101.1"
+]
 # sentence-transformers pulls in torch (~650MB); kept opt-in, not default.
 local = [
     "sentence-transformers>=5.7.0"

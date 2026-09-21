@@ -122,3 +122,39 @@ def test_doctor_requires_a_selected_project(runner, home):
 
     assert result.exit_code != 0
     assert 'project use <slug>' in result.output
+
+
+@pytest.mark.parametrize('proxy', [True, False])
+def test_doctor_lists_litellm_proxy_models(runner, home, monkeypatch, proxy):
+    create_project(runner, home)
+    for key, value in (
+        ('generation_provider', 'litellm'), ('generation_model', 'claude')
+    ):
+        assert invoke(
+            runner, home, 'config', 'set', key, value, '--project', 'case-doctor'
+        ).exit_code == 0
+    if proxy:
+        monkeypatch.setenv('LITELLM_BASE_URL', 'http://localhost:4000')
+
+    class Proxy:
+        def list_models(self):
+            return ['claude', 'gpt-4.1-mini']
+
+    monkeypatch.setattr(
+        cli_doctor, 'build_generation_provider', lambda *a, **k: Proxy()
+    )
+    monkeypatch.setattr(
+        cli_doctor, 'build_embedding_provider', lambda *a, **k: Proxy()
+    )
+
+    result = invoke(
+        runner, home, 'doctor', '--project', 'case-doctor',
+        '--check-providers', '--json'
+    )
+
+    generation = json.loads(result.output)['providers']['generation']
+    if proxy:
+        assert generation['available_models'] == ['claude', 'gpt-4.1-mini']
+    else:
+        # Direct LiteLLM routes have no endpoint of their own to ask.
+        assert generation['check_note'] == 'provider does not support model discovery'

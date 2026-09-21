@@ -28,6 +28,7 @@ from .calling import (
     tool_spec
 )
 from .gemini import GeminiEmbedding
+from .litellm_sdk import LiteLLMEmbedding, LiteLLMGeneration, resolve_litellm_key
 from .local import SentenceTransformerEmbedding
 from .locality import LocalityReport, ProviderLocality, audit_locality
 from .usage import Usage, UsageRecorder
@@ -38,6 +39,7 @@ from .registry import (
     EMBEDDING_BACKENDS,
     GEMINI,
     GENERATION_BACKENDS,
+    LITELLM,
     BackendSpec,
     OPENAI_COMPAT,
     OPENAI_RESPONSES,
@@ -100,6 +102,12 @@ def build_embedding_provider(
     if spec.kind == SENTENCE_TRANSFORMERS:
         return SentenceTransformerEmbedding(model=model, recorder=recorder)
 
+    if spec.kind == LITELLM:
+        return LiteLLMEmbedding(
+            model=model, api_key=resolve_litellm_key(model, settings),
+            base_url=settings.litellm_base_url or None, recorder=recorder
+        )
+
     if spec.kind == GEMINI:
         return GeminiEmbedding(
             model=model, api_key=api_key, recorder=recorder,
@@ -152,6 +160,12 @@ def build_generation_provider(
     if spec.kind == ANTHROPIC:
         return AnthropicGeneration(
             model=model, api_key=api_key, recorder=recorder
+        )
+
+    if spec.kind == LITELLM:
+        return LiteLLMGeneration(
+            model=model, api_key=resolve_litellm_key(model, settings),
+            base_url=settings.litellm_base_url or None, recorder=recorder
         )
 
     if spec.kind == OPENAI_RESPONSES:

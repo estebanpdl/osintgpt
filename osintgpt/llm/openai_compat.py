@@ -278,52 +278,12 @@ class OpenAICompatGeneration(GenerationProvider):
     def generate_with_tools(
         self, system, user, tools, history=None, conversation=None
     ):
-        messages = [{'role': 'system', 'content': system}]
-
-        for asked, answered in conversation or []:
-            messages.append({'role': 'user', 'content': asked})
-            messages.append({'role': 'assistant', 'content': answered})
-
-        messages.append({'role': 'user', 'content': user})
-
-        for exchange in history or []:
-            # The assistant turn has to carry the calls it made, or the
-            # results that follow refer to nothing and the request is refused.
-            messages.append({
-                'role': 'assistant',
-                'content': exchange.turn.text or None,
-                'tool_calls': [
-                    {
-                        'id': call.id,
-                        'type': 'function',
-                        'function': {
-                            'name': call.name,
-                            'arguments': json.dumps(call.arguments)
-                        }
-                    }
-                    for call in exchange.turn.calls
-                ]
-            })
-            for call in exchange.turn.calls:
-                messages.append({
-                    'role': 'tool',
-                    'tool_call_id': call.id,
-                    'content': exchange.results.get(call.id, '')
-                })
-
-        request = {'model': self.model, 'messages': messages}
+        request = {
+            'model': self.model,
+            'messages': chat_tool_messages(system, user, history, conversation)
+        }
         if tools:
-            request['tools'] = [
-                {
-                    'type': 'function',
-                    'function': {
-                        'name': tool.name,
-                        'description': tool.description,
-                        'parameters': tool.schema()
-                    }
-                }
-                for tool in tools
-            ]
+            request['tools'] = chat_tools(tools)
 
         response = self.client.chat.completions.create(**request)
 
@@ -337,19 +297,7 @@ class OpenAICompatGeneration(GenerationProvider):
             counted=usage is not None
         ))
 
-        message = response.choices[0].message
-
-        return ModelTurn(
-            text=getattr(message, 'content', None) or '',
-            calls=[
-                ToolCall(
-                    id=call.id,
-                    name=call.function.name,
-                    arguments=_arguments(call.function.arguments)
-                )
-                for call in (getattr(message, 'tool_calls', None) or [])
-            ]
-        )
+        return chat_model_turn(response.choices[0].message)
 
     def list_models(self) -> List[str]:
         return _list_models(self.client)
@@ -370,3 +318,73 @@ def _arguments(raw) -> dict:
         return {}
 
     return parsed if isinstance(parsed, dict) else {}
+
+
+# Chat Completions tool calling, shared by every backend that speaks it.
+
+# the messages for one tool-calling round
+def chat_tool_messages(system, user, history=None, conversation=None) -> list:
+    messages = [{'role': 'system', 'content': system}]
+
+    for asked, answered in conversation or []:
+        messages.append({'role': 'user', 'content': asked})
+        messages.append({'role': 'assistant', 'content': answered})
+
+    messages.append({'role': 'user', 'content': user})
+
+    for exchange in history or []:
+        # The assistant turn has to carry the calls it made, or the
+        # results that follow refer to nothing and the request is refused.
+        messages.append({
+            'role': 'assistant',
+            'content': exchange.turn.text or None,
+            'tool_calls': [
+                {
+                    'id': call.id,
+                    'type': 'function',
+                    'function': {
+                        'name': call.name,
+                        'arguments': json.dumps(call.arguments)
+                    }
+                }
+                for call in exchange.turn.calls
+            ]
+        })
+        for call in exchange.turn.calls:
+            messages.append({
+                'role': 'tool',
+                'tool_call_id': call.id,
+                'content': exchange.results.get(call.id, '')
+            })
+
+    return messages
+
+
+# tools in the Chat Completions shape
+def chat_tools(tools) -> list:
+    return [
+        {
+            'type': 'function',
+            'function': {
+                'name': tool.name,
+                'description': tool.description,
+                'parameters': tool.schema()
+            }
+        }
+        for tool in tools
+    ]
+
+
+# what a Chat Completions reply said and asked to run
+def chat_model_turn(message) -> ModelTurn:
+    return ModelTurn(
+        text=getattr(message, 'content', None) or '',
+        calls=[
+            ToolCall(
+                id=call.id,
+                name=call.function.name,
+                arguments=_arguments(call.function.arguments)
+            )
+            for call in (getattr(message, 'tool_calls', None) or [])
+        ]
+    )

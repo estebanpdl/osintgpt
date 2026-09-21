@@ -15,7 +15,7 @@ from osintgpt.llm import (
     build_embedding_provider,
     build_generation_provider
 )
-from osintgpt.llm.registry import backend_spec
+from osintgpt.llm.registry import LITELLM, backend_spec
 from osintgpt.projects import ProjectSettings, load_user_defaults
 from osintgpt.vector_store import BACKENDS, store_for
 
@@ -68,7 +68,10 @@ def _provider_status(
     }
     if not check_provider or not ready:
         return status
-    if not spec.discovers_models:
+    # A LiteLLM Proxy answers a list-models request; direct LiteLLM routes
+    # have no endpoint of their own to ask.
+    proxied = spec.kind == LITELLM and bool(settings.litellm_base_url)
+    if not spec.discovers_models and not proxied:
         status['check_note'] = 'provider does not support model discovery'
         return status
 
