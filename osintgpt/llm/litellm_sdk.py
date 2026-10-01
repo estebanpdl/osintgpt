@@ -7,8 +7,7 @@
 #
 # File: litellm_sdk.py
 # Description: Every provider LiteLLM can route to (Bedrock, Vertex AI, Azure,
-#   Mistral, Cohere, ...) through its SDK, or through a LiteLLM Proxy when a
-#   base URL is configured. The route is part of the model name.
+#   Mistral, Cohere, ...) through its SDK. The route is part of the model name.
 # =================================================================================
 
 # import modules
@@ -32,8 +31,6 @@ from .usage import Usage, UsageRecorder
 
 # Module named litellm_sdk rather than litellm, for the reason
 # anthropic_native.py gives: a module shadowing the SDK it imports is a trap.
-
-PROXY_ROUTE = 'litellm_proxy/'
 
 # Routes whose key osintgpt already stores, so `osintgpt auth set anthropic`
 # also serves `anthropic/...` through LiteLLM. Every other route reads its
@@ -68,49 +65,13 @@ def resolve_litellm_key(model: str, settings: Settings) -> Optional[str]:
         settings (Settings): Configuration carrying the credentials.
 
     Returns:
-        Optional[str]: The proxy's virtual key when a proxy is configured, \
-            else the stored key for the model's route, else None so LiteLLM \
-            reads that provider's environment variables itself.
+        Optional[str]: The stored key for the model's route, else None so \
+            LiteLLM reads that provider's environment variables itself.
     '''
-    if settings.litellm_base_url or settings.litellm_api_key:
-        return settings.litellm_api_key or None
-
     route = model.split('/', 1)[0] if '/' in model else 'openai'
     field = ROUTE_KEYS.get(route)
 
     return (getattr(settings, field) or None) if field else None
-
-
-# the model name a request carries
-def _routed(model: str, base_url: Optional[str]) -> str:
-    # Behind a proxy the name is the proxy's alias. Without the prefix LiteLLM
-    # would read `gemini-2.5-flash` as a Gemini route and skip the proxy.
-    if base_url and not model.startswith(PROXY_ROUTE):
-        return PROXY_ROUTE + model
-
-    return model
-
-
-# the proxy's OpenAI-compatible root
-def _proxy_v1(base_url: str) -> str:
-    root = base_url.rstrip('/')
-
-    return root if root.endswith('/v1') else f'{root}/v1'
-
-
-# list what a LiteLLM Proxy serves
-def _list_proxy_models(base_url: Optional[str], api_key: Optional[str]) -> List[str]:
-    if not base_url:
-        raise NotImplementedError(
-            'the litellm backend lists models only through a LiteLLM Proxy; '
-            'set LITELLM_BASE_URL, or name a route such as anthropic/<model>'
-        )
-
-    from openai import OpenAI
-
-    client = OpenAI(api_key=api_key or 'not-required', base_url=_proxy_v1(base_url))
-
-    return sorted(model.id for model in client.models.list())
 
 
 # LiteLLMGeneration class
@@ -124,17 +85,15 @@ class LiteLLMGeneration(GenerationProvider):
         self,
         model: str,
         api_key: Optional[str] = None,
-        base_url: Optional[str] = None,
         recorder: Optional[UsageRecorder] = None,
         client: Optional[object] = None
     ) -> None:
         '''
         Args:
             model (str): `<route>/<model>`, e.g. `bedrock/...` or \
-                `anthropic/claude-sonnet-5`; behind a proxy, its alias.
-            api_key (str, optional): Key for the route or the proxy. None \
-                lets LiteLLM read the provider's environment variables.
-            base_url (str, optional): LiteLLM Proxy URL.
+                `anthropic/claude-sonnet-5`.
+            api_key (str, optional): Key for the route. None lets LiteLLM \
+                read the provider's environment variables.
             client (object, optional): Stands in for the litellm module, \
                 for tests.
 
@@ -143,17 +102,12 @@ class LiteLLMGeneration(GenerationProvider):
         '''
         self.model = model
         self.api_key = api_key or None
-        self.base_url = base_url or None
         self.recorder = recorder
         self.client = client if client is not None else _load_litellm()
-        self.supports_model_discovery = bool(self.base_url)
         self.supports_vision = self._model_supports_vision()
 
     def _model_supports_vision(self) -> bool:
-        # LiteLLM's model map knows which models accept images. A proxy alias
-        # is not in it, and the proxy decides, so it is not refused up front.
-        if self.base_url:
-            return True
+        # LiteLLM's model map knows which models accept images.
         check = getattr(self.client, 'supports_vision', None)
         if check is None:
             return True
@@ -164,7 +118,7 @@ class LiteLLMGeneration(GenerationProvider):
 
     def _complete(self, messages: list, **extra):
         request = {
-            'model': _routed(self.model, self.base_url),
+            'model': self.model,
             'messages': messages,
             # Drop what a route cannot accept rather than fail the call on it.
             'drop_params': True,
@@ -172,8 +126,6 @@ class LiteLLMGeneration(GenerationProvider):
         }
         if self.api_key:
             request['api_key'] = self.api_key
-        if self.base_url:
-            request['api_base'] = self.base_url
 
         response = self.client.completion(**request)
 
@@ -225,9 +177,6 @@ class LiteLLMGeneration(GenerationProvider):
 
         return chat_model_turn(message)
 
-    def list_models(self) -> List[str]:
-        return _list_proxy_models(self.base_url, self.api_key)
-
 
 # LiteLLMEmbedding class
 class LiteLLMEmbedding(EmbeddingProvider):
@@ -238,7 +187,6 @@ class LiteLLMEmbedding(EmbeddingProvider):
         self,
         model: str,
         api_key: Optional[str] = None,
-        base_url: Optional[str] = None,
         batch_size: int = MAX_BATCH,
         recorder: Optional[UsageRecorder] = None,
         client: Optional[object] = None
@@ -247,8 +195,7 @@ class LiteLLMEmbedding(EmbeddingProvider):
         Args:
             model (str): `<route>/<model>`, e.g. `cohere/embed-english-v3.0` \
                 or `bedrock/amazon.titan-embed-text-v2:0`.
-            api_key (str, optional): Key for the route or the proxy.
-            base_url (str, optional): LiteLLM Proxy URL.
+            api_key (str, optional): Key for the route.
             batch_size (int): Inputs per request.
             client (object, optional): Stands in for the litellm module, \
                 for tests.
@@ -260,19 +207,14 @@ class LiteLLMEmbedding(EmbeddingProvider):
             raise ValueError('batch_size must be positive')
         self.model = model
         self.api_key = api_key or None
-        self.base_url = base_url or None
         self.batch_size = batch_size
         self.recorder = recorder
         self.client = client if client is not None else _load_litellm()
-        self.supports_model_discovery = bool(self.base_url)
 
     def indexing_options(self) -> dict:
-        # The route is already in the model name; the proxy is what else can
-        # change which model actually answers to that name.
-        return {
-            'endpoint': self.base_url.rstrip('/') if self.base_url else '',
-            'request_version': 1
-        }
+        # The route is already in the model name, so nothing else changes
+        # which model answers to it.
+        return {'request_version': 1}
 
     def embed(
         self,
@@ -296,14 +238,12 @@ class LiteLLMEmbedding(EmbeddingProvider):
             emit_index('request', attempt=1, maximum=1, inputs=len(batch))
 
             request = {
-                'model': _routed(self.model, self.base_url),
+                'model': self.model,
                 'input': batch,
                 'drop_params': True
             }
             if self.api_key:
                 request['api_key'] = self.api_key
-            if self.base_url:
-                request['api_base'] = self.base_url
 
             response = self.client.embedding(**request)
 
@@ -328,6 +268,3 @@ class LiteLLMEmbedding(EmbeddingProvider):
                 input_tokens=getattr(usage, 'prompt_tokens', 0) or 0,
                 counted=usage is not None
             ), on_batch)
-
-    def list_models(self) -> List[str]:
-        return _list_proxy_models(self.base_url, self.api_key)

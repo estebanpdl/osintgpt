@@ -105,7 +105,7 @@ def build_embedding_provider(
     if spec.kind == LITELLM:
         return LiteLLMEmbedding(
             model=model, api_key=resolve_litellm_key(model, settings),
-            base_url=settings.litellm_base_url or None, recorder=recorder
+            recorder=recorder
         )
 
     if spec.kind == GEMINI:
@@ -165,7 +165,7 @@ def build_generation_provider(
     if spec.kind == LITELLM:
         return LiteLLMGeneration(
             model=model, api_key=resolve_litellm_key(model, settings),
-            base_url=settings.litellm_base_url or None, recorder=recorder
+            recorder=recorder
         )
 
     if spec.kind == OPENAI_RESPONSES:

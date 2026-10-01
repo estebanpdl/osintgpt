@@ -78,9 +78,9 @@ ANTHROPIC = 'anthropic'
 GEMINI = 'gemini'
 SENTENCE_TRANSFORMERS = 'sentence-transformers'
 # The LiteLLM SDK: one client in front of 100+ providers (Bedrock, Vertex AI,
-# Azure, Mistral, Cohere, ...), or a LiteLLM Proxy when a base URL is set. A
-# kind of its own because the route is named per model (`bedrock/...`), not
-# per backend, and the key depends on that route.
+# Azure, Mistral, Cohere, ...). A kind of its own because the route is named
+# per model (`bedrock/...`), not per backend, and the key depends on that
+# route.
 LITELLM = 'litellm'
 
 EMBEDDING_BACKENDS: Dict[str, BackendSpec] = {
@@ -102,8 +102,8 @@ EMBEDDING_BACKENDS: Dict[str, BackendSpec] = {
         SENTENCE_TRANSFORMERS, None, extra='local',
         default_model=DEFAULT_LOCAL_EMBEDDING_MODEL, local=True
     ),
-    # Keyless here: the key belongs to the route the model names, or to the
-    # proxy, and the backend resolves it (see litellm.resolve_litellm_key).
+    # Keyless here: the key belongs to the route the model names, and the
+    # backend resolves it (see litellm.resolve_litellm_key).
     'litellm': BackendSpec(LITELLM, None, extra='litellm')
 }
 

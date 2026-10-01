@@ -21,7 +21,7 @@ and SQLite, Qdrant, or Postgres storage.
 Embeddings support OpenAI, Gemini, Voyage, Ollama, and sentence-transformers;
 generation supports OpenAI, Gemini, Anthropic, and Ollama. The `litellm`
 provider reaches the rest (Bedrock, Vertex AI, Azure, Mistral, Cohere, and
-others) for both, directly or through a LiteLLM Proxy.
+others) for both.
 
 ## Install
 
@@ -52,10 +52,6 @@ osintgpt config set generation_model bedrock/us.anthropic.claude-sonnet-4-5-2025
 osintgpt config set embedding_provider litellm
 osintgpt config set embedding_model cohere/embed-english-v3.0
 ```
-
-To send every call through a LiteLLM Proxy instead, set `LITELLM_BASE_URL`
-and its virtual key as `LITELLM_API_KEY` (or `osintgpt auth set litellm`), and
-use the proxy's model names. `doctor --check-providers` then lists them.
 
 The current release is 0.3.0. See
 [osintgpt on PyPI](https://pypi.org/project/osintgpt/) for package metadata

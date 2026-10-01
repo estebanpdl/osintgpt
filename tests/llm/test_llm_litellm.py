@@ -21,7 +21,6 @@ from types import SimpleNamespace
 
 # import osintgpt config
 from osintgpt.config import Settings
-from osintgpt.credentials import credential_names
 
 # import osintgpt llm
 from osintgpt.llm import (
@@ -102,7 +101,7 @@ class TestRegistration:
             spec = backends['litellm']
             assert spec.kind == LITELLM
             assert spec.extra == 'litellm'
-            # The key belongs to the route or the proxy, not to the backend.
+            # The key belongs to the route the model names, not to the backend.
             assert spec.settings_field is None
             assert not spec.local
 
@@ -119,17 +118,6 @@ class TestRegistration:
         assert generation.model == 'anthropic/claude-sonnet-5'
         assert isinstance(embedding, LiteLLMEmbedding)
         assert isinstance(embedding, EmbeddingProvider)
-
-    def test_auth_set_litellm_is_a_known_credential(self):
-        assert credential_names()['litellm'] == 'litellm_api_key'
-
-    def test_proxy_settings_come_from_the_environment(self, monkeypatch):
-        monkeypatch.setenv('LITELLM_BASE_URL', 'http://localhost:4000')
-        monkeypatch.setenv('LITELLM_API_KEY', 'sk-virtual')
-        settings = Settings.from_env()
-
-        assert settings.litellm_base_url == 'http://localhost:4000'
-        assert settings.litellm_api_key == 'sk-virtual'
 
     def test_judged_not_local(self):
         report = audit_locality(Settings(), 'litellm', 'litellm')
@@ -166,23 +154,13 @@ class TestKeys:
 
         assert resolve_litellm_key('bedrock/anthropic.claude-v2', settings) is None
 
-    def test_proxy_key_wins(self):
-        settings = Settings(
-            anthropic_api_key='sk-ant', litellm_api_key='sk-virtual',
-            litellm_base_url='http://localhost:4000'
+    def test_builder_hands_over_the_route_key(self, stub):
+        settings = Settings(anthropic_api_key='sk-ant')
+        provider = build_generation_provider(
+            'litellm', settings, model='anthropic/claude-sonnet-5'
         )
 
-        assert resolve_litellm_key('anthropic/claude-sonnet-5', settings) == 'sk-virtual'
-
-    def test_builder_hands_over_key_and_proxy(self, stub):
-        settings = Settings(
-            litellm_api_key='sk-virtual', litellm_base_url='http://localhost:4000'
-        )
-        provider = build_generation_provider('litellm', settings, model='claude')
-
-        assert provider.api_key == 'sk-virtual'
-        assert provider.base_url == 'http://localhost:4000'
-
+        assert provider.api_key == 'sk-ant'
 
 class TestGeneration:
     def test_generate(self):
@@ -202,7 +180,7 @@ class TestGeneration:
         ]
         assert request['drop_params'] is True
         # Unset credentials are left out, so LiteLLM reads its own.
-        assert 'api_key' not in request and 'api_base' not in request
+        assert 'api_key' not in request
 
         usage = recorder.records[0]
         assert (usage.provider, usage.model) == ('litellm', 'anthropic/claude-sonnet-5')
@@ -223,37 +201,9 @@ class TestGeneration:
 
         assert LiteLLMGeneration(model='m', client=stub).generate('S', 'U') == ''
 
-    def test_through_a_proxy(self):
-        stub = StubLiteLLM()
-        provider = LiteLLMGeneration(
-            model='gemini-2.5-flash', api_key='sk-virtual',
-            base_url='http://localhost:4000', client=stub
-        )
-        provider.generate('S', 'U')
-
-        request = stub.completions[0]
-        # Prefixed, or LiteLLM would send gemini-2.5-flash to Google directly.
-        assert request['model'] == 'litellm_proxy/gemini-2.5-flash'
-        assert request['api_base'] == 'http://localhost:4000'
-        assert request['api_key'] == 'sk-virtual'
-
-    def test_proxy_prefix_is_not_doubled(self):
-        stub = StubLiteLLM()
-        LiteLLMGeneration(
-            model='litellm_proxy/claude', base_url='http://localhost:4000',
-            client=stub
-        ).generate('S', 'U')
-
-        assert stub.completions[0]['model'] == 'litellm_proxy/claude'
-
     def test_vision_follows_the_model_map(self):
         assert LiteLLMGeneration(model='m', client=StubLiteLLM(vision=True)).supports_vision
         assert not LiteLLMGeneration(model='m', client=StubLiteLLM(vision=False)).supports_vision
-        # A proxy alias is not in the map; the proxy decides.
-        assert LiteLLMGeneration(
-            model='alias', base_url='http://localhost:4000',
-            client=StubLiteLLM(vision=False)
-        ).supports_vision
 
     def test_describe_image(self):
         stub = StubLiteLLM()
@@ -367,55 +317,8 @@ class TestEmbedding:
         with pytest.raises(RuntimeError, match='invalid vector indices'):
             LiteLLMEmbedding(model='m', client=stub).embed(['a'])
 
-    def test_indexing_options_name_the_proxy(self):
-        direct = LiteLLMEmbedding(model='m', client=StubLiteLLM())
-        proxied = LiteLLMEmbedding(
-            model='m', base_url='http://gw:4000/', client=StubLiteLLM()
-        )
-
-        assert direct.indexing_options() == {'endpoint': '', 'request_version': 1}
-        assert proxied.indexing_options() == {
-            'endpoint': 'http://gw:4000', 'request_version': 1
-        }
-
-    def test_through_a_proxy(self):
-        stub = StubLiteLLM()
-        LiteLLMEmbedding(
-            model='embed-alias', api_key='sk-virtual',
-            base_url='http://localhost:4000', client=stub
-        ).embed(['a'])
-
-        request = stub.embeddings[0]
-        assert request['model'] == 'litellm_proxy/embed-alias'
-        assert request['api_base'] == 'http://localhost:4000'
-        assert request['api_key'] == 'sk-virtual'
-
-
 class TestDiscovery:
-    def test_only_through_a_proxy(self):
-        provider = LiteLLMGeneration(model='m', client=StubLiteLLM())
-
-        assert not provider.supports_model_discovery
-        with pytest.raises(NotImplementedError, match='LITELLM_BASE_URL'):
-            provider.list_models()
-
-    def test_lists_what_the_proxy_serves(self, monkeypatch):
-        seen = {}
-
-        class StubOpenAI:
-            def __init__(self, api_key, base_url):
-                seen.update(api_key=api_key, base_url=base_url)
-                self.models = SimpleNamespace(list=lambda: [
-                    SimpleNamespace(id='gpt-4.1-mini'),
-                    SimpleNamespace(id='claude-sonnet')
-                ])
-
-        monkeypatch.setattr('openai.OpenAI', StubOpenAI)
-        provider = LiteLLMGeneration(
-            model='m', api_key='sk-virtual', base_url='http://localhost:4000',
-            client=StubLiteLLM()
-        )
-
-        assert provider.supports_model_discovery
-        assert provider.list_models() == ['claude-sonnet', 'gpt-4.1-mini']
-        assert seen == {'api_key': 'sk-virtual', 'base_url': 'http://localhost:4000/v1'}
+    def test_no_model_discovery(self):
+        # Direct SDK routes have no endpoint of their own to ask.
+        assert not LiteLLMGeneration(model='m', client=StubLiteLLM()).supports_model_discovery
+        assert not LiteLLMEmbedding(model='m', client=StubLiteLLM()).supports_model_discovery

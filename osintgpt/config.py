@@ -60,8 +60,6 @@ ENV_VARS = {
     'voyage_api_key': 'VOYAGE_API_KEY',
     'anthropic_api_key': 'ANTHROPIC_API_KEY',
     'ollama_base_url': 'OLLAMA_BASE_URL',
-    'litellm_api_key': 'LITELLM_API_KEY',
-    'litellm_base_url': 'LITELLM_BASE_URL',
     'sql_db_file_path': 'SQL_DB_FILE_PATH',
     'qdrant_api_key': 'QDRANT_API_KEY',
     'qdrant_url': 'QDRANT_URL',
@@ -89,11 +87,6 @@ class Settings(EmbeddingRateSettings):
     # Empty defers to DEFAULT_OLLAMA_BASE_URL. Worth setting inside a
     # container, where localhost is the container rather than the host.
     ollama_base_url: str = ''
-    # A LiteLLM Proxy (AI gateway) and the virtual key it issued. Both empty
-    # means the litellm backend calls each provider directly from this
-    # process, with that provider's own key.
-    litellm_api_key: str = ''
-    litellm_base_url: str = ''
     sql_db_file_path: str = ''
     qdrant_api_key: str = ''
     qdrant_url: str = ''
