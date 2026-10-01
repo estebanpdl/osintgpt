@@ -47,10 +47,12 @@ MODEL_SHAPES = {
     ('embedding', 'voyage'): 'voyage-3.5',
     ('embedding', 'ollama'): 'nomic-embed-text',
     ('embedding', 'sentence-transformers'): 'all-MiniLM-L6-v2',
+    ('embedding', 'litellm'): 'cohere/embed-english-v3.0',
     ('generation', 'openai'): 'gpt-5.6-terra',
     ('generation', 'gemini'): 'gemini-2.5-flash',
     ('generation', 'anthropic'): 'claude-sonnet-5',
-    ('generation', 'ollama'): 'llama3.1'
+    ('generation', 'ollama'): 'llama3.1',
+    ('generation', 'litellm'): 'bedrock/us.anthropic.claude-sonnet-4-5-20250929-v1:0'
 }
 
 # The legs, and what each one is for in an analyst's words rather than the

@@ -19,7 +19,9 @@ collections without mixing projects or losing the path back to a source. Use
 it from the command line or as a Python library, with hosted or local models
 and SQLite, Qdrant, or Postgres storage.
 Embeddings support OpenAI, Gemini, Voyage, Ollama, and sentence-transformers;
-generation supports OpenAI, Gemini, Anthropic, and Ollama.
+generation supports OpenAI, Gemini, Anthropic, and Ollama. The `litellm`
+provider reaches the rest (Bedrock, Vertex AI, Azure, Mistral, Cohere, and
+others) for both.
 
 ## Install
 
@@ -34,6 +36,21 @@ sentence-transformers and torch:
 
 ```bash
 pip install osintgpt[local]
+```
+
+Providers without a dedicated backend go through
+[LiteLLM](https://github.com/BerriAI/litellm), also opt-in. The model name
+carries the route, and each route reads its provider's usual credentials
+(`AWS_*` for Bedrock, `AZURE_*` for Azure, and so on); keys stored with
+`osintgpt auth set` serve the `openai/`, `anthropic/`, `gemini/` and `voyage/`
+routes:
+
+```bash
+pip install osintgpt[litellm]
+osintgpt config set generation_provider litellm
+osintgpt config set generation_model bedrock/us.anthropic.claude-sonnet-4-5-20250929-v1:0
+osintgpt config set embedding_provider litellm
+osintgpt config set embedding_model cohere/embed-english-v3.0
 ```
 
 The current release is 0.3.0. See

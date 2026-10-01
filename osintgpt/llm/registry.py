@@ -77,6 +77,11 @@ OPENAI_RESPONSES = 'openai-responses'
 ANTHROPIC = 'anthropic'
 GEMINI = 'gemini'
 SENTENCE_TRANSFORMERS = 'sentence-transformers'
+# The LiteLLM SDK: one client in front of 100+ providers (Bedrock, Vertex AI,
+# Azure, Mistral, Cohere, ...). A kind of its own because the route is named
+# per model (`bedrock/...`), not per backend, and the key depends on that
+# route.
+LITELLM = 'litellm'
 
 EMBEDDING_BACKENDS: Dict[str, BackendSpec] = {
     'openai': BackendSpec(
@@ -96,7 +101,10 @@ EMBEDDING_BACKENDS: Dict[str, BackendSpec] = {
     'sentence-transformers': BackendSpec(
         SENTENCE_TRANSFORMERS, None, extra='local',
         default_model=DEFAULT_LOCAL_EMBEDDING_MODEL, local=True
-    )
+    ),
+    # Keyless here: the key belongs to the route the model names, and the
+    # backend resolves it (see litellm.resolve_litellm_key).
+    'litellm': BackendSpec(LITELLM, None, extra='litellm')
 }
 
 GENERATION_BACKENDS: Dict[str, BackendSpec] = {
@@ -111,7 +119,8 @@ GENERATION_BACKENDS: Dict[str, BackendSpec] = {
     # because it is preferred.
     'anthropic': BackendSpec(
         ANTHROPIC, 'anthropic_api_key', discovers_models=True
-    )
+    ),
+    'litellm': BackendSpec(LITELLM, None, extra='litellm')
 }
 
 
