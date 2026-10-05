@@ -719,7 +719,29 @@ class TestTheRegistry:
 
         result = run_tool(context, 'semantic_search', {'nonsense': 1})
 
-        assert result.error
+        assert 'could not be called that way' in result.error
+
+    def test_a_bug_inside_a_tool_is_not_blamed_on_the_call(
+        self, project, embedder, monkeypatch
+    ):
+        '''
+        A TypeError raised inside a tool reported as a bad call sends the
+        model retrying arguments that were never the problem.
+        '''
+        from osintgpt.agentic import registry
+
+        def broken(context, query):
+            raise TypeError('internal')
+
+        monkeypatch.setitem(registry._HANDLERS, 'semantic_search', broken)
+        context = ToolContext(project=project, embedder=embedder)
+
+        with pytest.raises(TypeError, match='internal'):
+            run_tool(context, 'semantic_search', {'query': 'q'})
+
+    def test_no_search_tool_offers_a_days_filter(self):
+        for spec in TOOL_SPECS:
+            assert 'days' not in spec.parameters['properties']
 
     def test_the_survey_mode_is_offered_in_the_schema(self):
         spec = next(s for s in TOOL_SPECS if s.name == 'exact_search')

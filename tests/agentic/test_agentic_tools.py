@@ -29,12 +29,10 @@ from osintgpt.agentic import (
     snowball,
     snowball_search
 )
-from osintgpt.agentic.support import _moment, _within_days
 from osintgpt.agentic.tools import FETCH_LINES
 from osintgpt.graph import Edge, build_graph, graph_for
 from osintgpt.ingestion import Corpus
 from osintgpt.llm.base import EmbeddingProvider, EmbeddingPurpose
-from osintgpt.vector_store import SearchResult, StoredChunk
 
 MODEL = 'test-embedding'
 
@@ -256,63 +254,6 @@ class TestSurveyPrimitive:
         assert counts == sorted(counts, reverse=True)
 
 
-class TestTimeFilter:
-    '''
-    The model decides what "last week" means and passes a number. Nothing here
-    parses a phrase, because date language is bound to a language.
-    '''
-
-    @pytest.mark.parametrize('stamp, parsed', [
-        ('2026-04-22', True),
-        ('2022-10-26 07:39:35', True),
-        ('2026-04-22T13:00:00', True),
-        ('last Tuesday', False),
-        ('', False),
-        ('22/04/2026', False)
-    ])
-    def test_only_unambiguous_timestamps_are_read(self, stamp, parsed):
-        assert (_moment(stamp) is not None) is parsed
-
-    def test_an_old_document_is_filtered_out(self, context):
-        recent = semantic_search(context, 'zebra', days=30)
-
-        assert all('beta' not in p['ref'] for p in recent.payload['passages'])
-
-    def test_a_recent_document_survives_the_filter(self, context):
-        result = semantic_search(context, 'aardvark', days=100_000)
-
-        assert result.payload['passages']
-
-    def test_an_undated_document_is_kept_not_hidden(self, context):
-        '''
-        Hiding material because its date was unparseable is worse than a loose
-        filter: the analyst never learns the document exists.
-        '''
-        result = semantic_search(context, 'quokka', days=30)
-        refs = [p['ref'] for p in result.payload['passages']]
-
-        assert any('gamma' in ref for ref in refs)
-
-    def test_the_result_says_the_filter_was_partial(self, context):
-        result = semantic_search(context, 'quokka', days=30)
-
-        assert result.payload.get('undated_documents')
-        assert 'partial' in result.payload['note']
-
-    def test_no_note_when_nothing_was_undated(self, context):
-        result = semantic_search(context, 'aardvark')
-
-        assert 'note' not in result.payload
-
-    def test_no_days_means_no_filtering(self):
-        results = [_result('a.md', ''), _result('b.md', '1999-01-01')]
-
-        kept, undated = _within_days(results, None)
-
-        assert len(kept) == 2
-        assert undated == 0
-
-
 class TestSemanticAndExact:
     def test_semantic_search_returns_citations(self, context):
         result = semantic_search(context, 'aardvark')
@@ -452,13 +393,3 @@ class TestSnowball:
         result = snowball_search(context, 'aardvark', depth=2, threshold=0.0)
 
         assert all(hop['ref'] for hop in result.payload['hops'])
-
-
-def _result(ref, timestamp):
-    return SearchResult(
-        chunk=StoredChunk(
-            ref=ref, sequence=0, text='text', embedding_model=MODEL,
-            timestamp=timestamp
-        ),
-        score=0.5
-    )

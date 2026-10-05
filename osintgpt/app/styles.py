@@ -30,7 +30,7 @@ MARKDOWN_SPECIAL = '\\`*_[]'
 #
 #   green  the answer is grounded, the evidence checks out
 #   amber  it worked, but not the way it should have — a degraded answer, a
-#          time filter that could not read every timestamp, a partial result
+#          partial result
 #   red    something is wrong and will produce bad answers — a model mismatch,
 #          evidence that is not in its source document
 #

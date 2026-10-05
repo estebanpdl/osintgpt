@@ -37,7 +37,7 @@ class StoredChunk:
     # The heading path the chunk sits under, empty for unstructured text.
     path: str = ''
     # Named separately from metadata because retrieval reaches them: the
-    # timestamp is what a date filter reads, the author what exact search
+    # timestamp travels with every citation, the author is what exact search
     # matches alongside the text.
     timestamp: str = ''
     author: str = ''

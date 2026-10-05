@@ -74,7 +74,7 @@ def assign_roles(st, paths, described, key: str) -> Optional[FieldMapping]:
     with st.expander(f'Fields in {label}', expanded=True):
         st.caption(
             'Only content is embedded and searched. The rest travel with the '
-            'document, and timestamp is what a date filter reads.'
+            'document, and timestamp is shown with every citation.'
         )
         st.dataframe(
             [

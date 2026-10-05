@@ -10,6 +10,9 @@
 #   offered exactly the same set and a trace from one reads against another.
 # =================================================================================
 
+# import submodules
+from inspect import signature
+
 # type hints
 from typing import Any, Dict, List
 
@@ -43,8 +46,7 @@ TOOL_SPECS: List[ToolSpec] = [
         'reliably find an exact identifier — use exact_search for those.',
         properties={
             'query': dict(_STRING, description='What to look for, in your own words.'),
-            'limit': dict(_INTEGER, description='Passages to return, up to 30.'),
-            'days': dict(_INTEGER, description='Only documents this recent.')
+            'limit': dict(_INTEGER, description='Passages to return, up to 30.')
         },
         required=['query']
     ),
@@ -64,8 +66,7 @@ TOOL_SPECS: List[ToolSpec] = [
                 _STRING, enum=[SNIPPETS, REFS],
                 description='"refs" for locations and counts, "snippets" for content.'
             ),
-            'limit': _INTEGER,
-            'days': _INTEGER
+            'limit': _INTEGER
         },
         required=['terms']
     ),
@@ -162,9 +163,13 @@ def run_tool(
             error=f'no tool named {name!r}; available: {", ".join(TOOL_NAMES)}'
         )
 
+    # Binding first separates a bad call from a TypeError raised inside the
+    # tool, which is a bug and must not be reported as the model's mistake.
     try:
-        return handler(context, **(arguments or {}))
+        signature(handler).bind(context, **(arguments or {}))
     except TypeError as error:
         return ToolResult(
             tool=name, error=f'{name} could not be called that way: {error}'
         )
+
+    return handler(context, **(arguments or {}))

@@ -33,11 +33,9 @@ from .support import (
     SNIPPET_CHARS,
     _claim,
     _clamp,
-    _dating_note,
     _passage,
     _read,
-    _resolve,
-    _within_days
+    _resolve
 )
 
 log = logging.getLogger('osintgpt.agentic')
@@ -50,10 +48,6 @@ REFS = 'refs'
 # Lines returned by one fetch_source call. A model that needs more asks again
 # with the offset it was handed.
 FETCH_LINES = 200
-
-# When a `days` filter is asked for, retrieve this many times the limit first,
-# because filtering after ranking would otherwise return far fewer than asked.
-TIME_FILTER_OVERSAMPLE = 4
 
 
 # ToolContext class
@@ -134,7 +128,6 @@ def semantic_search(
     context: ToolContext,
     query: str,
     limit: int = 8,
-    days: Optional[int] = None,
     refs: Optional[Sequence[str]] = None
 ) -> ToolResult:
     '''
@@ -144,30 +137,19 @@ def semantic_search(
         context (ToolContext): Project and providers.
         query (str): What to search for, in the model's own words.
         limit (int): Most passages to return.
-        days (int, optional): Only documents timestamped within this many \
-            days. The model decides what "last week" means and passes a \
-            number; nothing here parses a phrase.
         refs (Sequence[str], optional): Restrict to these documents.
 
     Returns:
         ToolResult: Passages with their citations and scores.
     '''
-    wanted = _clamp(limit, 1, 30)
     found = search_project(
         context.project, query, context.embedder,
-        top_k=wanted * TIME_FILTER_OVERSAMPLE if days else wanted,
-        refs=refs, store=context.store
+        top_k=_clamp(limit, 1, 30), refs=refs, store=context.store
     )
-
-    found, undated = _within_days(found, days)
-    found = found[:wanted]
 
     return ToolResult(
         tool='semantic_search',
-        payload={
-            'passages': [_passage(r) for r in found],
-            **_dating_note(days, undated)
-        },
+        payload={'passages': [_passage(r) for r in found]},
         count=len(found),
         unit='passage'
     )
@@ -179,7 +161,6 @@ def exact_search(
     terms: Sequence[str],
     mode: str = SNIPPETS,
     limit: int = 20,
-    days: Optional[int] = None,
     refs: Optional[Sequence[str]] = None
 ) -> ToolResult:
     '''
@@ -194,7 +175,6 @@ def exact_search(
         terms (Sequence[str]): Literal strings — handles, hashes, URLs, names.
         mode (str): `snippets` for content, `refs` for locations and counts.
         limit (int): Most results to consider.
-        days (int, optional): Only documents timestamped within this many days.
         refs (Sequence[str], optional): Restrict to these documents.
 
     Returns:
@@ -208,13 +188,12 @@ def exact_search(
     )
 
     if mode == REFS:
-        dated, _ = _within_days(found, days)
         counts: Dict[str, int] = {}
         # Which terms hit each document, in the order they were searched. A
         # count says how loud a document is; the terms say what it is loud
         # about, and two documents with the same count can differ entirely.
         matched: Dict[str, List[str]] = {}
-        for result in dated:
+        for result in found:
             counts[result.ref] = counts.get(result.ref, 0) + 1
             seen = matched.setdefault(result.ref, [])
             for term in result.terms:
@@ -240,16 +219,13 @@ def exact_search(
             unit='document'
         )
 
-    kept, undated = _within_days(found, days)
-
     return ToolResult(
         tool='exact_search',
         payload={
             'mode': SNIPPETS,
-            'passages': [_passage(r) for r in kept[:_clamp(limit, 1, 30)]],
-            **_dating_note(days, undated)
+            'passages': [_passage(r) for r in found[:_clamp(limit, 1, 30)]]
         },
-        count=len(kept),
+        count=len(found),
         unit='passage'
     )
 

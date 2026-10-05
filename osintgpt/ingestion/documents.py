@@ -65,7 +65,7 @@ class FieldMapping:
     metadata: Tuple[str, ...] = ()
     # Field carrying when the record was made. Named rather than detected:
     # created_at, captured_at, date and at are the same field, and a heuristic
-    # that picks the wrong one breaks every time filter without saying so.
+    # that picks the wrong one misdates every citation without saying so.
     timestamp: str = ''
     # Field carrying who produced the record.
     author: str = ''
