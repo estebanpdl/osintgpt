@@ -36,8 +36,7 @@ sentence-transformers and torch:
 pip install osintgpt[local]
 ```
 
-The current release is 0.3.0. See
-[osintgpt on PyPI](https://pypi.org/project/osintgpt/) for package metadata
+See [osintgpt on PyPI](https://pypi.org/project/osintgpt/) for package metadata
 and release history.
 
 ## Quickstart
