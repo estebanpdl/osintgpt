@@ -110,13 +110,57 @@ the machine, provider readiness, stored models, source coverage, and embedding
 model mismatches. Add `--check-providers` only when you want it to contact
 configured services.
 
-## What it reads
+## Supported document formats
 
-The 29 readable extensions cover PDF, Word, Excel and CSV, JSON and JSONL,
-Markdown and plain text, HTML and XML, and common image formats when the
-embedding model supports them. A fallback converter handles formats such as
-PowerPoint and EPUB. Structured files need a content-field mapping when they
-are registered; scanned PDF pages need a transcriber to recover text.
+`osintgpt` reads most formats with its own readers. A few formats it has no
+reader for go to a fallback converter,
+[markitdown](https://github.com/microsoft/markitdown), as a last resort. Some
+formats are better converted before they are added to a project, because the
+fallback either fails or keeps their markup as text.
+
+| Format | Extensions | Read by | Notes |
+|---|---|---|---|
+| Plain text, Markdown | `.txt` `.md` `.markdown` `.rst` `.log` | osintgpt | |
+| HTML | `.html` `.htm` | osintgpt | |
+| PDF | `.pdf` | osintgpt | Scanned pages need a transcriber (`--vision`) |
+| Word | `.docx` | osintgpt | |
+| Excel | `.xlsx` `.xlsm` | osintgpt | Needs a content-field mapping |
+| CSV, JSON | `.csv` `.json` `.jsonl` `.ndjson` | osintgpt | Needs a content-field mapping |
+| Images | `.png` `.jpg` `.jpeg` `.webp` `.gif` `.bmp` `.tif` `.tiff` | Embedding model | Embedded directly when the model supports images; no text is extracted |
+| PowerPoint | `.pptx` | markitdown | |
+| Outlook email | `.msg` | markitdown | |
+| EPUB | `.epub` | markitdown | |
+| RSS / Atom feed | `.xml` | markitdown | Feed items are converted to markdown |
+| Other XML | `.xml` | — | **Convert first** to `.json`, `.jsonl`, or `.csv` |
+| Rich Text | `.rtf` | — | **Convert first** to `.docx` |
+| OpenDocument text | `.odt` | — | **Convert first** to `.docx` |
+| Legacy Excel | `.xls` | — | **Convert first** to `.xlsx` or `.csv` |
+
+Why convert first:
+
+- **`.rtf` and non-feed `.xml`** pass through the fallback unchanged: control
+  words such as `\rtf1\ansi\fonttbl` or tags such as `<record><author>` are
+  chunked, embedded, and indexed as if they were content. That adds noise to
+  semantic and exact search and spends graph-extraction tokens on markup.
+  XML also loses its structure: an `<author>` element becomes text rather than
+  a field retrieval can filter on.
+- **`.odt`** is not converted at all; the file is skipped with a warning.
+- **`.xls`** has no reader and is not listed as readable.
+
+Word processors and spreadsheets export these formats directly. With
+LibreOffice installed:
+
+```bash
+soffice --headless --convert-to docx report.rtf
+soffice --headless --convert-to docx notes.odt
+soffice --headless --convert-to xlsx ledger.xls
+```
+
+XML has no single conversion, as each schema is different. Export the records
+to `.json`, `.jsonl`, or `.csv` from the source system or with a short script,
+then register the file with a mapping (`--map content=<field>`, plus
+`--map author=<field>` and `--map timestamp=<field>`) so those values stay
+fields.
 
 `osintgpt convert <path>` prints the markdown a file would be chunked from,
 without registering, embedding, or storing anything. It needs no project and
