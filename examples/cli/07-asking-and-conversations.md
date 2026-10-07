@@ -74,12 +74,9 @@ round 2
 Usage: 4 calls, 9,639 tokens, ~$0.002329
 ```
 
-With `gpt-4.1-mini`, the same question searched for the phrase
-`'Sorin-3 status page'` as one exact term, found nothing, and answered that
-the corpus does not contain the information. Before accepting "not found",
-read the trace: an empty exact search on a long phrase proves nothing.
-Rephrase, search for an identifier yourself, try another model, or use the
-static path, which always retrieves semantic passages:
+Before accepting a "not found" answer, read the trace: an empty exact search
+on a long phrase proves nothing. Rephrase, search for an identifier yourself,
+or use the static path, which always retrieves semantic passages:
 
 ```bash
 osintgpt ask "Who edited the Sorin-3 status page during the outage?" --static --passages 3
