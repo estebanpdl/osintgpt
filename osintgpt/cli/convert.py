@@ -32,9 +32,9 @@ def convert_file(
     out: Optional[str] = typer.Option(
         None, '--out', metavar='PATH',
         help='When converting a single file, --out specifies the output '
-             'filename; when converting a directory, --out must be an '
-             'existing directory where the resulting .md files will be '
-             'written, preserving the original structure.'
+             'filename; when converting a directory, --out names a '
+             'directory, created if missing, where the resulting .md files '
+             'will be written, preserving the original structure.'
     ),
     maps: Optional[List[str]] = typer.Option(
         None, '--map',
