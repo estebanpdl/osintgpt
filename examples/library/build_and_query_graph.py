@@ -15,8 +15,9 @@ from osintgpt.llm import build_generation_provider
 def print_edge(edge, depth: int | None = None) -> None:
     """Print one relationship with the evidence that supports it."""
     prefix = f'depth {depth}: ' if depth is not None else ''
-    print(f'{prefix}{edge.source} --{edge.relation}--> {edge.target}')
-    print(f'  {edge.ref}: {edge.evidence}')
+    print(f'{prefix}{edge.sentence}')
+    for quote in edge.evidence_quotes or (edge.evidence,):
+        print(f'  {edge.ref}: {quote}')
 
 
 def main() -> None:

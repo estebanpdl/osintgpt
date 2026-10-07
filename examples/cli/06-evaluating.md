@@ -1,39 +1,102 @@
 # Evaluating retrieval
 
-An evaluation set pairs questions with the documents known to answer them.
-The generated `questions.toml` contains three such questions. After creating
-a project for the generated case and indexing its prose, score it directly
-from the command line:
+An evaluation set pairs questions with the documents known to answer them,
+so a retrieval change can be measured instead of argued about. The generator
+writes one with eight questions to `examples/data/generated/case/questions.toml`:
 
-```bash
-osintgpt evaluate examples/data/generated/case/questions.toml \
-  --project case --top-k 10
+```toml
+[[question]]
+text = "Who paid for the hardware upgrade at the northern relay?"
+expected = [
+    "D:/i/tools/osintgpt/examples/data/generated/case/material/reports/field-note-kestrel.md",
+]
+terms = [
+    "Kestrel",
+]
+note = "paraphrase: the note says underwrote and refit"
 ```
 
-The command uses the project's configured embedding provider and model, so it
-needs the same credentials as semantic indexing and search. The report names
-the retrieval method and embedding model, then prints hit rate (questions with
-any expected document), mean reciprocal rank (how early the first expected
-document appeared), and recall (how many expected documents appeared within
-`--top-k`, which defaults to 10). It also lists every miss and unscorable
-question.
+`expected` holds refs exactly as the store records them. Material outside
+the project is stored under its absolute path, so the generator resolves
+them for your checkout; rerun it if the repository moves. `terms` is used
+only by hybrid evaluation, and `note` records what the question probes.
 
-Evaluation also reports its embedding calls and estimated cost. JSON includes
-whether every billable call was counted and priced, so a partial estimate
-cannot be mistaken for a complete one.
+## Score the project
 
-To measure hybrid retrieval, add literal `terms` to the relevant questions in
-the TOML set and run:
+After indexing as in [`01`](01-first-case.md) and
+[`02`](02-structured-data.md):
 
 ```bash
-osintgpt evaluate examples/data/generated/case/questions.toml \
-  --project case --retrieval hybrid --json
+osintgpt evaluate examples/data/generated/case/questions.toml --top-k 3
 ```
 
-Hybrid evaluation uses only the terms recorded in the question set. It does
-not ask a generation model to derive extra terms, keeping runs reproducible.
+```text
+┌─────────────────┬────────────────────────┐
+│ Retrieval       │ semantic               │
+│ Embedding model │ text-embedding-3-small │
+│ Top k           │ 3                      │
+│ Scored          │ 8                      │
+│ Found           │ 8                      │
+│ Hit rate        │ 100%                   │
+│ MRR             │ 0.875                  │
+│ Recall          │ 100%                   │
+└─────────────────┴────────────────────────┘
 
-These scores measure retrieval against this question set. They do not measure
-whether a generated answer is factual or complete, and they are only as useful
-as the expected documents and questions chosen. Read the misses and unscorable
-questions instead of treating one aggregate as a quality verdict.
+Misses
+None
+
+Unscorable
+None
+Usage: 8 calls, 107 tokens, ~$0.000002
+```
+
+- **Hit rate:** questions with at least one expected document in the top k.
+- **MRR:** mean of 1/rank of the first expected document; 1.0 means it was
+  always first.
+- **Recall:** share of expected documents retrieved within the top k.
+
+Evaluation embeds each question with the project's embedding model, so it
+needs the same credential as `index`.
+
+## Read the misses
+
+Tighten `--top-k` to 1 and measure hybrid retrieval, which adds each
+question's `terms` as an exact leg:
+
+```bash
+osintgpt evaluate examples/data/generated/case/questions.toml --top-k 1 --retrieval hybrid
+```
+
+```text
+│ Retrieval       │ hybrid                 │
+│ Top k           │ 1                      │
+│ Found           │ 6                      │
+│ MRR             │ 0.750                  │
+...
+Misses
+Did the Koru-5 operator deny relaying packet AR-12?
+  Expected:
+D:/i/tools/osintgpt/examples/data/generated/case/material/reports/interview-transcript.txt
+  Retrieved: D:/i/tools/osintgpt/examples/data/generated/case/material/records/events.csv
+¿Por qué se cerró la ruta MX-3?
+  Expected: D:/i/tools/osintgpt/examples/data/generated/case/material/reports/nota-operativa.md
+  Retrieved: D:/i/tools/osintgpt/examples/data/generated/case/material/records/messages.jsonl
+```
+
+Both misses are short records that repeat the question's identifier
+(`AR-12`, `MX-3`), so they outrank the document that actually answers. Exact
+terms cannot fix that, because the records contain the same terms. A miss
+like this is a reason to look at the records and the question, not only at
+the aggregate.
+
+Hybrid evaluation uses only the terms recorded in the set; it never asks a
+generation model for terms, so runs are reproducible.
+
+## Limits
+
+These scores measure whether retrieval finds the expected documents for
+these questions. They do not measure whether a generated answer is correct.
+Eight questions over a dozen documents say little; build a set of real
+questions for your own corpus, and save new ones with `save_questions` from
+Python. [`library/evaluate_retrieval.py`](../library/evaluate_retrieval.py)
+runs every method in one pass.

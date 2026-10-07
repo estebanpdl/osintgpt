@@ -1,4 +1,4 @@
-"""Score retrieval against questions with known source documents.
+"""Score retrieval methods against questions with known source documents.
 
 Usage:
     python examples/library/evaluate_retrieval.py PROJECT QUESTIONS [options]
@@ -9,7 +9,7 @@ from pathlib import Path
 
 from osintgpt import Project, Settings, evaluate, load_questions
 from osintgpt.evaluation import RETRIEVAL_METHODS
-from osintgpt.llm import build_embedding_provider
+from osintgpt.llm import UsageRecorder, build_embedding_provider
 from osintgpt.vector_store import store_for
 
 
@@ -20,46 +20,49 @@ def main() -> None:
     )
     parser.add_argument('project', type=Path, help='project directory')
     parser.add_argument('questions', type=Path, help='question-set TOML')
-    parser.add_argument('--embedding-provider', help='provider id')
-    parser.add_argument('--embedding-model', help='model name')
     parser.add_argument('--top-k', type=int, default=10, help='retrieval depth')
     parser.add_argument(
-        '--retrieval', choices=RETRIEVAL_METHODS,
-        default=RETRIEVAL_METHODS[0],
-        help='retrieval method to measure'
+        '--retrieval', choices=RETRIEVAL_METHODS, action='append',
+        help='method to measure; repeatable (default: every method)'
     )
+    parser.add_argument('--env-file', help='.env file to read credentials from')
     arguments = parser.parse_args()
 
     project = Project.load(arguments.project)
-    config = project.settings_for(Settings.from_env())
-    provider = (
-        arguments.embedding_provider or project.settings.embedding_provider
+    config = project.settings_for(Settings.from_env(arguments.env_file))
+    recorder = UsageRecorder()
+    embedder = build_embedding_provider(
+        project.settings.embedding_provider,
+        config,
+        model=project.settings.embedding_model or None,
+        recorder=recorder,
     )
-    model = (
-        arguments.embedding_model or project.settings.embedding_model or None
-    )
-    embedder = build_embedding_provider(provider, config, model=model)
+    questions = load_questions(arguments.questions)
 
     store = store_for(project, config)
     try:
+        # Expected refs absent from the store are reported, not scored as misses.
         known_refs = store.refs(embedder.model)
-        report = evaluate(
-            project,
-            load_questions(arguments.questions),
-            embedder,
-            top_k=arguments.top_k,
-            known_refs=known_refs,
-            retrieval=arguments.retrieval,
-            store=store,
-        )
+        for method in arguments.retrieval or RETRIEVAL_METHODS:
+            report = evaluate(
+                project,
+                questions,
+                embedder,
+                top_k=arguments.top_k,
+                known_refs=known_refs,
+                retrieval=method,
+                store=store,
+            )
+            print(f'{report.retrieval}: {report.summary}')
+            for result in report.misses:
+                print(f'  missed: {result.question.text}')
+            for problem in report.unscorable:
+                print(f'  unscorable: {problem}')
     finally:
-        store.close()
+        if hasattr(store, 'close'):
+            store.close()
 
-    print(f'{report.retrieval}: {report.summary}')
-    for result in report.misses:
-        print(f'missed: {result.question.text}')
-    for problem in report.unscorable:
-        print(f'unscorable: {problem}')
+    print(f'Usage: {recorder.summary}')
 
 
 if __name__ == '__main__':

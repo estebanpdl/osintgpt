@@ -31,9 +31,10 @@ def main() -> None:
     parser.add_argument('role', choices=('embedding', 'generation'))
     parser.add_argument('provider', help='provider id')
     parser.add_argument('model', help='model name')
+    parser.add_argument('--env-file', help='.env file to read credentials from')
     arguments = parser.parse_args()
 
-    settings = Settings.from_env()
+    settings = Settings.from_env(arguments.env_file)
     factory = (
         build_embedding_provider
         if arguments.role == 'embedding'
