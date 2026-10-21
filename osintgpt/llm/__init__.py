@@ -43,7 +43,8 @@ from .registry import (
     OPENAI_RESPONSES,
     SENTENCE_TRANSFORMERS,
     backend_spec,
-    connection_for
+    connection_for,
+    resolve_generation_model
 )
 
 __all__ = [
@@ -142,12 +143,7 @@ def build_generation_provider(
     spec, base_url, api_key = connection_for(
         provider, GENERATION_BACKENDS, 'generation', settings
     )
-    model = model or settings.openai_gpt_model
-    if not model:
-        raise ValueError(
-            f'no model given for the {provider} generation provider; pass '
-            'model= or set one in Settings'
-        )
+    model = resolve_generation_model(spec, settings, provider, model)
 
     if spec.kind == ANTHROPIC:
         return AnthropicGeneration(

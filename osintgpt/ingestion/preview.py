@@ -136,7 +136,7 @@ class DryRun:
         Returns:
             Optional[float]: Estimated USD to embed once, or None when the \
                 model carries no price. Covers embedding only — a graph pass \
-                costs one generation call per document on top.
+                makes separate generation calls per document window.
         '''
         return estimate_cost(self.embedding_model, self.tokens)
 

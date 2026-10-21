@@ -18,7 +18,9 @@ from osintgpt.projects import (
 from .output import emit, emit_record, fail
 from .selection import ProjectSelectionError, resolve_project, state_from
 
-config_app = typer.Typer(help='Read and update project settings.')
+config_app = typer.Typer(help='Read and update project settings. Graph builds use graph_generation_provider and '
+    'graph_generation_model in graph_model_mode independent. Set graph_model_mode inherit to use Chat/RAG '
+    'generation_provider and generation_model, even with independent user defaults. Saving settings never builds a graph.')
 PROJECT_FIELDS = {field.name: field for field in fields(ProjectSettings)}
 SECRET_FIELDS = secret_fields()
 

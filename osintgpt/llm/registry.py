@@ -161,6 +161,14 @@ def resolve_base_url(spec: BackendSpec, settings: Settings) -> Optional[str]:
     return f"{base.rstrip('/')}/v1"
 
 
+def resolve_generation_model(spec, settings, provider, model=None, *, use_settings=True):
+    '''Resolve a generation model without constructing a client or reading credentials.'''
+    model = model or (settings.openai_gpt_model if use_settings else '') or spec.default_model
+    if not isinstance(model, str) or not model.strip():
+        raise ValueError(f'no model given for the {provider} generation provider; choose a model explicitly.')
+    return model
+
+
 # the key a backend authenticates with
 def resolve_api_key(
     spec: BackendSpec, settings: Settings, provider: str

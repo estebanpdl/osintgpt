@@ -21,6 +21,7 @@ from .fallback import FALLBACK_SUFFIXES, can_convert, convert
 from .images import IMAGE_SUFFIXES, is_image
 from .office import extract_docx
 from .pdf import Transcriber, extract_pdf
+from .provenance import page_spans
 from .tabular import load_records
 from .text import HTML_SUFFIXES, TEXT_SUFFIXES, load_text
 
@@ -100,14 +101,15 @@ def load_documents(
 
     if suffix == '.pdf':
         extraction = extract_pdf(path, transcriber)
-        text = extraction.markdown.strip()
+        text = extraction.markdown
 
-        return [Document(ref=path.as_posix(), text=text)] if text else []
+        return [Document(ref=path.as_posix(), text=text,
+                         spans=page_spans(text, extraction.pages), text_format='markdown')] if text else []
 
     if suffix == '.docx':
         text = extract_docx(path).strip()
 
-        return [Document(ref=path.as_posix(), text=text)] if text else []
+        return [Document(ref=path.as_posix(), text=text, text_format='markdown')] if text else []
 
     if suffix in TEXT_SUFFIXES | HTML_SUFFIXES:
         return load_text(path, mapping)
@@ -127,7 +129,7 @@ def load_documents(
     if can_convert(path):
         text = convert(path)
 
-        return [Document(ref=path.as_posix(), text=text)] if text else []
+        return [Document(ref=path.as_posix(), text=text, text_format='markdown')] if text else []
 
     readable = ', '.join(sorted(READABLE_SUFFIXES))
 

@@ -26,7 +26,8 @@ contains literal `{` and `}` and `.format` would require doubling every one.
 | `sentence_details` | `OpenAIGPT.analyze_sentence_details` (deprecated) | — |
 | `answer` | `answering.build_prompt` → `answer_question` | `question`, `passages` |
 | `search_terms` | `lexical.derive_search_terms` | `max_terms` |
-| `graph_extraction` | `graph.extract_document` | `ref`, `text`, `known_entities`, `part` |
+| `graph_extraction` | `graph.extract_document` | —; source and bounded entity context are user-message JSON |
+| `graph_quote_repair` | `graph.extraction._repair` | —; fixed candidates and source ranges are user-message JSON |
 | `agentic` | `agentic.agentic_answer` | `today` |
 | `followups` | `followups.suggest_followups` | `n`, `question`, `answer`, `passages`, `asked` |
 | `transcription` | `ingestion.transcription.transcriber_for` | `page` |
@@ -67,13 +68,17 @@ do not correct spelling, do not guess at a digit. A model that tidies a
 scanned page produces text that reads better than the original and no longer
 matches it, and nothing downstream can tell.
 
-`graph_extraction` is a **contract** prompt, and the one where the contract
-carries the most weight. Its reply is parsed into entities and edges, and the
-rule that every edge quote its own sentence is what makes a graph edge a
-sourced claim rather than a model assertion. An edge arriving without evidence
-is dropped rather than stored — weaken that instruction and the graph fills
-with plausible relationships nobody can check, which is worse than an empty
-graph.
+`graph_extraction` is a **contract** prompt. Its reply declares local entity IDs,
+supported aliases/identifiers, and qualified claims. Every relationship needs
+quotations located in the supplied source ranges. Matching normalizes NFC and
+whitespace only, without language-specific stop words. Relation polarity (`relation_polarity`), assertion status,
+attribution, and dates preserve the model's interpretation in any source language;
+matching a quotation alone cannot prove that interpretation correct.
+
+`graph_quote_repair` is a **contract** prompt used at most once per window to
+correct unlocated quotations for bounded candidates. It cannot change the claim's
+endpoints, relation, or qualifications. Rejected candidates and correction outcomes
+are retained in the graph audit, while only validated claims enter traversal.
 
 `followups` is a **contract** prompt — the reply is parsed as a JSON array —
 and its instructions carry a second contract nothing can check: every

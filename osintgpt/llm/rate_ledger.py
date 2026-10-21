@@ -1,5 +1,6 @@
-'''Atomic quota reservations shared by embedding jobs on one machine.'''
+'''Atomic quota reservations shared by jobs on one machine.'''
 
+import hashlib
 import json
 import logging
 import sqlite3
@@ -30,6 +31,14 @@ CREATE INDEX IF NOT EXISTS embedding_requests_scope ON embedding_requests(scope,
 def lower_limit(*values):
     positive = [value for value in values if value and value > 0]
     return min(positive) if positive else 0
+
+
+def quota_scope(provider, model, endpoint, credential, explicit=''):
+    account = {'scope': explicit} if explicit else {
+        'credential': hashlib.sha256(credential.encode()).hexdigest(), 'model': model
+    }
+    material = {'provider': provider, 'endpoint': endpoint.rstrip('/'), **account}
+    return hashlib.sha256(json.dumps(material, sort_keys=True).encode()).hexdigest()
 
 
 class TokenBudgetExceeded(ValueError):
@@ -93,20 +102,22 @@ class RateLedger:
         with self.transaction() as connection:
             return self._limits(self._state(connection, scope), configured, self.clock())
 
-    def reserve(self, scope, tokens, configured, *, deadline=None):
+    def reserve(self, scope, tokens, configured, *, deadline=None, emit=emit_index, check_cancel=None):
         if type(tokens) is not int or tokens < 1:
             raise ValueError('A quota reservation needs a positive token count')
         announced = False
         while True:
+            if check_cancel is not None:
+                check_cancel()
             with self.transaction() as connection:
                 now = self.clock()
                 if deadline is not None and now >= deadline:
-                    raise QuotaWaitExpired('Embedding retry deadline reached before quota reservation')
+                    raise QuotaWaitExpired('Retry deadline reached before quota reservation')
                 state = self._state(connection, scope)
                 rpm, tpm = self._limits(state, configured, now)
                 if tpm and tokens > tpm:
                     raise TokenBudgetExceeded(
-                        f'One embedding input/batch needs {tokens} estimated tokens, '
+                        f'One request needs {tokens} estimated tokens, '
                         f'exceeding the current {tpm} TPM budget. Reduce input size '
                         'or configure a larger quota only if your account supports it.'
                     )
@@ -129,7 +140,7 @@ class RateLedger:
                     if hint['until'] > now and hint['left'] < needed:
                         wait = max(wait, hint['until'] - now)
                 if deadline is not None and now + wait >= deadline:
-                    raise QuotaWaitExpired('Embedding quota wait exceeds the retry deadline')
+                    raise QuotaWaitExpired('Quota wait exceeds the retry deadline')
                 if wait <= 0:
                     cursor = connection.execute(
                         'INSERT INTO embedding_requests(scope, at, tokens) VALUES (?, ?, ?)',
@@ -145,11 +156,11 @@ class RateLedger:
                     )
                     return cursor.lastrowid
             if not announced:
-                log.info('Embedding quota pacing: waiting %.2f seconds before the next request.', wait)
+                log.info('Quota pacing: waiting %.2f seconds before the next request.', wait)
                 announced = True
             # Short sleeps keep Ctrl+C/Streamlit cancellation responsive. The
             # transaction has closed; another process can use/update its quota.
-            emit_index('waiting', seconds=wait)
+            emit('waiting', seconds=wait)
             self.sleep(min(wait, 1.0))
 
     def observe(self, scope, ticket, configured, *, tokens=None, headers=None, cooldown=0):

@@ -26,7 +26,7 @@ from typing import Optional, Union
 from osintgpt.config import Settings
 
 from .paths import ProjectPaths, default_home
-from .settings import ProjectSettings
+from .settings import GRAPH_MODEL_FIELDS, ProjectSettings, graph_model_settings
 from .toml_io import read_toml, write_toml
 
 # Written at the top of every project.toml. A project directory is the thing
@@ -197,18 +197,16 @@ class Project:
         Returns:
             ProjectSettings: The settings this project actually runs with.
         '''
-        if defaults is None:
-            return self.settings
-
         # False and 0 are choices; only '' and None mean "not chosen here".
         filled = {
             field.name: getattr(defaults, field.name)
             for field in fields(ProjectSettings)
-            if getattr(self.settings, field.name) in ('', None)
+            if defaults is not None and field.name not in GRAPH_MODEL_FIELDS
+            and getattr(self.settings, field.name) in ('', None)
             and getattr(defaults, field.name) not in ('', None)
         }
 
-        return replace(self.settings, **filled)
+        return replace(self.settings, **filled, **graph_model_settings(self.settings, defaults))
 
     # compose project choices onto caller-supplied configuration
     def settings_for(

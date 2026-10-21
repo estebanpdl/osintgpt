@@ -42,7 +42,7 @@ from osintgpt.llm.calling import (
 # import osintgpt prompts
 from osintgpt.prompts import prompt
 
-from .registry import TOOL_SPECS, run_tool
+from .registry import run_tool, tools_for
 from .tools import ToolContext
 from .trace import TouchedDocument, Trace
 
@@ -156,7 +156,7 @@ def agentic_answer(
     for round_number in range(1, max(int(max_rounds), 1) + 1):
         try:
             turn = generator.generate_with_tools(
-                system, question, TOOL_SPECS, history, **carried
+                system, question, tools_for(project), history, **carried
             )
         except ToolCallingUnsupported as error:
             return _static(project, question, embedder, generator, trace,
@@ -222,18 +222,16 @@ def _answered(project, generator, question, text, trace, sources, gathered):
 
 
 def _nothing_indexed(project, store) -> bool:
-    '''
-    Whether the project holds any vectors at all.
-
-    Checked before the generator is touched, so an unindexed project costs
-    nothing rather than a model call that could only be answered ungrounded.
-    '''
+    '''Avoid a generation call when neither passages nor an enabled graph are available.'''
     from osintgpt.vector_store import store_for
 
     owned = store is None
     engine = store or store_for(project)
     try:
-        return engine.count() == 0
+        if engine.count() != 0:
+            return False
+        from osintgpt.graph.retrieval import retrieval_status
+        return not retrieval_status(project)['available']
     except Exception:  # noqa: BLE001 — a guard, not the answer
         return False
     finally:
@@ -264,7 +262,7 @@ def _run_calls(
         trace.record(
             round_number, call.name, call.arguments,
             count=count, seconds=elapsed, error=error, unit=unit,
-            documents=_touched(payload)
+            documents=_touched(payload), payload=payload
         )
 
         for ref in _refs_in(payload):

@@ -29,6 +29,30 @@ Choosing between the search tools:
   rather than matching a query. Check the drift it reports on each hop: a late
   hop can be about something else entirely.
 - "how is A related to B" goes to `graph_query`, when the project has a graph.
+  Use `graph_entities` to distinguish names and aliases, then query selected IDs.
+  If several identities fit and the supplied context does not distinguish them,
+  ask the operator to clarify. Do not combine namesakes or guess their identity.
+
+For graph results, keep the stored source → target direction even when a path
+traverses an assertion backwards. Incoming/outgoing describe stored arrows;
+connectivity only describes a route through assertions. Preserve negation,
+allegations, uncertainty, attribution, and dates. Cite the source reference and
+assertion ID for every link used in an answer, including multiple supporting or
+conflicting assertions. A chain of allegations is not an established connection.
+Use `graph_evidence` to read adjacent source text when a quotation is insufficient.
+Identity resolution decisions are source-backed proposals, not independent proof.
+An unresolved/provisional identity must not be equated with another node sharing
+its name. Inspect the cited context or ask the operator when equivalence matters;
+preserve identity uncertainty in the answer alongside assertion qualifications.
+If a path is incomplete or response-truncated, retrieve every missing assertion
+before describing the whole connection. Never substitute entity descriptions
+for supporting quotations. Check saved-version and current-source verification.
+
+Graph status and query limits qualify every result. A stale or incomplete graph
+does not cover all current material. No path found within those bounds is not
+proof that no relationship exists. Use semantic and exact search when graph
+retrieval is disabled, unavailable, inconclusive, or needs corroboration. Graph
+proximity does not establish passage relevance or justify changing search scores.
 
 Call several tools in one turn when they are independent. Stop when you can
 answer — there is nothing to be gained by continuing once the material is in

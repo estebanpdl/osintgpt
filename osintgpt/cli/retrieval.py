@@ -177,14 +177,14 @@ def ask(
     question: str = typer.Argument(..., help='Question to answer.'),
     passages: int = typer.Option(
         DEFAULT_PASSAGES, '--passages', min=1,
-        help='Maximum retrieved passages offered to the model.'
+        help='Maximum passages for --static; the tool loop chooses its own retrieval limits.'
     ),
     project_slug: Optional[str] = typer.Option(
         None, '--project', help='Project slug or id; overrides selection.'
     ),
     static: bool = typer.Option(
         False, '--static',
-        help='Retrieve once and answer, instead of letting the model search.'
+        help='Retrieve semantic passages once and answer without the tool loop.'
     ),
     conversation_id: Optional[str] = typer.Option(
         None, '--conversation',

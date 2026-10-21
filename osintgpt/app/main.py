@@ -27,6 +27,7 @@ from osintgpt.projects import default_home
 # against and a relative import fails at load.
 from osintgpt.app.session import (
     MATERIAL,
+    GRAPH,
     PROJECTS,
     SETTINGS,
     VIEW,
@@ -38,7 +39,7 @@ from osintgpt.app.session import (
     selected_project
 )
 from osintgpt.app.styles import load_css
-from osintgpt.app.views import chat, conversations, ingest, projects, settings
+from osintgpt.app.views import chat, conversations, graph, ingest, projects, settings
 
 LOGO = Path(__file__).parent / 'assets' / 'osintgpt.png'
 
@@ -99,6 +100,8 @@ def main() -> None:
             ingest.render(st, runtime, st.session_state)
         elif view == SETTINGS:
             settings.render(st, runtime, home, st.session_state)
+        elif view == GRAPH:
+            graph.render(st, runtime, home, st.session_state)
         else:
             chat.render(st, runtime, st.session_state)
     except MissingEnvironmentVariableError as error:

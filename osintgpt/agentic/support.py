@@ -42,12 +42,14 @@ def _resolve(context, ref: str) -> Optional[Path]:
     because none of them is a file the corpus covers. Resolving first is what
     makes the comparison real rather than one a `..` walks straight through.
     '''
+    from osintgpt.ingestion.source_view import reference_parts
+
     try:
-        candidate = (context.root / ref).resolve()
+        candidate, _ = reference_parts(ref, context.root, context.covered)
     except (OSError, ValueError):
         return None
 
-    if candidate not in context.covered:
+    if candidate is None:
         log.warning('refused a ref the corpus does not cover: %r', ref)
 
         return None
@@ -55,18 +57,9 @@ def _resolve(context, ref: str) -> Optional[Path]:
     return candidate if candidate.is_file() else None
 
 
-def _read(context, path: Path, ref: str) -> str:
-    '''
-    The document's text, through the same loaders that indexed it, so a PDF
-    reads as the markdown the index holds rather than as bytes.
-    '''
-    from osintgpt.ingestion import load_documents
-
-    documents = load_documents(
-        path, context.corpus.mapping_for(path, context.root)
-    )
-
-    return '\n\n'.join(d.text for d in documents if d.text)
+def _read(context, path: Path, ref: str, source_version=''):
+    from osintgpt.ingestion.source_view import read_source
+    return read_source(context.project, path, ref, source_version)
 
 
 def _passage(result) -> Dict[str, Any]:
@@ -77,21 +70,14 @@ def _passage(result) -> Dict[str, Any]:
         'ref': chunk.ref,
         'text': result.text[:SNIPPET_CHARS],
         'score': round(result.score, 4),
+        'document_ref': chunk.document_ref or chunk.ref,
+        **({'provenance': chunk.metadata['_osintgpt_provenance']}
+           if '_osintgpt_provenance' in chunk.metadata else {}),
         **({'timestamp': chunk.timestamp} if chunk.timestamp else {}),
         **({'author': chunk.author} if chunk.author else {}),
         # Which terms put this chunk in the result, so the model reads why it
         # ranked rather than inferring it from position.
         **({'terms': list(result.terms)} if getattr(result, 'terms', ()) else {})
-    }
-
-
-def _claim(edge) -> Dict[str, str]:
-    return {
-        'source': edge.source,
-        'relation': edge.relation,
-        'target': edge.target,
-        'ref': edge.ref,
-        'evidence': edge.evidence
     }
 
 

@@ -32,7 +32,9 @@ def create_project(runner, home):
     result = invoke(runner, home, 'project', 'create', 'Case Graph')
     assert result.exit_code == 0
 
-    return Registry.load(home).open('case-graph')
+    project = Registry.load(home).open('case-graph').with_settings(generation_model='test-chat')
+    project.save()
+    return project
 
 
 def build_graph(project):
@@ -224,7 +226,7 @@ def test_graph_build_prints_cost_progress_and_report(
     )
 
     assert result.exit_code == 0
-    assert 'one generation call per document' in result.output
+    assert 'processes source windows with identity lookup' in result.output
     assert '1/1 evidence.md' in result.output
     assert '1 documents, 2 entities, 1 edges' in result.output
     assert 'Usage:' in result.output
@@ -343,3 +345,172 @@ def test_graph_traversal_refuses_an_unbuilt_graph(
 
     assert result.exit_code != 0
     assert 'graph has not been built' in result.output
+
+
+def test_graph_build_and_status_report_windows_and_usage(runner, home, monkeypatch):
+    project = create_project(runner, home).with_settings(graph_enabled=True)
+    project.save()
+    (project.paths.root / 'large.md').write_text('x' * 100000)
+    Corpus.load(project.paths.sources).register('large.md')
+
+    class Generator:
+        def __init__(self, recorder):
+            self.recorder = recorder
+
+        def generate(self, system, user):
+            self.recorder.record(Usage('stub', 'test-chat', 10, 5))
+            return '{"entities": [], "edges": []}'
+
+    monkeypatch.setattr(llm, 'build_generation_provider',
+                        lambda *args, recorder=None, **kwargs: Generator(recorder))
+    result = invoke(runner, home, 'graph', 'build', '--project', 'case-graph', '--json')
+    assert result.exit_code == 0, result.output
+    data = json.loads(result.output)
+    assert data['status'] == 'complete'
+    assert data['documents'] == 1
+    assert data['calls'] == data['accounting']['windows_completed'] > 1
+    assert data['usage']['total_tokens'] == data['calls'] * 15
+    assert data['usage']['complete'] is False
+
+    def forbidden(*args, **kwargs):
+        raise AssertionError('Status must not create a provider')
+
+    monkeypatch.setattr(llm, 'build_generation_provider', forbidden)
+    result = invoke(runner, home, 'graph', 'status', '--project', 'case-graph', '--json')
+    assert result.exit_code == 0, result.output
+    status = json.loads(result.output)
+    assert status['status'] == 'complete'
+    assert status['available']
+    assert status['counts'] == data['accounting']
+    assert status['usage'] == data['usage']
+    destination = home / 'empty-graph.json'
+    result = invoke(runner, home, 'graph', 'export', str(destination),
+                    '--project', 'case-graph', '--json')
+    assert result.exit_code == 0
+    exported = json.loads(destination.read_text(encoding='utf-8'))
+    assert exported['entities'] == exported['edges'] == []
+    assert exported['metadata']['graph']['build_status'] == 'complete'
+    assert exported['metadata']['project']['id'] == project.id
+
+
+def test_graph_status_does_not_create_unused_database(runner, home):
+    project = create_project(runner, home)
+    result = invoke(runner, home, 'graph', 'status', '--project', 'case-graph', '--json')
+    assert result.exit_code == 0
+    assert json.loads(result.output)['status'] == 'never_built'
+    assert not (project.paths.root / 'graph.sqlite').exists()
+
+
+def test_rejection_inspection_is_keyless_and_does_not_create_unused_graph(runner, home, monkeypatch):
+    from osintgpt.graph.records import RejectedClaim
+    project = create_project(runner, home)
+    clear_credentials(monkeypatch)
+    result = invoke(runner, home, 'graph', 'rejected', '--project', 'case-graph', '--json')
+    assert result.exit_code == 0 and json.loads(result.output)['results'] == []
+    assert not (project.paths.root / 'graph.sqlite').exists()
+    with graph_for(project) as graph:
+        graph.record_rejections([RejectedClaim('a.csv#one', 'a.csv', 'version', 2,
+                                              {'evidence': 'Not in source'}, 'Quotation not found')])
+    result = invoke(runner, home, 'graph', 'rejected', '--project', 'case-graph', '--ref', 'a.csv', '--json')
+    assert result.exit_code == 0
+    assert json.loads(result.output)['results'][0]['candidate']['evidence'] == 'Not in source'
+
+
+def test_human_graph_rows_preserve_negative_and_alleged_status(runner, home):
+    project = create_project(runner, home)
+    with graph_for(project) as graph:
+        graph.add([], [Edge('A', 'B', 'funded', 'a.md', 'A did not fund B.',
+                            relation_polarity='negative', assertion='alleged')])
+    for command in [('neighbors', 'A'), ('path', 'A', 'B')]:
+        result = invoke(runner, home, 'graph', *command, '--project', 'case-graph')
+        assert result.exit_code == 0
+        assert 'negative' in result.output and 'alleged' in result.output
+
+
+def test_invalid_graph_response_exits_nonzero_with_failed_state(runner, home, monkeypatch):
+    project = create_project(runner, home).with_settings(graph_enabled=True)
+    project.save()
+    (project.paths.root / 'a.md').write_text('Text')
+    Corpus.load(project.paths.sources).register('a.md')
+
+    class Generator:
+        def generate(self, *args):
+            return 'not json'
+
+    monkeypatch.setattr(llm, 'build_generation_provider', lambda *args, **kwargs: Generator())
+    result = invoke(runner, home, 'graph', 'build', '--project', 'case-graph', '--json')
+    data = json.loads(result.output)
+    assert result.exit_code == 1
+    assert data['status'] == 'failed'
+    assert data['accounting']['invalid_responses'] == 2
+    assert data['usage']['missing_usage_requests'] == 2
+
+
+def test_unchanged_cli_refresh_is_keyless_and_reports_reuse(runner, home, monkeypatch):
+    project = create_project(runner, home).with_settings(graph_enabled=True)
+    project.save()
+    (project.paths.root / 'a.md').write_text('Source')
+    Corpus.load(project.paths.sources).register('a.md')
+    class Generator:
+        def generate(self, *args):
+            return '{"entities": [], "edges": []}'
+    monkeypatch.setattr(llm, 'build_generation_provider', lambda *args, **kwargs: Generator())
+    first = invoke(runner, home, 'graph', 'build', '--project', 'case-graph', '--json')
+    assert first.exit_code == 0, first.output
+    clear_credentials(monkeypatch)
+    def forbidden(*args, **kwargs):
+        raise AssertionError('Reusing completed sources must not construct a provider')
+    monkeypatch.setattr(llm, 'build_generation_provider', forbidden)
+    result = invoke(runner, home, 'graph', 'build', '--project', 'case-graph', '--json')
+    assert result.exit_code == 0, result.output
+    data = json.loads(result.output)
+    assert data['calls'] == 0 and data['skipped'] == 1
+    assert data['details'][0]['action'] == 'reused'
+
+
+def test_configured_fallback_model_is_part_of_graph_recipe():
+    from types import SimpleNamespace
+    from osintgpt.cli.graph import _LazyGenerator
+    from osintgpt.config import Settings
+    effective = SimpleNamespace(generation_model='', generation_provider='openai')
+    first = _LazyGenerator(None, effective, Settings(openai_gpt_model='first'), None)
+    second = _LazyGenerator(None, effective, Settings(openai_gpt_model='second'), None)
+    assert first.graph_options()['model'] == 'first'
+    assert second.graph_options()['model'] == 'second'
+    assert first._built is second._built is None
+
+
+@pytest.mark.parametrize('reason,exit_code', [('', 0), ('length', 1)])
+def test_cli_passes_schema_and_completion_status_through_lazy_provider(runner, home, monkeypatch, reason, exit_code):
+    from osintgpt.graph.contract import EXTRACTION_SCHEMA
+    from osintgpt.llm.generation import GenerationResponse
+    project = create_project(runner, home).with_settings(graph_enabled=True)
+    project.save()
+    (project.paths.root / 'a.md').write_text('Source')
+    Corpus.load(project.paths.sources).register('a.md')
+    schemas = []
+
+    class Generator:
+        supports_structured_output = True
+        supports_output_limit = True
+
+        def generate_response(self, system, user, *, max_output_tokens=None, schema=None):
+            schemas.append(schema)
+            return GenerationResponse('{"entities":[],"edges":[]}', status='completed', stop_reason=reason)
+
+    monkeypatch.setattr(llm, 'build_generation_provider', lambda *args, **kwargs: Generator())
+    result = invoke(runner, home, 'graph', 'build', '--project', 'case-graph', '--json')
+    assert result.exit_code == exit_code, result.output
+    data = json.loads(result.output)
+    assert schemas == [EXTRACTION_SCHEMA]
+    assert data['accounting']['structured_output_unenforced'] == 0
+    assert data['accounting']['completion_status_unavailable'] == 0
+    assert data['accounting']['invalid_responses'] == exit_code
+
+    if not reason:
+        def forbidden(*args, **kwargs):
+            raise AssertionError('Compatible reuse must remain keyless')
+        monkeypatch.setattr(llm, 'build_generation_provider', forbidden)
+        again = invoke(runner, home, 'graph', 'build', '--project', 'case-graph', '--json')
+        assert again.exit_code == 0, again.output
+        assert json.loads(again.output)['skipped'] == 1

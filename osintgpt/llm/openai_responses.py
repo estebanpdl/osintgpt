@@ -24,6 +24,7 @@ from typing import Any, Dict, List, Optional, Tuple
 
 from .base import GenerationProvider
 from .calling import Exchange, ModelTurn, ToolCall, ToolSpec
+from .generation import GenerationResponse, deliver_response, send_request
 from .usage import Usage, UsageRecorder
 
 # Reasoning models emit their chain of thought as items in the response, and a
@@ -45,6 +46,7 @@ class OpenAIResponsesGeneration(GenerationProvider):
     '''
     supports_tools = True
     supports_vision = True
+    supports_structured_output = True
 
     def __init__(
         self,
@@ -71,13 +73,34 @@ class OpenAIResponsesGeneration(GenerationProvider):
         self.provider = provider
         self.recorder = recorder
 
-    def generate(self, system: str, user: str) -> str:
-        response = self._create(
-            instructions=system,
-            input=[{'role': 'user', 'content': user}]
-        )
+    def generate(self, system: str, user: str, *, max_output_tokens=None) -> str:
+        return self.generate_response(system, user, max_output_tokens=max_output_tokens).text
 
-        return response.output_text or ''
+    def generate_response(self, system, user, *, max_output_tokens=None, schema=None, on_response=None, request=None,
+                          tools=None, history=None):
+        options = self.graph_request(system, user, schema=schema, tools=tools, history=history)
+        if max_output_tokens is not None:
+            options['max_output_tokens'] = max_output_tokens
+        response = send_request(self.client, lambda client: client.responses.create(
+            model=self.model, **options), request)
+        refused = any(getattr(block, 'type', '') == 'refusal'
+                      for item in getattr(response, 'output', [])
+                      for block in (getattr(item, 'content', None) or []))
+        status = getattr(response, 'status', '') or ''
+        for item in getattr(response, 'output', []):
+            if getattr(item, 'type', '') == 'message' and getattr(item, 'status', '') == 'incomplete':
+                status = 'incomplete'
+        reason = getattr(getattr(response, 'incomplete_details', None), 'reason', '') or ''
+        calls = tuple({'id': item.call_id, 'name': item.name, 'arguments': _arguments(item.arguments)}
+                      for item in response.output if item.type == 'function_call')
+        result = GenerationResponse(response.output_text or '', status=status, stop_reason=reason, refused=refused,
+                                    tool_calls=calls, continuation=tuple(item.model_dump(exclude_none=True)
+                                    for item in response.output) if calls else ())
+        return deliver_response(self, result, self._usage(response), on_response)
+
+    def graph_request(self, system, user, **options):
+        from .generation_tools import generation_arguments
+        return generation_arguments('responses', system, user, **options)
 
     def describe_image(
         self, system: str, user: str, image: bytes,
@@ -176,17 +199,19 @@ class OpenAIResponsesGeneration(GenerationProvider):
             model=self.model, store=False, **request
         )
 
+        self._record(self._usage(response))
+        return response
+
+    def _usage(self, response):
         usage = getattr(response, 'usage', None)
-        self._record(Usage(
+        return Usage(
             provider=self.provider,
             model=self.model,
             input_tokens=getattr(usage, 'input_tokens', 0) or 0,
             output_tokens=getattr(usage, 'output_tokens', 0) or 0,
             billable=self.billable,
             counted=usage is not None
-        ))
-
-        return response
+        )
 
 
 def _arguments(raw) -> dict:

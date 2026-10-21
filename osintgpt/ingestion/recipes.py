@@ -7,12 +7,13 @@ from dataclasses import replace
 from . import chunking
 from .images import is_image
 from .indexing import _ref_for, content_hash
-from .loaders import load_documents
+from . import snapshots
+from .snapshots import load_snapshot
 from osintgpt.vector_store.records import StoredChunk
 
 
 # Bump when extraction, record filtering or provenance semantics change.
-INGESTION_VERSION = 1
+INGESTION_VERSION = 2
 
 
 def digest(value) -> str:
@@ -30,6 +31,7 @@ def recipe_for(mapping, embedder, *, transcribes=False) -> str:
     return digest({
         'version': 2,
         'ingestion_version': INGESTION_VERSION,
+        'extraction_version': snapshots.EXTRACTION_VERSION,
         'mapping': mapping.to_dict(),
         'chunking': {
             'version': chunking.CHUNKING_VERSION,
@@ -86,20 +88,22 @@ def supports_legacy_checkpoint(embedder) -> bool:
     return False
 
 
-def prepare_chunks(path, ref, mapping, embedder, transcriber=None, *, statistics=None, record_ends=None):
+def prepare_chunks(path, ref, mapping, embedder, transcriber=None, *, statistics=None, record_ends=None, cache_dir=None):
     '''Derive the exact payload, keeping both file and record identity.'''
     chunks, texts, document_refs = [], [], []
-    documents = load_documents(path, mapping, transcriber, statistics=statistics)
+    snapshot = load_snapshot(path, mapping, ref=ref, cache_dir=cache_dir,
+                             transcriber=transcriber, statistics=statistics)
+    documents = snapshot.documents
     if statistics is not None:
         statistics['documents'] = len(documents)
     for document in documents:
         start = len(chunks)
-        # Project-local record refs remain usable when the project is moved.
-        source_ref = path.as_posix()
+        cursor = 0
         document_ref = document.ref
-        if document_ref == source_ref or document_ref.startswith(source_ref + '#'):
-            document_ref = ref + document_ref[len(source_ref):]
         for piece in chunking.chunk_document(document.text, max_chars=chunking.MAX_CHARS):
+            provenance = snapshot.provenance(document, piece.text, after=cursor, first_only=True)
+            if provenance['matches']:
+                cursor = provenance['matches'][0]['end']
             texts.append(piece.rendered)
             # Kept separately for compatibility with the first journal format.
             document_refs.append(document.ref)
@@ -107,7 +111,8 @@ def prepare_chunks(path, ref, mapping, embedder, transcriber=None, *, statistics
                 ref=ref, sequence=len(chunks), text=piece.text,
                 embedding_model=embedder.model, path=piece.path,
                 timestamp=document.timestamp, author=document.author,
-                metadata=dict(document.metadata), document_ref=document_ref
+                metadata={**document.metadata, '_osintgpt_provenance': provenance},
+                document_ref=document_ref
             ))
         if record_ends is not None and len(chunks) > start:
             record_ends.append(len(chunks))

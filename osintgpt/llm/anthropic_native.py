@@ -17,6 +17,7 @@ from typing import List, Optional
 
 from .base import GenerationProvider
 from .calling import ModelTurn, ToolCall
+from .generation import GenerationResponse, deliver_response, send_request
 from .usage import Usage, UsageRecorder
 
 # The API requires an explicit ceiling. Too low truncates a reply mid-thought
@@ -33,6 +34,8 @@ class AnthropicGeneration(GenerationProvider):
     Chat completions through the Anthropic SDK.
     '''
     supports_model_discovery = True
+    supports_structured_output = True
+    provider = 'anthropic'
 
     def __init__(
         self,
@@ -183,32 +186,68 @@ class AnthropicGeneration(GenerationProvider):
             block.text for block in response.content if block.type == 'text'
         )
 
-    def generate(self, system: str, user: str) -> str:
-        # The system prompt is its own parameter here rather than a message,
-        # which is the one shape difference from the OpenAI-compatible path.
-        response = self.client.messages.create(
-            model=self.model,
-            max_tokens=self.max_tokens,
-            system=system,
-            messages=[{'role': 'user', 'content': user}]
-        )
+    def generate(self, system: str, user: str, *, max_output_tokens=None) -> str:
+        return self.generate_response(system, user, max_output_tokens=max_output_tokens).text
+
+    def graph_model_limits(self):
+        '''Fetch capabilities only for an explicitly requested graph build.'''
+        from anthropic import APIError
+        try:
+            metadata = self.client.with_options(max_retries=0, timeout=30).models.retrieve(self.model)
+        except APIError as error:
+            raise ValueError(f'Cannot read Anthropic model limits for {self.model}: {error}. '
+                             'No graph generation request was sent.') from error
+        return {'max_tokens': getattr(metadata, 'max_tokens', None),
+                'max_input_tokens': getattr(metadata, 'max_input_tokens', None),
+                'resolved_model': metadata.id}
+
+    def generate_response(self, system, user, *, max_output_tokens=None, schema=None, on_response=None, request=None,
+                          graph_output=None, tools=None, history=None):
+        options = self.graph_request(system, user, schema=schema, tools=tools, history=history)
+        arguments = dict(model=self.model,
+                         max_tokens=graph_output if graph_output is not None else
+                         min(self.max_tokens, max_output_tokens) if max_output_tokens else self.max_tokens,
+                         **options)
+
+        def operation(client):
+            if graph_output is None:
+                return client.messages.create(**arguments)
+            # Consume events for cooperative cancellation, but deliver a single
+            # final Message to the existing accounting/checkpoint contract.
+            with client.messages.stream(**arguments) as stream:
+                complete = False
+                for event in stream:
+                    complete |= event.type == 'message_stop'
+                    getattr(request, 'check_cancelled', lambda: None)()
+                if not complete:
+                    raise ValueError('Anthropic stream ended before message_stop; no complete response was received.')
+                return stream.get_final_message()
+
+        response = send_request(self.client, operation, request)
 
         # Field names differ from the OpenAI shape: input_tokens rather than
         # prompt_tokens.
         usage = getattr(response, 'usage', None)
-        self._record(Usage(
+        consumption = Usage(
             provider='anthropic',
             model=self.model,
             input_tokens=getattr(usage, 'input_tokens', 0) or 0,
             output_tokens=getattr(usage, 'output_tokens', 0) or 0,
             counted=usage is not None
-        ))
-
-        # A reply can carry thinking blocks alongside text; only text is asked
-        # for here, and a refusal returns no text blocks at all.
-        return ''.join(
-            block.text for block in response.content if block.type == 'text'
         )
+
+        text = ''.join(block.text for block in response.content if block.type == 'text')
+        reason = getattr(response, 'stop_reason', '') or ''
+        calls = tuple({'id': block.id, 'name': block.name, 'arguments': dict(block.input or {})}
+                      for block in response.content if block.type == 'tool_use')
+        return deliver_response(self, GenerationResponse(text, stop_reason=reason, refused=reason == 'refusal',
+                                tool_calls=calls, continuation=tuple(block.model_dump(exclude_none=True)
+                                for block in response.content) if calls else ()),
+                                consumption, on_response)
+
+    def graph_request(self, system, user, **options):
+        from .generation_tools import generation_arguments
+        return generation_arguments('anthropic', system, user, **options)
 
     def list_models(self) -> List[str]:
         return sorted(model.id for model in self.client.models.list())

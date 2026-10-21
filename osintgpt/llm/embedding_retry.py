@@ -1,4 +1,4 @@
-'''One bounded retry owner for paid embedding HTTP requests, before delivery.'''
+'''Bounded HTTP retries shared by embedding and generation requests.'''
 
 import logging
 import math
@@ -36,7 +36,7 @@ class RetryPolicy:
         return max(minimum, backoff) + jitter(0, min(1.0, backoff / 4))
 
 
-def request_with_retries(pacer, batch, ticket, request, reserve):
+def request_with_retries(pacer, batch, ticket, request, reserve, *, emit=emit_index, workload='embedding'):
     '''Retry only request(batch); parsing validation, sinks and costs stay out.
 
     reserve(deadline) re-sizes the unfinished prefix and obtains a new quota
@@ -46,32 +46,32 @@ def request_with_retries(pacer, batch, ticket, request, reserve):
     deadline = pacer.ledger.clock() + policy.max_elapsed
     attempt = 1
     while True:
-        emit_index('request', attempt=attempt, maximum=policy.max_attempts, inputs=len(batch))
+        emit('request', attempt=attempt, maximum=policy.max_attempts, inputs=len(batch))
         try:
             response = request(batch)
         except Exception as error:
-            failure = classify(error, pacer.provider, pacer.ledger.clock())
+            failure = classify(error, pacer.provider, pacer.ledger.clock(), generation=workload == 'generation')
             delay = policy.delay(attempt, failure.delay, pacer.retry_jitter) if failure.retryable else 0
             # Persist the cooldown even when this invocation cannot retry, so
             # other jobs sharing the scope respect the provider's instruction.
             pacer.observe(ticket, headers=error_headers(error), cooldown=delay)
             if not failure.retryable:
-                emit_index('request_stopped', reason='Provider or request configuration needs attention.', status=failure.status)
+                emit('request_stopped', reason='Provider or request configuration needs attention.', status=failure.status)
                 raise
             if attempt >= policy.max_attempts or pacer.ledger.clock() + delay >= deadline:
-                log.warning('%s embedding retries stopped after %d attempt(s): attempt/time budget reached.', pacer.provider, attempt)
-                emit_index('request_stopped', reason='Retry attempt/time budget reached.', status=failure.status)
+                log.warning('%s %s retries stopped after %d attempt(s): attempt/time budget reached.', pacer.provider, workload, attempt)
+                emit('request_stopped', reason='Retry attempt/time budget reached.', status=failure.status)
                 raise
             log.warning(
-                '%s embedding request failed (%s); retry %d/%d after at least %.2fs, subject to quota pacing.',
-                pacer.provider, failure.status or 'transport', attempt + 1, policy.max_attempts, delay
+                '%s %s request failed (%s); retry %d/%d after at least %.2fs, subject to quota pacing.',
+                pacer.provider, workload, failure.status or 'transport', attempt + 1, policy.max_attempts, delay
             )
-            emit_index('retry', attempt=attempt + 1, maximum=policy.max_attempts, seconds=delay, status=failure.status)
+            emit('retry', attempt=attempt + 1, maximum=policy.max_attempts, seconds=delay, status=failure.status)
             try:
                 batch, ticket = reserve(deadline)
             except QuotaWaitExpired:
-                log.warning('%s embedding retries stopped: quota wait exceeds the remaining retry time budget.', pacer.provider)
-                emit_index('request_stopped', reason='Quota wait exceeds the remaining retry time budget.', status=failure.status)
+                log.warning('%s %s retries stopped: quota wait exceeds the remaining retry time budget.', pacer.provider, workload)
+                emit('request_stopped', reason='Quota wait exceeds the remaining retry time budget.', status=failure.status)
                 raise error from None
             attempt += 1
         else:

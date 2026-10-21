@@ -1,12 +1,10 @@
 '''Token-aware batches and quota reservations for paid embedding providers.'''
 
-import hashlib
-import json
 import random
 from functools import lru_cache
 
 from osintgpt.rate_settings import RateLimits
-from .rate_ledger import PROCESS_LEDGER, RateLedger, TokenBudgetExceeded, lower_limit
+from .rate_ledger import PROCESS_LEDGER, RateLedger, TokenBudgetExceeded, lower_limit, quota_scope
 from .embedding_retry import RetryPolicy, request_with_retries
 
 # API request ceilings, not account TPM tiers. Unknown Voyage models use the
@@ -31,14 +29,6 @@ def token_count(provider, model, text):
     # An estimate, never billing usage. Includes allowance for tokenizer
     # framing; counts bytes rather than assuming English characters/token.
     return len(text.encode('utf-8')) + 16
-
-
-def quota_scope(provider, model, endpoint, credential, explicit=''):
-    account = {'scope': explicit} if explicit else {
-        'credential': hashlib.sha256(credential.encode()).hexdigest(), 'model': model
-    }
-    material = {'provider': provider, 'endpoint': endpoint.rstrip('/'), **account}
-    return hashlib.sha256(json.dumps(material, sort_keys=True).encode()).hexdigest()
 
 
 class EmbeddingPacer:

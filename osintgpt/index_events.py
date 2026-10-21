@@ -13,25 +13,30 @@ class IndexEvent:
     data: dict
 
 
-_observer = ContextVar('index_observer', default=None)
 EventSink = Callable[[IndexEvent], None]
 
 
-@contextmanager
-def observe_index(callback):
-    token = _observer.set(callback)
-    try:
-        yield
-    finally:
-        _observer.reset(token)
+class EventChannel:
+    def __init__(self, name):
+        self.observer = ContextVar(name, default=None)
 
-
-def emit_index(kind, **data):
-    callback = _observer.get()
-    if callback is not None:
+    @contextmanager
+    def observe(self, callback):
+        token = self.observer.set(callback)
         try:
-            callback(IndexEvent(kind, data))
-        except Exception:
-            # A broken display must not turn a saved response into a retry.
-            # Cancellation and CostLimitReached are BaseExceptions and pass on.
-            logging.getLogger('osintgpt.indexing').warning('Index progress display could not be updated.')
+            yield
+        finally:
+            self.observer.reset(token)
+
+    def emit(self, kind, **data):
+        callback = self.observer.get()
+        if callback is not None:
+            try:
+                callback(IndexEvent(kind, data))
+            except Exception:
+                # Display errors cannot invalidate saved work; cancellation still propagates.
+                logging.getLogger('osintgpt.progress').warning('Progress display could not be updated.')
+
+
+_index = EventChannel('index_observer')
+observe_index, emit_index = _index.observe, _index.emit

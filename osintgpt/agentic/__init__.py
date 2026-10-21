@@ -18,6 +18,8 @@ from .tools import (
     ToolResult,
     exact_search,
     fetch_source,
+    graph_entities,
+    graph_evidence,
     graph_query,
     list_documents,
     semantic_search,

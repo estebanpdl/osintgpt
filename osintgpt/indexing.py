@@ -117,7 +117,7 @@ class IndexReport:
     def notices(self) -> List[str]:
         '''
         Returns:
-            List[str]: Why each skipped file was skipped. A file that cannot                 be indexed is reported rather than dropped, so an operator                 learns it from a run instead of from an answer that was                 missing something.
+            List[str]
         '''
         notices = [result.problem for result in self.skipped]
         if self.adopted:
@@ -143,11 +143,6 @@ def index_project(
 ) -> IndexReport:
     '''
     Bring a project's index up to date with its registered corpus.
-
-    Only documents that are new or changed are read and embedded; the rest
-    cost a hash and a destination inventory check. Documents no source covers any more have their chunks
-    removed, because vectors nobody covers are invisible to a corpus walk and
-    still returned by a search.
 
     Args:
         project (Project): The project to index.
@@ -249,7 +244,8 @@ def _run(
             source_hash = content_hash(path.read_bytes())
             stored = _index_document(
                 path, ref, mappings[ref], embedder, store, transcriber,
-                journal, force, source_hash, recipes[ref], destination, statistics
+                journal, force, source_hash, recipes[ref], destination, statistics,
+                cache_dir=project.paths.extracts
             )
         except CostLimitReached as error:
             state.save()
@@ -314,7 +310,8 @@ def _index_document(
     source_hash=None,
     recipe=None,
     destination=None,
-    statistics=None
+    statistics=None,
+    cache_dir=None
 ) -> int:
     '''
     Read, chunk, embed and store one document. Returns the chunks stored.
@@ -323,10 +320,6 @@ def _index_document(
         if statistics is not None:
             statistics.update(documents=1, chunked_documents=1)
         emit_index('embedding', ref=ref, total=1, completed=0, completed_records=0, statistics=dict(statistics or {}))
-        # One image is one chunk: there is nothing to split, and the stored
-        # text is a marker rather than a caption, because nothing was
-        # extracted and inventing a description would put words in the index
-        # that no model produced.
         vector = embedder.embed_images(
             [read_image(path)], purpose=EmbeddingPurpose.DOCUMENT
         )[0]
@@ -348,7 +341,8 @@ def _index_document(
 
     record_ends = []
     chunks, texts, document_refs = prepare_chunks(
-        path, ref, mapping, embedder, transcriber, statistics=statistics, record_ends=record_ends
+        path, ref, mapping, embedder, transcriber, statistics=statistics,
+        record_ends=record_ends, cache_dir=cache_dir
     )
     details = {
         'provider': _provider_name(embedder), 'model': embedder.model,

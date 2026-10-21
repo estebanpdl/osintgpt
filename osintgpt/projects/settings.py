@@ -17,6 +17,29 @@ from dataclasses import asdict, dataclass, fields
 from typing import Optional
 from osintgpt.rate_settings import EmbeddingRateSettings
 
+GRAPH_MODEL_FIELDS = ('graph_model_mode', 'graph_generation_provider', 'graph_generation_model')
+
+
+def graph_model_settings(settings, defaults=None):
+    '''Resolve graph choices without combining models from different provider defaults.'''
+    def selection(value):
+        mode, provider, model = (getattr(value, name, '') for name in GRAPH_MODEL_FIELDS)
+        if mode not in ('', 'inherit', 'independent'):
+            raise ValueError('graph_model_mode must be inherit, independent, or empty for user defaults.')
+        return mode or ('independent' if provider or model else ''), provider, model
+
+    mode, provider, model = selection(settings)
+    default_mode, default_provider, default_model = selection(defaults)
+    if default_mode != 'independent':
+        default_provider, default_model = '', ''
+    mode = mode or default_mode or 'inherit'
+    if mode == 'inherit':
+        provider, model = '', ''
+    else:
+        model = model or (default_model if not provider or provider == default_provider else '')
+        provider = provider or default_provider
+    return dict(zip(GRAPH_MODEL_FIELDS, (mode, provider, model)))
+
 # ProjectSettings class
 @dataclass(frozen=True)
 class ProjectSettings(EmbeddingRateSettings):
@@ -29,12 +52,14 @@ class ProjectSettings(EmbeddingRateSettings):
     embedding_model: str = ''
     generation_provider: str = 'openai'
     generation_model: str = ''
+    graph_model_mode: str = ''
+    graph_generation_provider: str = ''
+    graph_generation_model: str = ''
     # Vision model for document ingestion; empty inherits the generation model.
     ingestion_model: str = ''
     semantic_enabled: bool = True
     lexical_enabled: bool = True
-    # One generation call per document to build, so opting in is a decision an
-    # operator makes for a case rather than a default they inherit.
+    # Extraction uses calls per text window and requires an explicit build.
     graph_enabled: bool = False
     # One extra generation call after each answer. On by default: it is small
     # against the answer it follows, and it surfaces connections an analyst
@@ -45,6 +70,13 @@ class ProjectSettings(EmbeddingRateSettings):
     conversation_window: int = 3
     storage_backend: str = 'sqlite'
     cost_ceiling_usd: Optional[float] = None
+
+    def __post_init__(self):
+        super().__post_init__()
+        for name in GRAPH_MODEL_FIELDS:
+            if not isinstance(getattr(self, name), str):
+                raise ValueError(f'{name} must be text.')
+        graph_model_settings(self)
 
     # build from a parsed mapping
     @classmethod

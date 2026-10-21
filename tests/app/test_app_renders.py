@@ -113,8 +113,73 @@ class TestTheScriptRuns:
         app = run()
 
         assert app.sidebar.radio[0].options == [
-            'Projects', 'Material', 'Ask', 'Settings'
+            'Projects', 'Material', 'Ask', 'Graph', 'Settings'
         ]
+
+
+class TestGraphStatus:
+    def test_settings_summary_routes_rejected_evidence_details_to_graph(self, project):
+        from osintgpt.graph import ExtractionOptions, build_graph
+        from osintgpt.ingestion import Corpus
+
+        project = project.with_settings(graph_enabled=True)
+        project.save()
+        (project.paths.root / 'a.md').write_text('Alpha funds Beta.')
+        Corpus.load(project.paths.sources).register('a.md')
+
+        class Generator:
+            def generate(self, *args):
+                return ('{"entities":[{"name":"Alpha"},{"name":"Beta"}],"edges":['
+                        '{"source":"Alpha","target":"Beta","relation":"funds","evidence":"Invented."}]}')
+
+        build_graph(project, Generator(), options=ExtractionOptions(repair_quotes=False))
+        app = run(project, **{VIEW: 'Settings'})
+        assert not app.exception
+        captions = ' '.join(item.value for item in app.caption)
+        assert 'Relationship graph: complete with gaps' in captions
+        assert 'available in Graph' in captions
+        assert 'graph rejected --json' not in captions
+        app = run(project, **{VIEW: 'Graph'})
+        assert not app.exception
+        captions = ' '.join(item.value for item in app.caption)
+        assert '1 relationships and 0 entities rejected' in captions
+        assert 'graph rejected --json' in captions
+
+    def test_unused_graph_status_does_not_create_graph(self, project):
+        app = run(project, **{VIEW: 'Settings'})
+        assert not app.exception
+        assert any('Relationship graph: never built' in item.value for item in app.caption)
+        assert not (project.paths.root / 'graph.sqlite').exists()
+
+    def test_settings_shows_empty_completed_summary_and_graph_shows_call_counts(self, project, monkeypatch):
+        from osintgpt.graph import build_graph
+        from osintgpt.ingestion import Corpus
+
+        project = project.with_settings(graph_enabled=True)
+        project.save()
+        (project.paths.root / 'large.md').write_text('x' * 100000)
+        Corpus.load(project.paths.sources).register('large.md')
+
+        class Generator:
+            def generate(self, *args):
+                return '{"entities": [], "edges": []}'
+
+        report = build_graph(project, Generator())
+
+        def forbidden(*args, **kwargs):
+            raise AssertionError('Settings must not build a provider')
+
+        monkeypatch.setattr('osintgpt.app.session.build_generation_provider', forbidden)
+        app = run(project, **{VIEW: 'Settings'})
+        assert not app.exception
+        captions = ' '.join(item.value for item in app.caption)
+        assert 'Relationship graph: complete' in captions
+        assert 'available in Graph' in captions
+        app = run(project, **{VIEW: 'Graph'})
+        assert not app.exception
+        captions = ' '.join(item.value for item in app.caption)
+        assert f'{report.calls}/{report.calls} windows; {report.calls} generation calls' in captions
+        assert 'Recorded token usage or cost is incomplete' in captions
 
 
 class TestTheConversationSidebar:

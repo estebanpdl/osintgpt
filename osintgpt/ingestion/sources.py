@@ -21,7 +21,7 @@ from .documents import FieldMapping
 from .loaders import READABLE_SUFFIXES
 
 # import osintgpt projects
-from osintgpt.projects.paths import CANON_DIR
+from osintgpt.projects.paths import CANON_DIR, EXTRACTS_DIR
 from osintgpt.projects.toml_io import read_toml, write_toml
 
 # A folder registration should not be able to swallow a home directory by
@@ -60,7 +60,7 @@ class Source:
         return not Path(self.path).suffix
 
     # what this source covers on disk
-    def resolve(self, root: Union[str, Path]) -> List[Path]:
+    def resolve(self, root: Union[str, Path], *, watch=None) -> List[Path]:
         '''
         Files this source covers, relative to a project root.
 
@@ -72,20 +72,28 @@ class Source:
         Args:
             root (Union[str, Path]): Project root, or the directory the \
                 relative path is measured from.
+            watch: Optional observer for paths/directories governing membership.
 
         Returns:
             List[Path]: Existing files, sorted, capped at MAX_FOLDER_FILES.
         '''
         target = Path(root) / self.path
+        snapshots = (Path(root) / EXTRACTS_DIR / 'text').resolve()
+        if watch is not None:
+            watch(target)
 
         if target.is_file():
-            return [target]
+            return [] if target.resolve().is_relative_to(snapshots) else [target]
 
         if not target.is_dir():
             return []
 
         found: List[Path] = []
         for candidate in sorted(target.rglob('*')):
+            if candidate.resolve().is_relative_to(snapshots):
+                continue
+            if watch is not None and (candidate.is_dir() or candidate.is_symlink()):
+                watch(candidate)
             if len(found) >= MAX_FOLDER_FILES:
                 break
             if not candidate.is_file():
@@ -266,7 +274,7 @@ class Corpus:
 
     # the source governing every covered file
     def mappings(
-        self, root: Union[str, Path]
+        self, root: Union[str, Path], *, watch=None
     ) -> Dict[Path, FieldMapping]:
         '''
         The field roles that apply to each file the corpus covers.
@@ -290,8 +298,10 @@ class Corpus:
         direct: set = set()
 
         for source in self._index_sources():
+            if watch is not None:
+                watch(Path(root, source.path))
             target = Path(root, source.path).resolve()
-            for path in source.resolve(root):
+            for path in source.resolve(root, **({'watch': watch} if watch is not None else {})):
                 covered = path.resolve()
                 if covered == target:
                     chosen[covered] = source.mapping

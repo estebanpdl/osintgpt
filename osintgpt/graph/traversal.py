@@ -1,239 +1,165 @@
-# -*- coding: utf-8 -*-
+'''Bounded, directed traversal of selected identities through indexed adjacency reads.'''
 
-# =================================================================================
-# osintgpt
-#
-# Author: @estebanpdl
-#
-# File: traversal.py
-# Description: Walking the edge set in process. A project graph is small
-#   enough that loading it whole beats querying it recursively.
-# =================================================================================
-
-# import submodules
 from collections import deque
 from dataclasses import dataclass, field
 
-# type hints
-from typing import Dict, List, Optional, Sequence, Tuple
+from .records import Edge, merge_key
 
-from .store import Edge, GraphStore, merge_key
-
-# How far a path search will look. Beyond this the connection is too indirect
-# to mean anything an analyst would act on, and the search cost grows with the
-# branching factor.
 MAX_DEPTH = 4
+MAX_RESULTS = 60
+MAX_NODES = 256
+MAX_EDGES = 2000
+DIRECTIONS = ('incoming', 'outgoing', 'connectivity')
 
 
-# GraphHit class
+def bounded_integer(value, name, low, high):
+    if type(value) is not int or not low <= value <= high:
+        raise ValueError(f'{name} must be an integer from {low} to {high}.')
+    return value
+
+
 @dataclass(frozen=True)
 class GraphHit:
-    '''
-    One edge, carrying the document and sentence that assert it.
-    '''
     edge: Edge
-    # How many steps from the entity that was asked about.
     depth: int = 1
+    from_id: str = ''
+    to_id: str = ''
 
     @property
-    def ref(self) -> str:
+    def ref(self):
         return self.edge.ref
 
     @property
-    def evidence(self) -> str:
+    def evidence(self):
         return self.edge.evidence
 
+    @property
+    def against_direction(self):
+        return bool(self.from_id and self.from_id != endpoint(self.edge, 'source'))
 
-# GraphPath class
+
 @dataclass(frozen=True)
 class GraphPath:
-    '''
-    A chain of claims connecting two entities.
-    '''
-    edges: List[Edge] = field(default_factory=list)
+    edges: list = field(default_factory=list)
+    steps: list = field(default_factory=list)
 
     @property
-    def length(self) -> int:
+    def length(self):
         return len(self.edges)
 
     @property
-    def refs(self) -> List[str]:
-        '''
-        Returns:
-            List[str]: Documents the path rests on, in order, deduplicated. \
-                A path is only as good as its weakest link, and this is what \
-                a reader checks.
-        '''
-        seen = []
-        for edge in self.edges:
-            if edge.ref not in seen:
-                seen.append(edge.ref)
+    def refs(self):
+        return list(dict.fromkeys(edge.ref for edge in self.edges))
 
-        return seen
-
-    def __len__(self) -> int:
+    def __len__(self):
         return len(self.edges)
 
 
-# edges touching an entity
-def neighbors(
-    store: GraphStore,
-    entity: str,
-    limit: int = 30,
-    refs: Optional[Sequence[str]] = None
-) -> List[GraphHit]:
-    '''
-    Every claim with this entity at either end.
+@dataclass
+class Traversal:
+    hits: list = field(default_factory=list)
+    path: GraphPath | None = None
+    reasons: list = field(default_factory=list)
+    nodes_visited: int = 0
+    edges_examined: int = 0
 
-    Matching is exact on the merge key, or substring: an analyst asking about
-    a surname should find the person, and asking about "Nimbus" should find
-    "Project Nimbus".
+    @property
+    def truncated(self):
+        return bool(self.reasons)
 
-    Args:
-        store (GraphStore): The project's graph.
-        entity (str): Name to look for.
-        limit (int): Most hits to return.
-        refs (Sequence[str], optional): Restrict to these documents.
-
-    Returns:
-        List[GraphHit]: Claims touching the entity.
-    '''
-    key = merge_key(entity)
-    if not key:
-        return []
-
-    hits = [
-        GraphHit(edge=edge)
-        for edge in store.edges(refs)
-        if _matches(edge.source, key) or _matches(edge.target, key)
-    ]
-
-    return hits[:limit]
+    def stop(self, reason):
+        if reason not in self.reasons:
+            self.reasons.append(reason)
 
 
-# the shortest chain of claims between two entities
-def path_between(
-    store: GraphStore,
-    source: str,
-    target: str,
-    max_depth: int = MAX_DEPTH,
-    refs: Optional[Sequence[str]] = None
-) -> Optional[GraphPath]:
-    '''
-    Answer "how is A connected to B" with the claims that connect them.
+class AmbiguousEntity(ValueError):
+    def __init__(self, query, candidates, truncated=False):
+        self.query, self.candidates, self.truncated = query, candidates, truncated
+        super().__init__('Ambiguous entity name; select an ID: ' + ', '.join(
+            f'{entity.key} ({entity.name})' for entity in candidates))
 
-    Breadth-first over the loaded edge set, so the chain returned is the
-    shortest one — the fewest assertions a reader has to accept.
 
-    Args:
-        store (GraphStore): The project's graph.
-        source (str): Where to start.
-        target (str): Where to end.
-        max_depth (int): Longest chain to consider.
-        refs (Sequence[str], optional): Restrict to these documents.
+def matching_entities(store, value):
+    return store.entity_candidates(value)[0]
 
-    Returns:
-        Optional[GraphPath]: The shortest path, or None when the graph does \
-            not connect them within `max_depth`. None means the documents do \
-            not assert a connection, not that there is none.
-    '''
-    start, goal = merge_key(source), merge_key(target)
+
+def resolve_entity(store, value):
+    candidates = matching_entities(store, value)
+    if len(candidates) > 1:
+        raise AmbiguousEntity(value, candidates[:20], len(candidates) > 20)
+    return candidates[0].key if candidates else None
+
+
+def endpoint(edge, side):
+    return getattr(edge, side + '_id') or merge_key(getattr(edge, side))
+
+
+def walk(store, start, *, goal=None, direction='connectivity', depth=2, limit=20,
+         refs=None, max_nodes=MAX_NODES, max_edges=MAX_EDGES):
+    if direction not in DIRECTIONS:
+        raise ValueError('Direction must be incoming, outgoing, or connectivity.')
+    bounded_integer(depth, 'depth', 1, MAX_DEPTH)
+    bounded_integer(limit, 'limit', 1, MAX_RESULTS)
+    bounded_integer(max_nodes, 'max_nodes', 1, MAX_NODES)
+    bounded_integer(max_edges, 'max_edges', 1, MAX_EDGES)
+    result = Traversal(nodes_visited=1)
+    if start == goal:
+        result.path = GraphPath()
+        return result
+    queue, visited, seen_edges = deque([(start, 0, [])]), {start}, set()
+    while queue:
+        node, level, chain = queue.popleft()
+        if level >= depth:
+            result.stop('depth_boundary')
+            continue
+        remaining = max_edges - result.edges_examined
+        if remaining <= 0:
+            result.stop('edge_limit')
+            break
+        edges = store.adjacent(node, direction, refs, limit=remaining + 1)
+        for edge in edges[:remaining]:
+            result.edges_examined += 1
+            other = endpoint(edge, 'target') if endpoint(edge, 'source') == node else endpoint(edge, 'source')
+            step = GraphHit(edge, level + 1, node, other)
+            if other not in visited and len(visited) == max_nodes:
+                result.stop('node_limit')
+                return result
+            if goal is not None:
+                if other == goal:
+                    steps = chain + [step]
+                    if len(steps) > limit:
+                        result.stop('result_limit')
+                        return result
+                    result.path = GraphPath([hit.edge for hit in steps], steps)
+                    result.nodes_visited = len(visited | {other})
+                    return result
+            elif edge.assertion_id not in seen_edges:
+                if len(result.hits) == limit:
+                    result.stop('result_limit')
+                    return result
+                seen_edges.add(edge.assertion_id)
+                result.hits.append(step)
+            if other not in visited:
+                visited.add(other)
+                result.nodes_visited = len(visited)
+                queue.append((other, level + 1, chain + [step] if goal is not None else []))
+        if len(edges) > remaining:
+            result.stop('edge_limit')
+            break
+    return result
+
+
+def neighbors(store, entity, limit=30, refs=None, *, direction='connectivity'):
+    return neighborhood(store, entity, depth=1, limit=limit, refs=refs, direction=direction)
+
+
+def neighborhood(store, entity, depth=2, limit=60, refs=None, *, direction='connectivity'):
+    start = resolve_entity(store, entity)
+    return walk(store, start, direction=direction, depth=depth, limit=limit, refs=refs).hits if start else []
+
+
+def path_between(store, source, target, max_depth=MAX_DEPTH, refs=None, *, direction='connectivity'):
+    start, goal = resolve_entity(store, source), resolve_entity(store, target)
     if not start or not goal:
         return None
-
-    adjacency = _adjacency(store.edges(refs))
-
-    if start == goal:
-        return GraphPath()
-
-    queue = deque([(start, [])])
-    seen = {start}
-
-    while queue:
-        node, chain = queue.popleft()
-        if len(chain) >= max_depth:
-            continue
-
-        for neighbor, edge in adjacency.get(node, []):
-            if neighbor in seen:
-                continue
-            extended = chain + [edge]
-            if neighbor == goal:
-                return GraphPath(edges=extended)
-            seen.add(neighbor)
-            queue.append((neighbor, extended))
-
-    return None
-
-
-# everything within a few steps of an entity
-def neighborhood(
-    store: GraphStore,
-    entity: str,
-    depth: int = 2,
-    limit: int = 60,
-    refs: Optional[Sequence[str]] = None
-) -> List[GraphHit]:
-    '''
-    Edges reachable from an entity, nearest first.
-
-    Args:
-        store (GraphStore): The project's graph.
-        entity (str): Where to start.
-        depth (int): How many steps out.
-        limit (int): Most hits to return.
-        refs (Sequence[str], optional): Restrict to these documents.
-
-    Returns:
-        List[GraphHit]: Claims, each carrying how far out it was found.
-    '''
-    key = merge_key(entity)
-    if not key:
-        return []
-
-    adjacency = _adjacency(store.edges(refs))
-    hits: List[GraphHit] = []
-    seen_edges = set()
-    frontier = {node for node in adjacency if _matches_key(node, key)}
-    visited = set(frontier)
-
-    for step in range(1, depth + 1):
-        next_frontier = set()
-        for node in frontier:
-            for neighbor, edge in adjacency.get(node, []):
-                marker = (edge.source, edge.relation, edge.target, edge.ref)
-                if marker not in seen_edges:
-                    seen_edges.add(marker)
-                    hits.append(GraphHit(edge=edge, depth=step))
-                if neighbor not in visited:
-                    visited.add(neighbor)
-                    next_frontier.add(neighbor)
-        frontier = next_frontier
-        if not frontier or len(hits) >= limit:
-            break
-
-    return hits[:limit]
-
-
-def _adjacency(edges: Sequence[Edge]) -> Dict[str, List[Tuple[str, Edge]]]:
-    '''
-    Both directions. A claim that A funded B connects the two whichever end
-    the question starts from.
-    '''
-    graph: Dict[str, List[Tuple[str, Edge]]] = {}
-    for edge in edges:
-        source, target = merge_key(edge.source), merge_key(edge.target)
-        if not source or not target:
-            continue
-        graph.setdefault(source, []).append((target, edge))
-        graph.setdefault(target, []).append((source, edge))
-
-    return graph
-
-
-def _matches(name: str, key: str) -> bool:
-    return _matches_key(merge_key(name), key)
-
-
-def _matches_key(candidate: str, key: str) -> bool:
-    return candidate == key or key in candidate
+    return walk(store, start, goal=goal, direction=direction, depth=max_depth, refs=refs).path

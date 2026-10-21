@@ -12,9 +12,12 @@
 
 # import submodules
 from dataclasses import dataclass, field
+from functools import cached_property
 
 # type hints
 from typing import Any, Dict, List, Optional, Tuple
+
+from .provenance import TextSpan, _normalized_map
 
 # Separates a document's file from the record inside it, so a row keeps a ref
 # that survives a re-index: 'data/records.csv#4821'.
@@ -46,6 +49,17 @@ class Document:
     # text, because a question about an account has to reach the records it
     # wrote and not only the ones that mention it.
     author: str = ''
+    spans: Tuple[TextSpan, ...] = ()
+    text_format: str = ''
+
+    @cached_property
+    def quote_index(self):
+        return _normalized_map(self.text)
+
+    @cached_property
+    def presentation_quote_index(self):
+        from .quotation_projection import projection_index
+        return projection_index(self)
 
 
 # FieldMapping class

@@ -1,0 +1,56 @@
+.diagram { color: var(--st-text-color, #182131); font-family: var(--st-font, sans-serif); }
+.diagram:fullscreen { box-sizing: border-box; width: 100vw; height: 100dvh; padding: 1rem;
+  display: flex; flex-direction: column; background: var(--st-background-color, white); overflow: auto; }
+.graph-viewport { position: relative; height: 560px; }
+.diagram:fullscreen .graph-viewport { flex: 1; min-height: 240px; }
+.diagram.table-view svg.graph, .diagram.table-view .legend { display: none; }
+.toolbar { position: absolute; top: 10px; right: 10px; z-index: 2; display: flex; gap: 3px;
+  padding: 3px; border-radius: .4rem; background: var(--st-background-color, white); box-shadow: 0 0 0 1px #8390a455; }
+.toolbar button, .diagram-data button { font: inherit; color: inherit; background: var(--st-secondary-background-color, #f0f2f6);
+  border: 1px solid #8390a4; border-radius: .5rem; padding: .4rem .75rem; cursor: pointer; }
+.toolbar button { position: relative; display: grid; place-items: center; width: 32px; height: 32px;
+  padding: 5px; border: 0; border-radius: .25rem; background: transparent; }
+.toolbar button svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 1.7;
+  stroke-linecap: round; stroke-linejoin: round; }
+.toolbar button:hover { color: #a855f7; background: var(--st-secondary-background-color, #f0f2f6); }
+.toolbar button::after { content: attr(data-tooltip); position: absolute; top: calc(100% + 8px); right: 0;
+  white-space: nowrap; padding: .3rem .5rem; border-radius: .25rem; background: var(--st-text-color, #182131);
+  color: var(--st-background-color, white); font-size: .8rem; pointer-events: none; opacity: 0; }
+.toolbar button:hover::after, .toolbar button:focus-visible::after { opacity: 1; }
+.toolbar button:disabled { opacity: .5; cursor: default; }
+.toolbar button:focus-visible, .node:focus-visible, .claim:focus-visible { outline: 2px solid #a855f7; outline-offset: 3px; }
+.legend { position: absolute; top: 60px; right: 12px; z-index: 1; display: flex; flex-direction: column;
+  gap: .4rem; max-width: min(210px, 50%); padding: .6rem; border-radius: .4rem; font-size: .8rem;
+  background: var(--st-background-color, white); pointer-events: none; }
+.legend strong { margin-top: .25rem; }
+.legend span { display: inline-flex; align-items: center; gap: .35rem; }
+.swatch { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
+.swatch.starting { background: #a855f7; outline: 2px solid currentColor; outline-offset: 2px; }
+.swatch.other { background: #637a96; }
+.positive { --edge-color: #3b82f6; }
+.negative { --edge-color: #e39132; }
+.unknown { --edge-color: #8390a4; }
+.swatch.polarity { background: var(--edge-color); }
+svg.graph { display: block; box-sizing: border-box; width: 100%; height: 100%; background: var(--st-background-color, white);
+  border: 1px solid #8390a455; border-radius: .5rem; touch-action: none; user-select: none; cursor: grab; }
+svg.graph.moving { cursor: grabbing; }
+.edge { fill: none; stroke: var(--edge-color); stroke-width: 2; }
+.arrow { fill: var(--edge-color); }
+.claim { fill: var(--edge-color); stroke: var(--st-background-color, white); stroke-width: 2; cursor: pointer; }
+.claim.selected { stroke: var(--st-text-color, #182131); stroke-width: 3; }
+.node { cursor: grab; }
+.node circle { fill: #637a96; stroke: var(--st-background-color, white); stroke-width: 2; }
+.node.starting circle { fill: #a855f7; stroke: var(--st-text-color, #182131); stroke-width: 3; }
+.node text { fill: var(--st-text-color, #182131); font-size: 12px; text-anchor: middle;
+  paint-order: stroke; stroke: var(--st-background-color, white); stroke-width: 3px; stroke-linejoin: round; }
+.layout-status { position: absolute; bottom: 8px; left: 10px; z-index: 1; max-width: calc(100% - 20px);
+  padding: .2rem .4rem; border-radius: .25rem; font-size: .8rem; pointer-events: none;
+  background: var(--st-background-color, white); }
+.diagram-data { box-sizing: border-box; height: 100%; padding: 50px 10px 35px; overflow: auto;
+  border: 1px solid #8390a455; border-radius: .5rem; }
+.diagram-data table { width: 100%; border-collapse: collapse; font-size: .85rem; }
+.diagram-data th, .diagram-data td { padding: .5rem; border: 1px solid #8390a455; text-align: start; }
+.diagram-data td { min-width: 100px; max-width: 420px; overflow-wrap: anywhere; }
+.diagram-data th { position: sticky; top: 0; background: var(--st-secondary-background-color, #f0f2f6); }
+.diagram-data tr.selected { background: var(--st-secondary-background-color, #f0f2f6); }
+.diagram-data caption { text-align: start; padding: .5rem 0; font-weight: bold; }

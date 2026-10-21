@@ -97,7 +97,7 @@ include = ["osintgpt*"]
 
 [tool.setuptools.package-data]
 "osintgpt.prompts" = ["templates/*.md.j2", "templates/README.md"]
-"osintgpt.app" = ["assets/*.png"]
+"osintgpt.app" = ["assets/*.png", "assets/*.mjs", "assets/*.css"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

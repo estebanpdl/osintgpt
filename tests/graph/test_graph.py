@@ -44,10 +44,12 @@ class ScriptedGenerator(GenerationProvider):
         self.error = error
         self.calls = 0
         self.prompts = []
+        self.systems = []
 
     def generate(self, system, user, **kwargs):
         self.calls += 1
-        self.prompts.append(system)
+        self.prompts.append(user)
+        self.systems.append(system)
         if self.error:
             raise self.error
 
@@ -55,9 +57,13 @@ class ScriptedGenerator(GenerationProvider):
 
 
 def reply(entities=(), edges=()):
+    declared = dict(entities)
+    for source, _, target, _ in edges:
+        declared.setdefault(source, '')
+        declared.setdefault(target, '')
     return json.dumps({
         'entities': [
-            {'name': n, 'type': t} for n, t in entities
+            {'name': n, 'type': t} for n, t in declared.items()
         ],
         'edges': [
             {'source': s, 'relation': r, 'target': t, 'evidence': e}
@@ -86,7 +92,7 @@ class TestEvidenceIsRequired:
 
     def test_an_edge_with_no_evidence_is_dropped(self):
         generator = ScriptedGenerator(json.dumps({
-            'entities': [{'name': 'Alpha', 'type': 'org'}],
+            'entities': [{'name': 'Alpha', 'type': 'org'}, {'name': 'Beta'}],
             'edges': [
                 {'source': 'Alpha', 'relation': 'funded', 'target': 'Beta',
                  'evidence': 'Alpha funded Beta in March.'},
@@ -94,7 +100,7 @@ class TestEvidenceIsRequired:
             ]
         }))
 
-        result = extract_document(generator, 'a.md', 'text')
+        result = extract_document(generator, 'a.md', 'Alpha funded Beta in March.')
 
         assert len(result.edges) == 1
         assert result.edges[0].target == 'Beta'
@@ -125,7 +131,7 @@ class TestEvidenceIsRequired:
     def test_the_prompt_asks_for_the_sentence_and_forbids_inference(self):
         generator = ScriptedGenerator()
         extract_document(generator, 'a.md', 'text')
-        system = generator.prompts[0].lower()
+        system = generator.systems[0].lower()
 
         assert 'evidence' in system
         assert 'do not infer' in system
@@ -159,7 +165,7 @@ class TestNeverBuiltAsASideEffect:
     def test_the_refusal_says_what_it_would_cost(self, project):
         report = build_graph(project, ScriptedGenerator())
 
-        assert 'one generation call per document' in report.refused
+        assert 'generation calls per document window' in report.refused
 
     def test_graph_is_off_by_default(self, project):
         assert project.settings.graph_enabled is False
@@ -242,9 +248,10 @@ class TestIncremental:
         assert report.skipped == 1
 
     def test_rebuilding_forgets_what_a_document_said_before(self, built):
+        (built.paths.root / 'material' / 'a.md').write_text('Alpha no longer funded Beta.')
         generator = ScriptedGenerator(
             reply([('Alpha', 'org')],
-                  [('Alpha', 'no longer funded', 'Beta', 'Corrected.')])
+                  [('Alpha', 'no longer funded', 'Beta', 'Alpha no longer funded Beta.')])
         )
 
         build_graph(built, generator, rebuild=True)
@@ -253,51 +260,6 @@ class TestIncremental:
             relations = [e.relation for e in graph.edges()]
 
         assert relations == ['no longer funded']
-
-
-class TestStore:
-    def test_an_identical_claim_is_stored_once(self, store):
-        store.add([], [edge('A', 'B')])
-        store.add([], [edge('A', 'B')])
-
-        assert store.edge_count == 1
-
-    def test_the_same_claim_from_two_documents_is_two_claims(self, store):
-        '''
-        Two sources asserting the same thing is corroboration, and collapsing
-        them would hide it.
-        '''
-        store.add([], [edge('A', 'B', ref='one.md'),
-                       edge('A', 'B', ref='two.md')])
-
-        assert store.edge_count == 2
-
-    def test_an_entity_keeps_its_first_spelling(self, store):
-        store.add([Entity(key=merge_key('Alpha Corp'), name='Alpha Corp',
-                          type='org', mentions=1)], [])
-        store.add([Entity(key=merge_key('alpha corp'), name='alpha corp',
-                          type='', mentions=1)], [])
-
-        entities = store.entities()
-
-        assert len(entities) == 1
-        assert entities[0].name == 'Alpha Corp'
-        assert entities[0].mentions == 2
-
-    def test_forgetting_a_document_drops_its_claims_only(self, store):
-        store.add([], [edge('A', 'B', ref='one.md'),
-                       edge('C', 'D', ref='two.md')])
-
-        assert store.forget(['one.md']) == 1
-        assert [e.ref for e in store.edges()] == ['two.md']
-
-    def test_an_empty_graph_is_not_built(self, store):
-        assert store.is_built is False
-
-    def test_it_becomes_built_once_something_is_stored(self, store):
-        store.add([], [edge('A', 'B')])
-
-        assert store.is_built is True
 
 
 class TestMergeKeys:
@@ -397,20 +359,17 @@ class TestWholeDocuments:
 
     def test_a_long_document_is_windowed(self):
         generator = ScriptedGenerator()
-        extract_document(generator, 'a.md', 'word ' * 20_000)
+        extract_document(generator, 'a.md', 'Alpha Corp. ' + 'word ' * 20_000)
 
         assert generator.calls > 1
 
     def test_later_windows_carry_the_names_already_found(self):
-        '''
-        Chunking breaks coreference. Carrying the entity list forward is what
-        stops the same organization becoming two nodes across a boundary.
-        '''
+        '''Source-backed candidates help the model resolve references across windows.'''
         generator = ScriptedGenerator(
             reply([('Alpha Corp', 'org')]),
             reply([('Alpha Corp', 'org')])
         )
-        extract_document(generator, 'a.md', 'word ' * 20_000)
+        extract_document(generator, 'a.md', 'Alpha Corp. ' + 'word ' * 20_000)
 
         assert 'Alpha Corp' in generator.prompts[1]
 
@@ -433,77 +392,22 @@ class TestFailures:
         assert not result.ok
         assert 'provider refused' in result.problem
 
-    def test_an_unparseable_reply_yields_nothing_rather_than_raising(self):
+    def test_an_unparseable_reply_reports_failure(self):
         result = extract_document(ScriptedGenerator('not json'), 'a.md', 'x')
 
-        assert result.ok
+        assert not result.ok
+        assert result.accounting.invalid_responses == 2
         assert result.edges == []
 
     def test_a_reply_that_is_not_an_object_yields_nothing(self):
         result = extract_document(ScriptedGenerator('[1, 2]'), 'a.md', 'x')
 
         assert result.edges == []
+        assert not result.ok
 
-    def test_json_wrapped_in_prose_is_still_read(self):
+    def test_json_in_a_code_fence_is_read(self):
         generator = ScriptedGenerator(
-            'Here you go:\n```json\n' +
-            reply([('Alpha', 'org')]) + '\n```\nDone.'
+            '```json\n' + reply([('Alpha', 'org')]) + '\n```'
         )
 
-        assert extract_document(generator, 'a.md', 'x').entities
-
-
-class TestEndpointNames:
-    def test_an_endpoint_keeps_the_form_the_document_used(self, store):
-        '''
-        Without recording endpoints as entities, a name the extraction did not
-        list separately comes back as its merge key — an analyst reads
-        `beta ltd` where the document said `Beta Ltd`.
-        '''
-        store.add([], [edge('Alpha Corp', 'Beta Ltd')])
-
-        stored = store.edges()[0]
-
-        assert stored.source == 'Alpha Corp'
-        assert stored.target == 'Beta Ltd'
-
-    def test_an_endpoint_does_not_inflate_mention_counts(self, store):
-        '''
-        Appearing in a relationship is not the same as being counted as a
-        mention, and conflating them would make the most-mentioned list wrong.
-        '''
-        store.add([], [edge('Alpha', 'Beta')])
-
-        assert {e.name: e.mentions for e in store.entities()} == {
-            'Alpha': 0, 'Beta': 0
-        }
-
-    def test_an_extracted_entity_keeps_its_own_count(self, store):
-        store.add(
-            [Entity(key=merge_key('Alpha'), name='Alpha', type='org',
-                    mentions=5)],
-            [edge('Alpha', 'Beta')]
-        )
-
-        counts = {e.name: e.mentions for e in store.entities()}
-
-        assert counts['Alpha'] == 5
-
-    def test_an_endpoint_does_not_overwrite_a_known_type(self, store):
-        store.add(
-            [Entity(key=merge_key('Alpha'), name='Alpha', type='organization',
-                    mentions=1)],
-            []
-        )
-        store.add([], [edge('Alpha', 'Beta')])
-
-        types = {e.name: e.type for e in store.entities()}
-
-        assert types['Alpha'] == 'organization'
-
-    def test_endpoints_in_another_script_keep_their_form(self, store):
-        store.add([], [edge('Альфа', 'Бета')])
-
-        stored = store.edges()[0]
-
-        assert (stored.source, stored.target) == ('Альфа', 'Бета')
+        assert extract_document(generator, 'a.md', 'Alpha').entities

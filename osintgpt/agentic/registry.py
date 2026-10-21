@@ -27,6 +27,8 @@ from .tools import (
     exact_search,
     fetch_source,
     graph_query,
+    graph_entities,
+    graph_evidence,
     list_documents,
     semantic_search,
     snowball_search
@@ -100,16 +102,48 @@ TOOL_SPECS: List[ToolSpec] = [
         'graph_query',
         'Ask what the documents assert about an entity, or how two entities '
         'are connected. Every claim carries the document and sentence that '
-        'assert it. Not every project has a graph; the tool says so if not.',
+        'assert it. Preserve relation_polarity, assertion status, attribution, and dates; '
+        'a path is a chain of reported claims, not proof of an affirmative connection. '
+        'Discover identities with graph_entities first when needed. Ambiguity must be resolved before traversal. '
+        'Connectivity may traverse against an assertion without reversing it. Cite every supporting path link. '
+        'Read surrounding source text with graph_evidence. Check graph status and truncation; no path is not proof of absence.',
         properties={
-            'entity': dict(_STRING, description='The name to ask about.'),
+            'entity': dict(_STRING, description='The name, alias, or persistent entity ID to ask about.'),
             'target': dict(
                 _STRING,
                 description='Given one, returns the chain connecting them.'
             ),
-            'limit': _INTEGER
+            'limit': dict(_INTEGER, minimum=1, maximum=60),
+            'direction': dict(_STRING, enum=['incoming', 'outgoing', 'connectivity']),
+            'depth': dict(_INTEGER, minimum=1, maximum=4),
+            'max_bytes': dict(_INTEGER, minimum=4096, maximum=65536),
+            'refs': {'type': 'array', 'items': _STRING,
+                     'description': 'Omit for all sources. An empty list selects no sources.'}
         },
         required=['entity']
+    ),
+    tool_spec(
+        'graph_entities',
+        'Find graph identities by ID, name, or alias in the source language. Namesakes stay separate. '
+        'Use candidate types, descriptions, identifiers and source references to choose a persistent ID. '
+        'If the operator has not supplied enough context to distinguish candidates, ask for clarification.',
+        properties={'query': _STRING, 'limit': dict(_INTEGER, minimum=1, maximum=60),
+                    'refs': {'type': 'array', 'items': _STRING,
+                             'description': 'Source scope for relationship counts. Omit for all; empty means none. Identities remain discoverable.'},
+                    'max_bytes': dict(_INTEGER, minimum=4096, maximum=65536)}, required=['query']
+    ),
+    tool_spec(
+        'graph_evidence',
+        'Read surrounding source text for a stored assertion, using its saved text version and quotation location. '
+        'quote_index selects one supporting quotation; occurrence selects one matching location. '
+        'If next_offset is present, continue reading. Do not treat an incomplete quote as the whole claim. '
+        'Verification establishes textual support, not truth; check current-source changes.',
+        properties={'assertion_id': _STRING, 'quote_index': dict(_INTEGER, minimum=0, maximum=199),
+                    'occurrence': dict(_INTEGER, minimum=0, maximum=10000),
+                    'context_chars': dict(_INTEGER, minimum=0, maximum=4000),
+                    'offset': dict(_INTEGER, minimum=0, maximum=1000000),
+                    'limit_chars': dict(_INTEGER, minimum=1, maximum=8000),
+                    'max_bytes': dict(_INTEGER, minimum=4096, maximum=65536)}, required=['assertion_id']
     ),
     tool_spec(
         'fetch_source',
@@ -119,7 +153,10 @@ TOOL_SPECS: List[ToolSpec] = [
         properties={
             'ref': dict(_STRING, description='The document, as searches name it.'),
             'offset': dict(_INTEGER, description='First line, zero-based.'),
-            'limit': dict(_INTEGER, description='Lines to return.')
+            'limit': dict(_INTEGER, description='Lines to return.'),
+            'source_version': dict(_STRING, description=(
+                'Optional source_version from passage or graph provenance. '
+                'Reads the exact saved text and reports whether the current file changed.'))
         },
         required=['ref']
     )
@@ -131,10 +168,19 @@ _HANDLERS = {
     'list_documents': list_documents,
     'snowball': snowball_search,
     'graph_query': graph_query,
+    'graph_entities': graph_entities,
+    'graph_evidence': graph_evidence,
     'fetch_source': fetch_source
 }
 
 TOOL_NAMES = [spec.name for spec in TOOL_SPECS]
+
+
+def tools_for(project):
+    return [
+        spec for spec in TOOL_SPECS
+        if not spec.name.startswith('graph_') or project.settings.graph_enabled
+    ]
 
 
 # run one tool the model asked for

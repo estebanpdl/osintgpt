@@ -1,0 +1,800 @@
+{
+  "format_version": 1,
+  "name": "Fictional graph extraction diagnostic corpus",
+  "annotation_status": "draft_pending_independent_review",
+  "scope": "Synthetic diagnostic coverage, not a representative operator corpus. Relation equivalences and source annotations require review before quality claims. Scan text is preseeded to isolate downstream graph processing; OCR quality is not measured.",
+  "cases": [
+    {
+      "id": "en-funding",
+      "language": "en",
+      "tags": [
+        "dates",
+        "positive"
+      ],
+      "storage": "text",
+      "ref": "en-funding.md",
+      "text": "Aster funded Beacon in 2024.",
+      "entities": [
+        {
+          "id": "a",
+          "names": [
+            "Aster"
+          ],
+          "anchors": [
+            "Aster"
+          ]
+        },
+        {
+          "id": "b",
+          "names": [
+            "Beacon"
+          ],
+          "anchors": [
+            "Beacon"
+          ]
+        }
+      ],
+      "edges": [
+        {
+          "source": "a",
+          "target": "b",
+          "relations": [
+            "funded",
+            "funds",
+            "financed"
+          ],
+          "evidence": [
+            "Aster funded Beacon in 2024."
+          ],
+          "qualifiers": {
+            "relation_polarity": "positive",
+            "assertion": "stated",
+            "attributed_to": "",
+            "event_time": "2024",
+            "statement_time": ""
+          }
+        }
+      ]
+    },
+    {
+      "id": "es-denial",
+      "language": "es",
+      "tags": [
+        "negation",
+        "dates"
+      ],
+      "storage": "text",
+      "ref": "es-denial.md",
+      "text": "Nube no financió a Sol en 2023.",
+      "entities": [
+        {
+          "id": "n",
+          "names": [
+            "Nube"
+          ],
+          "anchors": [
+            "Nube"
+          ]
+        },
+        {
+          "id": "s",
+          "names": [
+            "Sol"
+          ],
+          "anchors": [
+            "Sol"
+          ]
+        }
+      ],
+      "edges": [
+        {
+          "source": "n",
+          "target": "s",
+          "relations": [
+            "financió",
+            "financia",
+            "funds",
+            "finances"
+          ],
+          "evidence": [
+            "Nube no financió a Sol en 2023."
+          ],
+          "qualifiers": {
+            "relation_polarity": "negative",
+            "assertion": "stated",
+            "attributed_to": "",
+            "event_time": "2023",
+            "statement_time": ""
+          }
+        }
+      ]
+    },
+    {
+      "id": "en-allegation",
+      "language": "en",
+      "tags": [
+        "allegation",
+        "attribution"
+      ],
+      "storage": "text",
+      "ref": "en-allegation.md",
+      "text": "Witness Vega alleges that Delta funded Echo.",
+      "entities": [
+        {
+          "id": "d",
+          "names": [
+            "Delta"
+          ],
+          "anchors": [
+            "Delta"
+          ]
+        },
+        {
+          "id": "e",
+          "names": [
+            "Echo"
+          ],
+          "anchors": [
+            "Echo"
+          ]
+        },
+        {
+          "id": "v",
+          "names": [
+            "Witness Vega"
+          ],
+          "anchors": [
+            "Witness Vega"
+          ]
+        }
+      ],
+      "edges": [
+        {
+          "source": "d",
+          "target": "e",
+          "relations": [
+            "funded",
+            "funds",
+            "finances"
+          ],
+          "evidence": [
+            "Witness Vega alleges that Delta funded Echo."
+          ],
+          "qualifiers": {
+            "relation_polarity": "positive",
+            "assertion": "alleged",
+            "attributed_to": "Witness Vega",
+            "event_time": "",
+            "statement_time": ""
+          }
+        }
+      ]
+    },
+    {
+      "id": "es-uncertain",
+      "language": "es",
+      "tags": [
+        "uncertainty"
+      ],
+      "storage": "text",
+      "ref": "es-uncertain.md",
+      "text": "Es incierto si Bruma controla Faro.",
+      "entities": [
+        {
+          "id": "b",
+          "names": [
+            "Bruma"
+          ],
+          "anchors": [
+            "Bruma"
+          ]
+        },
+        {
+          "id": "f",
+          "names": [
+            "Faro"
+          ],
+          "anchors": [
+            "Faro"
+          ]
+        }
+      ],
+      "edges": [
+        {
+          "source": "b",
+          "target": "f",
+          "relations": [
+            "controla",
+            "controls"
+          ],
+          "evidence": [
+            "Es incierto si Bruma controla Faro."
+          ],
+          "qualifiers": {
+            "relation_polarity": "positive",
+            "assertion": "uncertain",
+            "attributed_to": "",
+            "event_time": "",
+            "statement_time": ""
+          }
+        }
+      ]
+    },
+    {
+      "id": "zh-negation",
+      "language": "zh",
+      "tags": [
+        "negation",
+        "other_scripts"
+      ],
+      "storage": "text",
+      "ref": "zh-negation.md",
+      "text": "甲公司没有资助乙公司。",
+      "entities": [
+        {
+          "id": "a",
+          "names": [
+            "甲公司"
+          ],
+          "anchors": [
+            "甲公司"
+          ]
+        },
+        {
+          "id": "b",
+          "names": [
+            "乙公司"
+          ],
+          "anchors": [
+            "乙公司"
+          ]
+        }
+      ],
+      "edges": [
+        {
+          "source": "a",
+          "target": "b",
+          "relations": [
+            "资助",
+            "funds",
+            "funded"
+          ],
+          "evidence": [
+            "甲公司没有资助乙公司。"
+          ],
+          "qualifiers": {
+            "relation_polarity": "negative",
+            "assertion": "stated",
+            "attributed_to": "",
+            "event_time": "",
+            "statement_time": ""
+          }
+        }
+      ]
+    },
+    {
+      "id": "ar-negation",
+      "language": "ar",
+      "tags": [
+        "negation",
+        "other_scripts"
+      ],
+      "storage": "text",
+      "ref": "ar-negation.md",
+      "text": "ألفا لم تمول بيتا.",
+      "entities": [
+        {
+          "id": "a",
+          "names": [
+            "ألفا"
+          ],
+          "anchors": [
+            "ألفا"
+          ]
+        },
+        {
+          "id": "b",
+          "names": [
+            "بيتا"
+          ],
+          "anchors": [
+            "بيتا"
+          ]
+        }
+      ],
+      "edges": [
+        {
+          "source": "a",
+          "target": "b",
+          "relations": [
+            "تمول",
+            "مولت",
+            "funds"
+          ],
+          "evidence": [
+            "ألفا لم تمول بيتا."
+          ],
+          "qualifiers": {
+            "relation_polarity": "negative",
+            "assertion": "stated",
+            "attributed_to": "",
+            "event_time": "",
+            "statement_time": ""
+          }
+        }
+      ]
+    },
+    {
+      "id": "alias",
+      "language": "en",
+      "tags": [
+        "aliases"
+      ],
+      "storage": "text",
+      "ref": "alias.md",
+      "text": "Cedar Research, also known as CR, advises Iris. CR advises Iris.",
+      "entities": [
+        {
+          "id": "c",
+          "names": [
+            "Cedar Research",
+            "CR"
+          ],
+          "anchors": [
+            "Cedar Research, also known as CR"
+          ]
+        },
+        {
+          "id": "i",
+          "names": [
+            "Iris"
+          ],
+          "anchors": [
+            "Iris"
+          ]
+        }
+      ],
+      "edges": [
+        {
+          "source": "c",
+          "target": "i",
+          "relations": [
+            "advises",
+            "advised"
+          ],
+          "evidence": [
+            "CR advises Iris."
+          ],
+          "qualifiers": {
+            "relation_polarity": "positive",
+            "assertion": "stated",
+            "attributed_to": "",
+            "event_time": "",
+            "statement_time": ""
+          }
+        }
+      ]
+    },
+    {
+      "id": "namesakes",
+      "language": "en",
+      "tags": [
+        "identical_names"
+      ],
+      "storage": "text",
+      "ref": "namesakes.md",
+      "text": "Alex the doctor advises Clinic. Alex the lawyer represents Firm.",
+      "entities": [
+        {
+          "id": "d",
+          "names": [
+            "Alex"
+          ],
+          "anchors": [
+            "Alex the doctor"
+          ]
+        },
+        {
+          "id": "c",
+          "names": [
+            "Clinic"
+          ],
+          "anchors": [
+            "Clinic"
+          ]
+        },
+        {
+          "id": "l",
+          "names": [
+            "Alex"
+          ],
+          "anchors": [
+            "Alex the lawyer"
+          ]
+        },
+        {
+          "id": "f",
+          "names": [
+            "Firm"
+          ],
+          "anchors": [
+            "Firm"
+          ]
+        }
+      ],
+      "edges": [
+        {
+          "source": "d",
+          "target": "c",
+          "relations": [
+            "advises"
+          ],
+          "evidence": [
+            "Alex the doctor advises Clinic."
+          ],
+          "qualifiers": {
+            "relation_polarity": "positive",
+            "assertion": "stated",
+            "attributed_to": "",
+            "event_time": "",
+            "statement_time": ""
+          }
+        },
+        {
+          "source": "l",
+          "target": "f",
+          "relations": [
+            "represents"
+          ],
+          "evidence": [
+            "Alex the lawyer represents Firm."
+          ],
+          "qualifiers": {
+            "relation_polarity": "positive",
+            "assertion": "stated",
+            "attributed_to": "",
+            "event_time": "",
+            "statement_time": ""
+          }
+        }
+      ]
+    },
+    {
+      "id": "conflict",
+      "language": "en",
+      "tags": [
+        "conflicting_sources",
+        "attribution"
+      ],
+      "storage": "text",
+      "ref": "conflict.md",
+      "text": "Aster says Beacon owns Cedar. Iris says Beacon does not own Cedar.",
+      "entities": [
+        {
+          "id": "a",
+          "names": [
+            "Aster"
+          ],
+          "anchors": [
+            "Aster"
+          ]
+        },
+        {
+          "id": "b",
+          "names": [
+            "Beacon"
+          ],
+          "anchors": [
+            "Beacon"
+          ]
+        },
+        {
+          "id": "c",
+          "names": [
+            "Cedar"
+          ],
+          "anchors": [
+            "Cedar"
+          ]
+        },
+        {
+          "id": "i",
+          "names": [
+            "Iris"
+          ],
+          "anchors": [
+            "Iris"
+          ]
+        }
+      ],
+      "edges": [
+        {
+          "source": "b",
+          "target": "c",
+          "relations": [
+            "owns"
+          ],
+          "evidence": [
+            "Aster says Beacon owns Cedar."
+          ],
+          "qualifiers": {
+            "relation_polarity": "positive",
+            "assertion": "stated",
+            "attributed_to": "Aster",
+            "event_time": "",
+            "statement_time": ""
+          }
+        },
+        {
+          "source": "b",
+          "target": "c",
+          "relations": [
+            "owns"
+          ],
+          "evidence": [
+            "Iris says Beacon does not own Cedar."
+          ],
+          "qualifiers": {
+            "relation_polarity": "negative",
+            "assertion": "stated",
+            "attributed_to": "Iris",
+            "event_time": "",
+            "statement_time": ""
+          }
+        }
+      ]
+    },
+    {
+      "id": "conditional",
+      "language": "en",
+      "tags": [
+        "hypothetical"
+      ],
+      "storage": "text",
+      "ref": "conditional.md",
+      "text": "If Atlas acquired Birch, Atlas would control Birch. No acquisition is confirmed.",
+      "entities": [
+        {
+          "id": "a",
+          "names": [
+            "Atlas"
+          ],
+          "anchors": [
+            "Atlas"
+          ]
+        },
+        {
+          "id": "b",
+          "names": [
+            "Birch"
+          ],
+          "anchors": [
+            "Birch"
+          ]
+        }
+      ],
+      "edges": [
+        {
+          "source": "a",
+          "target": "b",
+          "relations": [
+            "acquired",
+            "acquires"
+          ],
+          "evidence": [
+            "If Atlas acquired Birch, Atlas would control Birch."
+          ],
+          "qualifiers": {
+            "relation_polarity": "positive",
+            "assertion": "hypothetical",
+            "attributed_to": "",
+            "event_time": "",
+            "statement_time": ""
+          }
+        },
+        {
+          "source": "a",
+          "target": "b",
+          "relations": [
+            "control",
+            "controls"
+          ],
+          "evidence": [
+            "If Atlas acquired Birch, Atlas would control Birch."
+          ],
+          "qualifiers": {
+            "relation_polarity": "positive",
+            "assertion": "hypothetical",
+            "attributed_to": "",
+            "event_time": "",
+            "statement_time": ""
+          }
+        }
+      ]
+    },
+    {
+      "id": "csv-record",
+      "language": "es",
+      "tags": [
+        "structured_records",
+        "dates"
+      ],
+      "storage": "csv",
+      "ref": "csv-record.csv#r1",
+      "text": "Marea compró Puerto en 2022.",
+      "entities": [
+        {
+          "id": "m",
+          "names": [
+            "Marea"
+          ],
+          "anchors": [
+            "Marea"
+          ]
+        },
+        {
+          "id": "p",
+          "names": [
+            "Puerto"
+          ],
+          "anchors": [
+            "Puerto"
+          ]
+        }
+      ],
+      "edges": [
+        {
+          "source": "m",
+          "target": "p",
+          "relations": [
+            "compró",
+            "compra",
+            "acquired"
+          ],
+          "evidence": [
+            "Marea compró Puerto en 2022."
+          ],
+          "qualifiers": {
+            "relation_polarity": "positive",
+            "assertion": "stated",
+            "attributed_to": "",
+            "event_time": "2022",
+            "statement_time": ""
+          }
+        }
+      ]
+    },
+    {
+      "id": "json-record",
+      "language": "en",
+      "tags": [
+        "structured_records"
+      ],
+      "storage": "json",
+      "ref": "json-record.json#r1",
+      "text": "North hired South.",
+      "entities": [
+        {
+          "id": "n",
+          "names": [
+            "North"
+          ],
+          "anchors": [
+            "North"
+          ]
+        },
+        {
+          "id": "s",
+          "names": [
+            "South"
+          ],
+          "anchors": [
+            "South"
+          ]
+        }
+      ],
+      "edges": [
+        {
+          "source": "n",
+          "target": "s",
+          "relations": [
+            "hired",
+            "hires"
+          ],
+          "evidence": [
+            "North hired South."
+          ],
+          "qualifiers": {
+            "relation_polarity": "positive",
+            "assertion": "stated",
+            "attributed_to": "",
+            "event_time": "",
+            "statement_time": ""
+          }
+        }
+      ]
+    },
+    {
+      "id": "scan-cache",
+      "language": "en",
+      "tags": [
+        "scanned_pdf",
+        "cached_transcription"
+      ],
+      "storage": "scan",
+      "ref": "scan-cache.pdf",
+      "text": "Amber supports Azure.",
+      "entities": [
+        {
+          "id": "a",
+          "names": [
+            "Amber"
+          ],
+          "anchors": [
+            "Amber"
+          ]
+        },
+        {
+          "id": "b",
+          "names": [
+            "Azure"
+          ],
+          "anchors": [
+            "Azure"
+          ]
+        }
+      ],
+      "edges": [
+        {
+          "source": "a",
+          "target": "b",
+          "relations": [
+            "supports",
+            "supported"
+          ],
+          "evidence": [
+            "Amber supports Azure."
+          ],
+          "qualifiers": {
+            "relation_polarity": "positive",
+            "assertion": "stated",
+            "attributed_to": "",
+            "event_time": "",
+            "statement_time": ""
+          }
+        }
+      ]
+    },
+    {
+      "id": "no-relationship",
+      "language": "en",
+      "tags": [
+        "negative_control"
+      ],
+      "storage": "text",
+      "ref": "no-relationship.md",
+      "text": "The index lists Aster and Beacon. It provides no information about a relationship between them.",
+      "entities": [
+        {
+          "id": "a",
+          "names": [
+            "Aster"
+          ],
+          "anchors": [
+            "Aster"
+          ]
+        },
+        {
+          "id": "b",
+          "names": [
+            "Beacon"
+          ],
+          "anchors": [
+            "Beacon"
+          ]
+        }
+      ],
+      "edges": []
+    }
+  ]
+}

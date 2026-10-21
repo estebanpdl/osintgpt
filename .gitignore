@@ -26,6 +26,7 @@ docs/
 CLAUDE.md
 resources.txt
 skills-lock.json
+operator-documents/
 examples/data/sql_database.db
 
 # dev & test folders

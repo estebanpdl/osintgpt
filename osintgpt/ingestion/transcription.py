@@ -27,6 +27,13 @@ log = logging.getLogger('osintgpt.ingestion')
 
 SUFFIX = '.md'
 
+
+def cached_transcriber(cache_dir):
+    '''Read existing page text without constructing or calling a provider.'''
+    def transcribe(image, page):
+        return _read(cache_path(cache_dir, image)) or ''
+    return transcribe
+
 # The transcription is the only record of what a scanned page said, so the
 # system prompt asks for a transcriber rather than an assistant. Voice is in
 # the template; this is the role.

@@ -61,24 +61,13 @@ MATCHES_MEAN = 'Chunks containing at least one of the searched terms.'
 
 # the passages an answer actually read
 def passages_of(answer: Any) -> List[Dict[str, str]]:
-    '''
-    Pull the passages out of an answer's trace.
-
-    A source chip an analyst cannot open is decoration, and the text is
-    already in the trace — the tools returned it — so nothing needs
-    retrieving twice to show it.
-
-    Args:
-        answer (AgenticAnswer): The answer.
-
-    Returns:
-        List[Dict[str, str]]: One entry per passage, deduplicated by citation.
-    '''
+    '''Deduplicate saved passage and graph previews without retrieving sources again.'''
     found: List[Dict[str, str]] = []
     seen = set()
 
     for entry in getattr(answer.trace, 'entries', []):
-        for item in getattr(entry, 'payload', {}).get('passages', []) or []:
+        payload = getattr(entry, 'payload', {})
+        for item in payload.get('passages', []) or []:
             citation = item.get('citation') or item.get('ref') or ''
             if not citation or citation in seen:
                 continue
@@ -86,8 +75,24 @@ def passages_of(answer: Any) -> List[Dict[str, str]]:
             found.append({
                 'citation': citation,
                 'ref': item.get('ref', citation),
-                'text': str(item.get('text', ''))[:PREVIEW_CHARS]
+                'text': str(item.get('text', ''))[:PREVIEW_CHARS],
+                **({'provenance': item['provenance']} if item.get('provenance') else {})
             })
+        for row in [*(payload.get('claims') or []), *(payload.get('path') or [])]:
+            if not isinstance(row, dict) or not all(name in row for name in ('source', 'target', 'relation', 'ref')):
+                continue
+            citation = row.get('citation') or f"{row['ref']} · {row['source']} — {row['relation']} → {row['target']}"
+            identity = row.get('assertion_id') or (citation, row.get('evidence', ''))
+            if identity not in seen:
+                seen.add(identity)
+                found.append({'citation': citation, 'ref': row['ref'],
+                              'text': '\n'.join(row.get('evidence_quotes') or [row.get('evidence', '')]), 'graph_claim': row})
+        if payload.get('assertion_id') and payload.get('text') and payload.get('status') == 'ok':
+            identity = (payload['assertion_id'], payload.get('start'), payload.get('end'))
+            if identity not in seen:
+                seen.add(identity)
+                found.append({'citation': f"{payload['citation']} · context {payload['start']}–{payload['end']}",
+                              'ref': payload['ref'], 'text': payload['text'], 'graph_context': payload})
 
     return found
 
@@ -103,6 +108,8 @@ def render(st, runtime, state) -> None:
         state: Session state.
     '''
     from osintgpt.agentic import answer_from_dict
+    from osintgpt.app.session import DeferredEmbedder
+    from . import findings_exports
 
     project = runtime.project
     conversation = current_conversation(state, project)
@@ -119,11 +126,12 @@ def render(st, runtime, state) -> None:
 
     question = take_pending(state) or st.chat_input('Ask about this project')
     if not question:
+        findings_exports.render(st, project, conversation, state)
         return
 
     with st.spinner('Searching…'):
         answer = agentic_answer(
-            project, question, runtime.embedder, runtime.generator,
+            project, question, DeferredEmbedder(runtime), runtime.generator,
             # Read before the turn is recorded, so the window holds what came
             # before this question and never the question itself.
             conversation=recent_pairs(
@@ -135,6 +143,7 @@ def render(st, runtime, state) -> None:
     # `turns` was read before the answer was appended, so the new turn takes
     # the position after the last one replayed above.
     _turn(st, question, answer, state, index=len(turns), suggest=True)
+    findings_exports.render(st, project, current_conversation(state, project), state)
 
 
 def _turn(st, question, answer, state, index: int, suggest: bool) -> None:
@@ -171,9 +180,31 @@ def _sources(st, answer) -> None:
 
         return
 
-    st.caption(f'{len(passages)} sources')
+    st.caption(f'{len(passages)} evidence previews')
     for passage in passages:
         with st.expander(escape(passage['citation'])):
+            if 'graph_claim' in passage:
+                from .graph_evidence import render_claim
+                render_claim(st, passage['graph_claim'])
+                continue
+            if 'graph_context' in passage:
+                context = passage['graph_context']
+                st.caption(f"Saved text version {context.get('source_version', '')}; "
+                           f"quotation complete in this page: {context.get('quote_complete', False)}")
+                st.text(passage['text'])
+                st.caption(str(context.get('verification', {})))
+                continue
+            provenance = passage.get('provenance', {})
+            if provenance:
+                spans = [span for match in provenance.get('matches', []) for span in match['spans']]
+                pages = sorted({span['page'] for span in spans if span.get('page')})
+                sections = list(dict.fromkeys(span['section'] for span in spans if span.get('section')))
+                details = [f"Saved text version {provenance['source_version'][:12]}"]
+                if pages:
+                    details.append('pages ' + ', '.join(map(str, pages)))
+                if sections:
+                    details.append('sections ' + '; '.join(sections))
+                st.caption(' · '.join(details))
             st.write(passage['text'])
 
 

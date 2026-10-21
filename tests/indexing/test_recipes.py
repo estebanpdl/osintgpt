@@ -59,7 +59,7 @@ def test_completed_file_is_invalidated_without_force(project, monkeypatch, chang
     elif change == 'chunk_size':
         monkeypatch.setattr(chunking, 'MAX_CHARS', 2000)
     else:
-        monkeypatch.setattr(recipes, 'INGESTION_VERSION', 2)
+        monkeypatch.setattr(recipes, 'INGESTION_VERSION', recipes.INGESTION_VERSION + 1)
     report = index_project(Project.load(project.paths.root), embedder)
     assert not report.failed and report.chunks == 250
     assert len(embedder.client.embeddings.calls) == 3

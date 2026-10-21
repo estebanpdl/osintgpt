@@ -25,7 +25,7 @@ EDGE_STATEMENT = re.compile(
     rf'MATCH \(a:Entity \{{key: {STRING}\}}\), '
     rf'\(b:Entity \{{key: {STRING}\}}\) '
     rf'MERGE \(a\)-\[r:(?:[A-Za-z_][A-Za-z0-9_]*|`(?:``|[^`])+`) '
-    rf'\{{relation: {STRING}, ref: {STRING}, evidence: {STRING}\}}\]->\(b\);'
+    rf'\{{relation: {STRING}, ref: {STRING}, evidence: {STRING}, assertion_id: {STRING}\}}\]->\(b\);'
 )
 
 
@@ -223,10 +223,10 @@ def test_json_is_unicode_and_round_trips_graph_records(graph):
     payload = json.loads(content)
 
     assert '\\u' not in content
-    assert payload == {
+    assert payload == json.loads(json.dumps({
         'entities': [asdict(entity) for entity in graph.entities()],
         'edges': [asdict(edge) for edge in graph.edges()]
-    }
+    }))
 
 
 def test_refs_restrict_edges_and_their_entities_in_both_formats(graph):

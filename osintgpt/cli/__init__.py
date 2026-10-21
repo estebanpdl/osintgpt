@@ -26,11 +26,22 @@ app = typer.Typer(
 )
 
 
+def _show_version(context: typer.Context, value: bool) -> None:
+    if value and not context.resilient_parsing:
+        from osintgpt import __version__
+        typer.echo(f'osintgpt {__version__}')
+        raise typer.Exit()
+
+
 @app.callback()
 def configure(
     context: typer.Context,
     home: Optional[Path] = typer.Option(
         None, '--home', help='osintgpt home directory.'
+    ),
+    version: bool = typer.Option(
+        False, '--version', '-V', callback=_show_version, is_eager=True,
+        help='Show the installed version and exit.'
     )
 ) -> None:
     context.obj = CliState(home=home or default_home())

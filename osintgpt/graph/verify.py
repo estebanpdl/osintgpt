@@ -1,12 +1,13 @@
 '''Check that graph evidence is present in its claimed source document.'''
 
-import unicodedata
-
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Dict, Iterable, List, Optional
+from typing import Iterable, List, Optional
 
-from osintgpt.ingestion import Corpus, load_documents
+from osintgpt.ingestion import Corpus
+from osintgpt.ingestion.snapshots import load_snapshot, read_snapshot
+from osintgpt.ingestion.provenance import quote_locations
+from osintgpt.ingestion.source_view import source_state
 from osintgpt.projects import Project
 
 from .store import Edge, graph_for
@@ -22,6 +23,11 @@ class EvidenceResult:
     edge: Edge
     status: str
     problem: str = ''
+    snapshot_status: str = 'unavailable'
+    source_state: str = 'unversioned'
+    current_version: str = ''
+    snapshot_problem: str = ''
+    current_locations: list = field(default_factory=list)
 
     @property
     def ok(self) -> bool:
@@ -66,35 +72,10 @@ class EvidenceReport:
         return ', '.join(parts) if parts else 'nothing to verify'
 
 
-@dataclass(frozen=True)
-class _DocumentText:
-    text: str = ''
-    problem: str = ''
-
-
-def _normalized(text: str) -> str:
-    return ' '.join(unicodedata.normalize('NFC', text).split())
-
-
 def _path_for(ref: str, root: Path) -> Path:
     path = Path(ref)
 
     return path if path.is_absolute() else root / path
-
-
-def _read_document(path: Path, corpus: Corpus, root: Path) -> _DocumentText:
-    if not path.is_file():
-        return _DocumentText(problem='document does not exist')
-
-    try:
-        documents = load_documents(path, corpus.mapping_for(path, root))
-        text = '\n\n'.join(
-            document.text for document in documents if document.text
-        ).strip()
-    except Exception as error:  # noqa: BLE001 — one source, not the report
-        return _DocumentText(problem=str(error))
-
-    return _DocumentText(text=_normalized(text))
 
 
 def verify_evidence(
@@ -118,26 +99,82 @@ def verify_evidence(
     with graph_for(project) as graph:
         edges = graph.edges(refs=refs)
 
-    corpus = Corpus.load(project.paths.sources)
+    return verify_claims(project, edges)
+
+
+def verify_claims(project, edges, *, first_only=False, require_registered=False, cache=None):
+    from .reconciliation import registered
+
+    if cache is not None:
+        if cache.project.id != project.id or cache.project.paths.root != project.paths.root:
+            raise ValueError('Evidence cache belongs to a different project.')
+        cache.bind_policy(require_registered)
+        cache.check()
+    corpus = cache.corpus if cache is not None else Corpus.load(project.paths.sources)
     root = Path(project.paths.root)
-    documents: Dict[str, _DocumentText] = {}
+    documents, saved, states = (cache.documents, cache.saved, cache.states) if cache is not None else ({}, {}, {})
     results = []
     for edge in edges:
-        if edge.ref not in documents:
-            documents[edge.ref] = _read_document(
-                _path_for(edge.ref, root), corpus, root
-            )
-
-        document = documents[edge.ref]
-        evidence = _normalized(edge.evidence)
-        if document.problem:
-            status = UNREADABLE
-        elif evidence and evidence in document.text:
-            status = FOUND
-        else:
-            status = NOT_FOUND
+        result_key = (edge.assertion_id, first_only, require_registered)
+        if cache is not None and result_key in cache.results:
+            results.append(cache.results[result_key])
+            continue
+        ref = edge.provenance.get('source_ref', edge.ref)
+        path = _path_for(ref, root)
+        mapping = cache.mapping_for(path) if cache is not None else corpus.mapping_for(path, root)
+        if ref not in documents:
+            if cache is not None:
+                cache.watch_source(ref, path, mapping, not require_registered or registered(corpus, root, ref))
+            try:
+                if require_registered and not registered(corpus, root, ref):
+                    raise ValueError('Source is no longer registered; current text was not read.')
+                current = load_snapshot(path, mapping, ref=ref, cache_dir=project.paths.extracts,
+                                        **({'transcriber': cache.read_transcription} if cache is not None else {}))
+                documents[ref] = (current, '')
+            except Exception as error:
+                documents[ref] = (None, 'document does not exist'
+                                  if isinstance(error, FileNotFoundError) else str(error))
+        current, problem = documents[ref]
+        if cache is not None:
+            cache.watch_transcriptions(current)
+        document = current.document(edge.ref) if current else None
+        quotes = edge.evidence_quotes or (edge.evidence,)
+        matched_quotes = [quote_locations(document, quote, first_only=first_only) if document else [] for quote in quotes]
+        matches = [match for locations in matched_quotes for match in locations] if all(matched_quotes) else []
+        status = UNREADABLE if problem else FOUND if matches else NOT_FOUND
+        snapshot_status, state, snapshot_problem = 'unavailable', 'unversioned', ''
+        version = edge.provenance.get('source_version', '')
+        if version:
+            state = 'unknown'
+            if version not in saved:
+                if cache is not None:
+                    cache.watch_saved(version)
+                try:
+                    saved[version] = (current if current and current.version == version
+                                      else read_snapshot(project.paths.extracts, version), '')
+                except Exception as error:
+                    saved[version] = (None, str(error))
+            snapshot, snapshot_problem = saved[version]
+            if cache is not None:
+                cache.watch_transcriptions(snapshot)
+            if snapshot and snapshot.ref != ref:
+                snapshot, snapshot_problem = None, 'Saved text belongs to a different source.'
+            if snapshot:
+                original = snapshot.document(edge.ref)
+                snapshot_status = FOUND if original and all(quote_locations(original, quote, first_only=True) for quote in quotes) else NOT_FOUND
+                key = (ref, version)
+                if key not in states:
+                    states[key] = (source_state(path, mapping, snapshot, project.paths.extracts)
+                                   if not require_registered or registered(corpus, root, ref) else 'unregistered')
+                state = states[key]
         results.append(EvidenceResult(
-            edge=edge, status=status, problem=document.problem
+            edge=edge, status=status, problem=problem, snapshot_status=snapshot_status,
+            source_state=state, snapshot_problem=snapshot_problem,
+            current_version=current.version if current else '', current_locations=matches
         ))
+        if cache is not None:
+            cache.results[result_key] = results[-1]
 
+    if cache is not None:
+        cache.check()
     return EvidenceReport(results=results)

@@ -53,7 +53,8 @@ class StoredChunk:
             str: How this chunk names itself in an answer — the document, and \
                 the section within it when there is one.
         '''
-        return f'{self.ref} › {self.path}' if self.path else self.ref
+        ref = self.document_ref or self.ref
+        return f'{ref} › {self.path}' if self.path else ref
 
 
 # SearchResult class

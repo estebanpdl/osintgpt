@@ -29,6 +29,8 @@ from osintgpt.vector_store import BACKENDS as STORAGE_BACKENDS
 from ..styles import badge
 from .embedding_rates import controls as embedding_rate_controls
 from .index_progress import model_notice
+from .graph_status import render as render_graph_status
+from .graph_models import controls as graph_model_controls
 from osintgpt.index_status import saved_index_status
 from ..session import _embedding_model
 from dataclasses import replace
@@ -62,8 +64,9 @@ LEGS = [
     ('lexical_enabled', 'Exact search',
      'Finds the exact characters — handles, hashes, URLs, case numbers.'),
     ('graph_enabled', 'Relationship graph',
-     'Answers how two things are connected. Costs one generation call per '
-     'document to build, and must be built explicitly.')
+     'Uses stored relationships when answering. Build explicitly in Graph or with the CLI; '
+     'long documents require multiple generation calls. Turning this off '
+     'preserves stored graph data.')
 ]
 
 
@@ -123,18 +126,22 @@ def render(st, runtime, home, state) -> None:
 
     defaults = load_user_defaults(home)
     effective = project.effective_settings(defaults)
-    config = project.settings_for(resolve_credentials(home), defaults)
+    base = resolve_credentials(home)
+    config = project.settings_for(base, defaults)
 
     changes = {}
     changes.update(_providers(st, effective))
     selected = replace(effective, **changes)
-    proposed = project.with_settings(**changes).settings_for(resolve_credentials(home), defaults)
+    proposed = project.with_settings(**changes).settings_for(base, defaults)
+    graph_changes, graph_valid = graph_model_controls(st, project, defaults, base, changes, model_help)
+    changes.update(graph_changes)
     model_notice(st, saved_index_status(project), selected.embedding_provider, _embedding_model(selected, proposed))
     changes.update(embedding_rate_controls(st, effective, changes['embedding_provider']))
     changes.update(_legs(st, effective))
+    render_graph_status(st, project, compact=True)
     changes.update(_storage(st, effective))
 
-    if st.button('Save', type='primary'):
+    if st.button('Save', type='primary', disabled=not graph_valid):
         project.with_settings(**changes).save()
         st.success('Saved. Reload to use the new configuration.')
         # The providers were built from the old settings, so anything cached
@@ -170,13 +177,13 @@ def _providers(st, effective) -> Dict[str, Any]:
 
     with columns[1]:
         gen_provider = st.selectbox(
-            'Generation provider', generation,
+            'Chat/RAG provider', generation,
             index=generation.index(effective.generation_provider)
             if effective.generation_provider in generation else 0,
             help='Reads the retrieved passages and writes the answer.'
         )
         gen_model = st.text_input(
-            'Generation model', effective.generation_model,
+            'Chat/RAG model', effective.generation_model,
             help=model_help('generation', gen_provider, GENERATION_BACKENDS)
         )
 

@@ -21,7 +21,8 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Sequence
 
 # import osintgpt graph
-from osintgpt.graph import graph_for, neighbors, path_between
+from osintgpt.graph.retrieval import discover_entities, query_graph
+from osintgpt.graph.evidence import assertion_context
 
 # import osintgpt lexical
 from osintgpt.lexical import lexical_search
@@ -31,7 +32,6 @@ from osintgpt.search import search_project
 
 from .support import (
     SNIPPET_CHARS,
-    _claim,
     _clamp,
     _passage,
     _read,
@@ -58,7 +58,6 @@ class ToolContext:
     '''
     project: Any
     embedder: Any
-    # Only the graph tool needs it, and only when the project enabled one.
     generator: Any = None
     store: Any = None
     # The corpus and the files it covers, built on first use. Checking a ref
@@ -292,67 +291,33 @@ def snowball_search(
     )
 
 
-# ask the graph
-def graph_query(
-    context: ToolContext,
-    entity: str,
-    target: Optional[str] = None,
-    limit: int = 20
-) -> ToolResult:
-    '''
-    What the documents assert about an entity, or how two are connected.
+def graph_query(context: ToolContext, entity: str, target: Optional[str] = None, limit: int = 20,
+                direction: str = 'connectivity', depth: Optional[int] = None,
+                max_bytes: int = 24000, refs=None) -> ToolResult:
+    return _graph_result('graph_query', lambda: query_graph(
+        context.project, entity, target, limit=limit, direction=direction, depth=depth,
+        max_bytes=max_bytes, refs=refs), 'path' if target else 'claims', 'step' if target else 'claim')
 
-    Every claim returned carries the document and the sentence asserting it,
-    because a relationship without its evidence is not a finding.
 
-    Args:
-        context (ToolContext): Project and providers.
-        entity (str): The name to ask about.
-        target (str, optional): Given one, returns the chain connecting them.
-        limit (int): Most claims to return.
+def graph_entities(context: ToolContext, query: str, limit: int = 20, max_bytes: int = 24000, refs=None) -> ToolResult:
+    return _graph_result('graph_entities', lambda: discover_entities(
+        context.project, query, limit=limit, max_bytes=max_bytes, refs=refs), 'candidates', 'entity')
 
-    Returns:
-        ToolResult: Claims with their evidence, or the connecting chain.
-    '''
-    with graph_for(context.project) as graph:
-        if not graph.is_built:
-            return ToolResult(
-                tool='graph_query',
-                payload={
-                    'built': False,
-                    'note': 'This project has no graph. Relationships are '
-                            'not available; use the other tools.'
-                }
-            )
 
-        if target:
-            path = path_between(graph, entity, target)
-            if path is None:
-                return ToolResult(
-                    tool='graph_query',
-                    payload={
-                        'connected': False,
-                        'note': f'The documents do not assert a connection '
-                                f'between {entity} and {target}. That is not '
-                                f'the same as there being none.'
-                    }
-                )
+def graph_evidence(context: ToolContext, assertion_id: str, quote_index: int = 0, occurrence: int = 0,
+                   context_chars: int = 800, offset: int = 0, limit_chars: int = 4000,
+                   max_bytes: int = 24000) -> ToolResult:
+    return _graph_result('graph_evidence', lambda: assertion_context(
+        context.project, assertion_id, quote_index=quote_index, occurrence=occurrence,
+        context_chars=context_chars, offset=offset, limit_chars=limit_chars, max_bytes=max_bytes), 'text', 'character')
 
-            return ToolResult(
-                tool='graph_query',
-                payload={'connected': True, 'path': [_claim(e) for e in path.edges]},
-                count=path.length,
-                unit='step'
-            )
 
-        hits = neighbors(graph, entity, limit=_clamp(limit, 1, 60))
-
-        return ToolResult(
-            tool='graph_query',
-            payload={'claims': [_claim(hit.edge) for hit in hits]},
-            count=len(hits),
-            unit='claim'
-        )
+def _graph_result(name, operation, collection, unit):
+    try:
+        payload = operation()
+    except ValueError as error:
+        return ToolResult(tool=name, error=str(error))
+    return ToolResult(tool=name, payload=payload, count=len(payload.get(collection, [])), unit=unit)
 
 
 # what documents exist
@@ -402,7 +367,8 @@ def fetch_source(
     context: ToolContext,
     ref: str,
     offset: int = 0,
-    limit: int = FETCH_LINES
+    limit: int = FETCH_LINES,
+    source_version: str = ''
 ) -> ToolResult:
     '''
     Read a window of a document, by line.
@@ -428,7 +394,7 @@ def fetch_source(
         )
 
     try:
-        text = _read(context, path, ref)
+        text, provenance = _read(context, path, ref, source_version)
     except Exception as error:  # noqa: BLE001 — one call, not the loop
         return ToolResult(tool='fetch_source', error=str(error))
 
@@ -436,13 +402,23 @@ def fetch_source(
     start = max(int(offset), 0)
     end = start + _clamp(limit, 1, 1000)
     window = lines[start:end]
+    original_lines = text.splitlines(keepends=True)
+    char_start = sum(len(line) for line in original_lines[:start])
+    char_end = char_start + len(''.join(original_lines[start:end]).rstrip('\r\n'))
+    provenance['records'] = [record for record in provenance['records']
+                             if record['start'] < char_end and record['end'] > char_start]
+    for record in provenance['records']:
+        record['locations'] = [span for span in record['locations']
+                               if span['start'] + record['start'] < char_end
+                               and span['end'] + record['start'] > char_start]
 
     payload: Dict[str, Any] = {
         'ref': ref,
         'offset': start,
         'lines': len(window),
         'total_lines': len(lines),
-        'text': '\n'.join(window)
+        'text': '\n'.join(window),
+        'provenance': provenance
     }
     if end < len(lines):
         payload['next_offset'] = end

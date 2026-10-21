@@ -1,0 +1,32 @@
+{
+  "documents": [
+    {"ref": "funding.md", "text": "Alpha funds Bridge. The transfer was reported in 2024.", "source": "Alpha", "target": "Bridge", "relation": "funds", "event_time": "2024"},
+    {"ref": "ownership.md", "text": "Bridge owns Harbor.", "source": "Bridge", "target": "Harbor", "relation": "owns"},
+    {"ref": "staffing.md", "text": "Harbor hires Dock Services for maintenance.", "source": "Harbor", "target": "Dock Services", "relation": "hires"},
+    {"ref": "denial.md", "text": "Alpha does not fund Bridge.", "source": "Alpha", "target": "Bridge", "relation": "funds", "relation_polarity": "negative"},
+    {"ref": "museum.md", "text": "Alpha visited Museum. The museum displays paintings.", "source": "Alpha", "target": "Museum", "relation": "visited"},
+    {"ref": "allegation.md", "text": "Witness Vega alleges that Delta funds Echo.", "source": "Delta", "target": "Echo", "relation": "funds", "assertion": "alleged", "attributed_to": "Witness Vega"},
+    {"ref": "uncertain.md", "text": "It is uncertain whether Iota owns Kappa.", "source": "Iota", "target": "Kappa", "relation": "owns", "assertion": "uncertain"},
+    {"ref": "spanish.md", "text": "La organización Nube no financia a Sol.", "source": "Nube", "target": "Sol", "relation": "financia", "relation_polarity": "negative"},
+    {"ref": "chinese.md", "text": "北方公司持有南方公司股份。", "source": "北方公司", "target": "南方公司", "relation": "持有股份"},
+    {"ref": "doctor.md", "text": "Alex the doctor advises Clinic.", "source": "Alex", "source_id": "alex_doctor", "target": "Clinic", "relation": "advises"},
+    {"ref": "lawyer.md", "text": "Alex the lawyer represents Firm.", "source": "Alex", "source_id": "alex_lawyer", "target": "Firm", "relation": "represents"},
+    {"ref": "weather.md", "text": "Weather conditions at Harbor include seasonal rain."},
+    {"ref": "shipping.md", "text": "Harbor Harbor Harbor shipping schedules and vessel arrivals."},
+    {"ref": "unrelated.md", "text": "A botanical reference covering plant morphology and soils."}
+  ],
+  "questions": [
+    {"name": "indirect ownership", "query": "Alpha Harbor", "terms": ["Alpha", "Harbor"], "entity": "Alpha", "target": "Harbor", "direction": "outgoing", "expected": ["funding.md", "ownership.md"], "graph_status": "ok"},
+    {"name": "reverse connectivity", "query": "Harbor Alpha", "terms": ["Harbor"], "entity": "Harbor", "target": "Alpha", "direction": "connectivity", "expected": ["funding.md", "ownership.md"], "graph_status": "ok"},
+    {"name": "wrong direction", "query": "Bridge funding Alpha", "terms": ["Bridge"], "entity": "Bridge", "target": "Alpha", "direction": "outgoing", "expected": [], "graph_status": "no_connection"},
+    {"name": "conflicting accounts", "query": "Alpha Bridge funding", "terms": ["Alpha"], "entity": "Alpha", "direction": "outgoing", "expected": ["funding.md", "denial.md"], "graph_status": "ok"},
+    {"name": "allegation", "query": "Delta Echo", "terms": ["Delta"], "entity": "Delta", "target": "Echo", "direction": "outgoing", "expected": ["allegation.md"], "graph_status": "ok"},
+    {"name": "uncertainty", "query": "Iota Kappa", "terms": ["Iota"], "entity": "Iota", "target": "Kappa", "direction": "outgoing", "expected": ["uncertain.md"], "graph_status": "ok"},
+    {"name": "Spanish negation", "query": "Nube Sol", "terms": ["Nube"], "entity": "Nube", "target": "Sol", "direction": "outgoing", "expected": ["spanish.md"], "graph_status": "ok"},
+    {"name": "Chinese assertion", "query": "北方公司南方公司", "terms": ["南方公司"], "entity": "北方公司", "target": "南方公司", "direction": "outgoing", "expected": ["chinese.md"], "graph_status": "ok"},
+    {"name": "namesake ambiguity", "query": "Alex", "terms": ["Alex"], "entity": "Alex", "target": "Clinic", "direction": "outgoing", "expected": [], "graph_status": "ambiguous"},
+    {"name": "selected namesake", "query": "Alex", "terms": ["Alex"], "entity": "alex_lawyer", "target": "Firm", "direction": "outgoing", "expected": ["lawyer.md"], "graph_status": "ok"},
+    {"name": "disconnected identities", "query": "Alpha Delta", "terms": ["Alpha", "Delta"], "entity": "Alpha", "target": "Delta", "direction": "connectivity", "expected": [], "graph_status": "no_connection"},
+    {"name": "nonrelational weather", "query": "weather Harbor", "terms": ["weather"], "entity": "Harbor", "direction": "connectivity", "expected": ["weather.md"], "graph_status": "ok"}
+  ]
+}

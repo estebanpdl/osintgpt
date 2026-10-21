@@ -295,12 +295,15 @@ class TestListDocuments:
 
 class TestGraphTool:
     def test_it_says_so_when_there_is_no_graph(self, context):
+        context.project = context.project.with_settings(graph_enabled=True)
         result = graph_query(context, 'Alpha')
 
         assert result.payload['built'] is False
-        assert 'no graph' in result.payload['note']
+        assert result.payload['status'] == 'unbuilt'
+        assert 'No published graph is available yet.' in result.payload['note']
 
     def test_every_claim_carries_its_evidence(self, project, embedder):
+        project = project.with_settings(graph_enabled=True)
         with graph_for(project) as graph:
             graph.add([], [Edge(source='Alpha', target='Beta',
                                 relation='funded', ref='r.md',
@@ -314,13 +317,14 @@ class TestGraphTool:
         assert claim['ref'] == 'r.md'
         assert claim['evidence'] == 'Alpha funded Beta.'
 
-    def test_an_unconnected_pair_says_the_documents_are_silent(
+    def test_a_missing_target_does_not_establish_absence(
         self, project, embedder
     ):
         '''
         Not asserting a connection is different from there being none, and
         the difference matters to an analyst.
         '''
+        project = project.with_settings(graph_enabled=True)
         with graph_for(project) as graph:
             graph.add([], [Edge(source='Alpha', target='Beta',
                                 relation='funded', ref='r.md',
@@ -330,7 +334,9 @@ class TestGraphTool:
         result = graph_query(context, 'Alpha', target='Unrelated')
 
         assert result.payload['connected'] is False
-        assert 'not the same as there being none' in result.payload['note']
+        assert result.payload['status'] == 'entity_not_found'
+        assert result.payload['endpoint'] == 'target'
+        assert 'does not establish that no relationship exists' in result.payload['note']
 
 
 class TestSnowball:

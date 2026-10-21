@@ -1,4 +1,4 @@
-'''Classify paid embedding failures and read minimum provider retry delays.'''
+'''Classify provider failures and read minimum retry delays.'''
 
 import math
 import re
@@ -7,6 +7,8 @@ from dataclasses import dataclass
 from email.utils import parsedate_to_datetime
 
 import httpx
+import httpx2
+from anthropic import APIConnectionError as AnthropicConnectionError, APIStatusError as AnthropicStatusError
 from google.genai.errors import APIError as GeminiAPIError
 from openai import APIConnectionError, APIStatusError
 
@@ -122,18 +124,25 @@ def connection_requires_action(error):
     seen = set()
     while error is not None and id(error) not in seen:
         seen.add(id(error))
-        if isinstance(error, (httpx.UnsupportedProtocol, httpx.LocalProtocolError, ssl.SSLCertVerificationError)):
+        if isinstance(error, (httpx.UnsupportedProtocol, httpx.LocalProtocolError,
+                              httpx2.UnsupportedProtocol, httpx2.LocalProtocolError, ssl.SSLCertVerificationError)):
             return True
         error = error.__cause__
     return False
 
 
-def classify(error, provider, now):
+def classify(error, provider, now, *, generation=False):
     '''Unknown/local/programming errors are terminal, regardless of their text.'''
-    if provider in ('openai', 'voyage'):
+    if (provider in ('openai', 'voyage') or generation) and isinstance(error, (APIConnectionError, APIStatusError)):
         if isinstance(error, APIConnectionError):
             return Failure(not connection_requires_action(error))
         if not isinstance(error, APIStatusError):
+            return Failure(False)
+        status, payload = error.status_code, error.body
+    elif provider == 'anthropic':
+        if isinstance(error, AnthropicConnectionError):
+            return Failure(not connection_requires_action(error))
+        if not isinstance(error, AnthropicStatusError):
             return Failure(False)
         status, payload = error.status_code, error.body
     elif provider == 'gemini':
@@ -148,5 +157,5 @@ def classify(error, provider, now):
         payload = {}
     if isinstance(payload.get('error'), dict):
         payload = payload['error']
-    retryable = status in TRANSIENT_STATUS and not requires_action(payload)
+    retryable = (status in TRANSIENT_STATUS or provider == 'anthropic' and status == 529) and not requires_action(payload)
     return Failure(retryable, status, retry_delay(error_headers(error), payload, now) if retryable else 0)

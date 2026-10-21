@@ -79,6 +79,7 @@ class TraceEntry:
     documents: Tuple[TouchedDocument, ...] = ()
     seconds: float = 0.0
     error: str = ''
+    payload: Dict[str, Any] = field(default_factory=dict, repr=False)
 
     @property
     def ok(self) -> bool:
@@ -165,12 +166,13 @@ class Trace:
         seconds: float = 0.0,
         error: str = '',
         unit: str = 'result',
-        documents: Sequence[TouchedDocument] = ()
+        documents: Sequence[TouchedDocument] = (),
+        payload: Dict[str, Any] | None = None
     ) -> TraceEntry:
         entry = TraceEntry(
             round=round_number, tool=tool, arguments=dict(arguments),
             count=count, unit=unit, documents=tuple(documents),
-            seconds=seconds, error=error
+            seconds=seconds, error=error, payload=payload or {}
         )
         self.entries.append(entry)
 

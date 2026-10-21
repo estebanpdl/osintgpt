@@ -9,14 +9,17 @@ from pathlib import Path
 
 from osintgpt import Project, Settings, build_graph, graph_for
 from osintgpt.graph import neighbors, path_between
+from osintgpt.graph.provider import LazyGraphGenerator
 from osintgpt.llm import build_generation_provider
+from osintgpt.llm.usage import UsageRecorder
 
 
 def print_edge(edge, depth: int | None = None) -> None:
     """Print one relationship with the evidence that supports it."""
     prefix = f'depth {depth}: ' if depth is not None else ''
-    print(f'{prefix}{edge.source} --{edge.relation}--> {edge.target}')
-    print(f'  {edge.ref}: {edge.evidence}')
+    print(f'{prefix}{edge.sentence}')
+    for quote in edge.evidence_quotes or (edge.evidence,):
+        print(f'  {edge.ref}: {quote}')
 
 
 def main() -> None:
@@ -34,9 +37,11 @@ def main() -> None:
 
     project = Project.load(arguments.project)
     config = project.settings_for(Settings.from_env())
-    provider = arguments.generation_provider or project.settings.generation_provider
-    model = arguments.generation_model or project.settings.generation_model or None
-    generator = build_generation_provider(provider, config, model=model)
+    # Shared selection respects independent graph models and provider-managed
+    # output; graph extraction does not accept an output-token ceiling.
+    generator = LazyGraphGenerator(build_generation_provider, project.effective_settings(), config,
+                                   UsageRecorder(), provider=arguments.generation_provider,
+                                   model=arguments.generation_model)
     report = build_graph(
         project,
         generator,

@@ -336,10 +336,16 @@ hr {
     backdrop-filter: blur(3px);
 }
 
+/* Keep secondary text readable without Streamlit dimming it a second time. */
+[data-testid="stCaptionContainer"] {
+    opacity: 1;
+}
+
 [data-testid="stCaptionContainer"] p,
 .stCaptionContent p {
     color: var(--text-secondary);
-    font-size: 0.8rem;
+    font-size: 0.875rem;
+    line-height: 1.5;
     letter-spacing: 0.01em;
 }
 

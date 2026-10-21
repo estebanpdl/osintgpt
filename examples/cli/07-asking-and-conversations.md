@@ -154,7 +154,8 @@ osintgpt conversations show 2026-10-07T18-11-04-who-paid-for-the-neral-7-refit-a
 osintgpt conversations delete 2026-10-07T18-11-04-who-paid-for-the-neral-7-refit-and-through
 ```
 
-Threads are JSONL files under the project's `conversations/` directory,
+`delete` asks for confirmation; `--yes` skips it in scripts. Threads are
+JSONL files under the project's `conversations/` directory,
 holding each answer with its full trace. The app's conversation view reads
 the same files.
 

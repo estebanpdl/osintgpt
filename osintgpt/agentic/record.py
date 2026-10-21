@@ -12,6 +12,7 @@
 
 # type hints
 from typing import Any, Dict, Tuple
+from copy import deepcopy
 
 from .loop import AgenticAnswer
 from .trace import Narration, TouchedDocument, Trace, TraceEntry
@@ -63,7 +64,8 @@ def answer_to_dict(answer: AgenticAnswer) -> Dict[str, Any]:
                     # and rounding again here moves the number: 1.9548 stored
                     # as 1.955 displays as 1.96 rather than 1.95.
                     'seconds': entry.seconds,
-                    'error': entry.error
+                    'error': entry.error,
+                    **({'payload': payload} if (payload := _saved_evidence(entry)) else {})
                 }
                 for entry in trace.entries
             ],
@@ -130,8 +132,17 @@ def _entry(call: Dict[str, Any]) -> TraceEntry:
         unit=str(call.get('unit') or 'result'),
         documents=_documents(call),
         seconds=_number(call.get('seconds')),
-        error=str(call.get('error') or '')
+        error=str(call.get('error') or ''),
+        payload=call.get('payload') if isinstance(call.get('payload'), dict) else {}
     )
+
+
+def _saved_evidence(entry):
+    if entry.tool in ('graph_query', 'graph_evidence'):
+        return deepcopy(entry.payload)
+    if entry.payload.get('passages'):
+        return {'passages': deepcopy(entry.payload['passages'])}
+    return {}
 
 
 def _documents(call: Dict[str, Any]) -> Tuple[TouchedDocument, ...]:

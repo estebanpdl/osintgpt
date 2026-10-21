@@ -753,7 +753,7 @@ class TestTheRegistry:
         Answer quality must not depend on which vendor was picked, so there is
         one table rather than a set per provider.
         '''
-        assert len(TOOL_SPECS) == len(TOOL_NAMES) == 6
+        assert len(TOOL_SPECS) == len(TOOL_NAMES) == 8
 
 
 class TestTheSystemPrompt:
@@ -782,6 +782,8 @@ class TestTheSystemPrompt:
 
 def _minimal(name):
     return {
+        'graph_entities': {'query': 'x'},
+        'graph_evidence': {'assertion_id': 'assert_x'},
         'semantic_search': {'query': 'x'},
         'exact_search': {'terms': ['x']},
         'list_documents': {},

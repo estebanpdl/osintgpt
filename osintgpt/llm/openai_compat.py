@@ -21,6 +21,7 @@ from openai import OpenAI
 from typing import List, Optional
 
 from .base import BatchSink, EmbeddingProvider, EmbeddingPurpose, GenerationProvider
+from .generation import GenerationResponse, deliver_response, send_request
 from .calling import ModelTurn, ToolCall
 from .usage import Usage, UsageRecorder
 from .embedding_pacing import EmbeddingPacer
@@ -195,6 +196,9 @@ class OpenAICompatGeneration(GenerationProvider):
     # round comes back unusable rather than by trusting this flag.
     supports_tools = True
     supports_vision = True
+    # Older Gemini models and compatible servers cannot combine JSON response
+    # formatting with function calls. Submit the final extraction as tool args.
+    graph_submission_tool = True
 
     def __init__(
         self,
@@ -204,7 +208,8 @@ class OpenAICompatGeneration(GenerationProvider):
         discovers_models: bool = False,
         billable: bool = True,
         provider: str = '',
-        recorder: Optional[UsageRecorder] = None
+        recorder: Optional[UsageRecorder] = None,
+        supports_structured_output: Optional[bool] = None
     ) -> None:
         '''
         Args:
@@ -220,27 +225,49 @@ class OpenAICompatGeneration(GenerationProvider):
         self.billable = billable
         self.provider = provider
         self.recorder = recorder
+        self.supports_structured_output = (
+            base_url is None or provider in {'gemini', 'ollama'}
+        ) if supports_structured_output is None else supports_structured_output
 
-    def generate(self, system: str, user: str) -> str:
-        response = self.client.chat.completions.create(
-            model=self.model,
-            messages=[
-                {'role': 'system', 'content': system},
-                {'role': 'user', 'content': user}
-            ]
-        )
+    def generate(self, system: str, user: str, *, max_output_tokens=None) -> str:
+        return self.generate_response(system, user, max_output_tokens=max_output_tokens).text
+
+    def generate_response(self, system, user, *, max_output_tokens=None, schema=None, on_response=None, request=None,
+                          tools=None, history=None):
+        if schema is not None and not self.supports_structured_output:
+            raise ValueError('This endpoint does not declare structured-output support.')
+        options = self.graph_request(system, user, schema=schema, tools=tools, history=history)
+        if max_output_tokens is not None:
+            options['max_tokens'] = max_output_tokens
+        response = send_request(self.client, lambda client: client.chat.completions.create(
+            model=self.model, **options
+        ), request)
 
         usage = getattr(response, 'usage', None)
-        self._record(Usage(
+        consumption = Usage(
             provider=self.provider,
             model=self.model,
             input_tokens=getattr(usage, 'prompt_tokens', 0) or 0,
             output_tokens=getattr(usage, 'completion_tokens', 0) or 0,
             billable=self.billable,
             counted=usage is not None
-        ))
+        )
 
-        return response.choices[0].message.content or ''
+        if not response.choices:
+            result = GenerationResponse('', status='missing_choices')
+        else:
+            choice = response.choices[0]
+            calls = tuple({'id': call.id, 'name': call.function.name, 'arguments': _arguments(call.function.arguments)}
+                          for call in (getattr(choice.message, 'tool_calls', None) or []))
+            result = GenerationResponse(choice.message.content or '',
+                                        stop_reason=getattr(choice, 'finish_reason', '') or '',
+                                        refused=bool(getattr(choice.message, 'refusal', None)), tool_calls=calls,
+                                        continuation=(choice.message.model_dump(exclude_none=True),) if calls else ())
+        return deliver_response(self, result, consumption, on_response)
+
+    def graph_request(self, system, user, **options):
+        from .generation_tools import generation_arguments
+        return generation_arguments('chat', system, user, **options)
 
     def describe_image(
         self, system: str, user: str, image: bytes,

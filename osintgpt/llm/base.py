@@ -20,6 +20,7 @@ from osintgpt.index_events import emit_index
 from typing import Callable, List, Optional, Tuple
 
 from .calling import Exchange, ModelTurn, ToolCallingUnsupported, ToolSpec
+from .generation import GenerationResponse
 from .usage import Usage, UsageRecorder
 
 BatchSink = Callable[[List[List[float]]], None]
@@ -171,6 +172,7 @@ class GenerationProvider(ABC):
     Sends a prompt to a chat model and returns its text.
     '''
     model: str
+    supports_structured_output: bool = False
 
     # See EmbeddingProvider.supports_model_discovery.
     supports_model_discovery: bool = False
@@ -221,6 +223,14 @@ class GenerationProvider(ABC):
         Returns:
             str: The model's reply, empty when it produced none.
         '''
+
+    def generate_response(self, system, user, *, max_output_tokens=None, schema=None):
+        '''Legacy providers retain text generation without claiming schema or completion checks.'''
+        from inspect import signature
+        options = {}
+        if 'max_output_tokens' in signature(self.generate).parameters:
+            options['max_output_tokens'] = max_output_tokens
+        return GenerationResponse(self.generate(system, user, **options))
 
     def describe_image(
         self, system: str, user: str, image: bytes, media_type: str = 'image/png'
