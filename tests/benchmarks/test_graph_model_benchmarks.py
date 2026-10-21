@@ -169,6 +169,10 @@ def test_rejected_proposals_remain_visible_but_failed_processing_stops_compariso
     else:
         assert report['status'] == 'failed' and not report['answers']
         assert report['usage_by_role']['answering']['calls'] == 0
+        counts = report['graph_build']['counts']
+        assert counts['invalid_responses'] > 0
+        assert counts['requests_failed'] == counts['retries'] == 0
+        assert counts['requests_succeeded'] == counts['requests_attempted']
 
 
 def test_offline_cli_does_not_construct_live_providers(tmp_path, monkeypatch):

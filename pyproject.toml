@@ -74,6 +74,7 @@ dev = [
     "pytest>=9.1.1",
     "pytest-cov>=7.1.0",
     "pytest-mock>=3.15.1",
+    "pytest-xdist>=3.8.0",
     "python-pptx>=1.0.2",
     "tomli; python_version < '3.11'"
 ]

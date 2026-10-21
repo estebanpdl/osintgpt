@@ -53,6 +53,5 @@ def test_human_scope_messages_keep_model_json_bounds_separate(graph_case):
 
 
 @pytest.mark.parametrize('command', ['entities', 'neighbors', 'path', 'evidence'])
-def test_inspection_help_describes_operator_behavior(command):
-    result = CliRunner().invoke(app, ['graph', command, '--help'])
-    assert result.exit_code == 0 and '--max-bytes' in result.output
+def test_inspection_help_describes_operator_behavior(command, cli_help):
+    assert '--max-bytes' in cli_help('graph', command)

@@ -25,6 +25,31 @@ from osintgpt.config import ENV_VARS, Settings
 FAKE_KEY = 'sk-test-not-a-real-key'
 
 
+@pytest.fixture(params=[False, True], ids=['plain-help', 'colored-help'])
+def cli_help(request, monkeypatch):
+    '''Check visible help in both terminal modes without ANSI or width artifacts.'''
+    from rich.text import Text
+    from typer import rich_utils
+    from typer.testing import CliRunner
+    from osintgpt.cli import app
+
+    # Rich owns its console width separately from CliRunner's terminal_width.
+    monkeypatch.setattr(rich_utils, 'MAX_WIDTH', 180)
+    monkeypatch.setattr(rich_utils, 'FORCE_TERMINAL', request.param)
+    monkeypatch.setattr(rich_utils, 'COLOR_SYSTEM', 'standard' if request.param else None)
+    monkeypatch.setenv('TERM', 'xterm-256color')
+    monkeypatch.delenv('NO_COLOR', raising=False)
+
+    def render(*arguments):
+        result = CliRunner().invoke(app, [*arguments, '--help'], color=request.param)
+        assert result.exit_code == 0, result.output
+        if request.param:
+            assert '\x1b[' in result.stdout, 'The colored-help case must exercise ANSI output.'
+        return Text.from_ansi(result.stdout).plain
+
+    return render
+
+
 @pytest.fixture(autouse=True)
 def isolated_environment(monkeypatch):
     '''

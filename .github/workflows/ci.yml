@@ -43,8 +43,15 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install -e ".[all,dev]"
 
+      # All environments run the complete suite. Coverage is collected once;
+      # file groups keep module-scoped state/fixtures in the same worker.
       - name: Test
-        run: python -m pytest --cov=osintgpt --cov-report=term-missing
+        if: matrix.os != 'ubuntu-latest' || matrix.python-version != '3.12'
+        run: python -m pytest -n 2 --dist=loadfile --durations=20
+
+      - name: Test with coverage
+        if: matrix.os == 'ubuntu-latest' && matrix.python-version == '3.12'
+        run: python -m pytest -n 2 --dist=loadfile --durations=20 --cov=osintgpt --cov-report=term-missing
 
   offline:
     name: no network reaches a provider
@@ -73,7 +80,7 @@ jobs:
       # that would have called a provider for real. ci/sitecustomize.py refuses
       # outbound connections.
       - name: Test with sockets blocked
-        run: python -m pytest -p no:cacheprovider
+        run: python -m pytest -n 2 --dist=loadfile --durations=20 -p no:cacheprovider
         env:
           PYTHONPATH: ci
 

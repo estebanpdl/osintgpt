@@ -52,12 +52,11 @@ def test_no_graph_is_reported_without_creating_one(runner, home):
     assert not (project.paths.root / 'graph.sqlite').exists()
 
 
-def test_help_explains_migration_and_options(runner, home):
-    result = invoke(runner, home, 'graph', 'migrate', '--help')
-    assert result.exit_code == 0
+def test_help_explains_migration_and_options(cli_help):
+    output = cli_help('graph', 'migrate')
     for term in ('backup', 'no model calls', '--dry-run', '--project', '--json'):
-        assert term in result.output
-    assert 'migrate' in invoke(runner, home, 'graph', '--help').output
+        assert term in output
+    assert 'migrate' in cli_help('graph')
 
 
 def test_schema_seven_notice_and_upgrade_are_explicit_and_keyless(runner, home, monkeypatch):

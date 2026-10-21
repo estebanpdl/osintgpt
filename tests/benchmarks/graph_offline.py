@@ -39,6 +39,10 @@ def fixture_proposal(item, payload):
 
 def with_resolution(proposed, request):
     '''Keep scripted fixtures compatible with the requested extraction contract.'''
+    # Invalid extraction payloads must reach validation, not crash the mock
+    # transport and accidentally exercise connection retries.
+    if not isinstance(proposed, dict):
+        return proposed
     schema = request.get('text', {}).get('format', {}).get('schema', {})
     if 'resolution' in schema.get('properties', {}).get('entities', {}).get('items', {}).get('properties', {}):
         for entity in proposed.get('entities', []):

@@ -6,7 +6,7 @@ from osintgpt.graph import Entity, Edge, graph_for, saved_graph_status
 from test_cli_graph import clear_credentials, create_project, home, invoke, runner
 
 
-def test_identity_review_preview_apply_and_revalidation_commands(runner, home, monkeypatch):
+def test_identity_review_preview_apply_and_revalidation_commands(runner, home, monkeypatch, cli_help):
     project = create_project(runner, home)
     with graph_for(project) as graph:
         graph.add([Entity('one', 'Orion'), Entity('two', 'Orion'), Entity('lyra', 'Lyra'), Entity('vega', 'Vega')],
@@ -29,5 +29,5 @@ def test_identity_review_preview_apply_and_revalidation_commands(runner, home, m
     assert saved_graph_status(project)['entities'] == 3
     local = invoke(runner, home, 'graph', 'revalidate', '--project', project.slug, '--json')
     assert local.exit_code == 0 and json.loads(local.stdout)['provider_calls'] == 0
-    assert '--split-source' in invoke(runner, home, 'graph', 'reconcile', '--help').stdout
-    assert '--apply' in invoke(runner, home, 'graph', 'revalidate', '--help').stdout
+    assert '--split-source' in cli_help('graph', 'reconcile')
+    assert '--apply' in cli_help('graph', 'revalidate')

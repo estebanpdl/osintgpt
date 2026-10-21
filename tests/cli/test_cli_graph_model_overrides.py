@@ -59,9 +59,8 @@ def test_provider_only_override_and_invalid_override_fail_before_client(runner, 
         assert error in json.loads(result.stdout)['error']
 
 
-def test_help_explains_override_and_inheritance_scope(runner, home):
-    result = invoke(runner, home, 'graph', 'build', '--help')
-    assert result.exit_code == 0
-    assert '--provider' in result.stdout and '--model' in result.stdout and 'invocation only' in result.stdout
-    result = invoke(runner, home, 'config', '--help')
-    assert result.exit_code == 0 and 'graph_model_mode' in result.stdout and 'inherit' in result.stdout
+def test_help_explains_override_and_inheritance_scope(cli_help):
+    output = cli_help('graph', 'build')
+    assert '--provider' in output and '--model' in output and 'invocation only' in output
+    output = cli_help('config')
+    assert 'graph_model_mode' in output and 'inherit' in output
