@@ -11,7 +11,16 @@
 # =================================================================================
 
 # import modules <Qdrant>
-import qdrant_client
+try:
+    import qdrant_client
+    from qdrant_client.http import models as rest
+except ModuleNotFoundError as error:
+    if error.name != 'qdrant_client':
+        raise
+    raise ImportError(
+        'Qdrant requires the optional qdrant-client package. '
+        'Install it with: pip install "osintgpt[qdrant]"'
+    ) from None
 
 # type hints
 from typing import Tuple

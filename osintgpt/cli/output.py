@@ -64,7 +64,7 @@ def fail(
     if json_output:
         typer.echo(json.dumps(payload, ensure_ascii=False, default=str))
     else:
-        error_console.print(message, style='bold red', soft_wrap=True)
+        error_console.print(message, style='bold red', soft_wrap=True, markup=False)
         for key, value in (details or {}).items():
             error_console.print(
                 f'{key.replace("_", " ")}: {display(value)}', soft_wrap=True

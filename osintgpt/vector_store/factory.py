@@ -17,7 +17,6 @@ from typing import Optional, Union
 from osintgpt.config import Settings, resolve_settings
 
 from .base import BaseVectorEngine
-from .qdrant_store import QdrantVectorStore
 from .sqlite_store import SQLiteVectorStore
 
 SQLITE = 'sqlite'
@@ -53,6 +52,8 @@ def store_for(
         return SQLiteVectorStore(project.paths.store)
 
     if backend == QDRANT:
+        from .qdrant_store import QdrantVectorStore
+
         return QdrantVectorStore(
             resolve_settings(config) if config is not None else Settings(),
             # The project's own slug, so two projects on one server stay

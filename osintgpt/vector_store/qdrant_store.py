@@ -10,9 +10,6 @@
 #   scale-up option, reached by changing configuration rather than callers.
 # =================================================================================
 
-# import submodules <Qdrant>
-from qdrant_client.http import models as rest
-
 # import modules
 import uuid
 
@@ -23,7 +20,7 @@ from typing import Iterable, List, Optional, Sequence, Union
 from osintgpt.config import Settings, resolve_settings
 
 from .base import BaseVectorEngine
-from .connection import connect
+from .connection import connect, rest
 from .records import SearchResult, StoredChunk
 
 # One collection per project, named by the project rather than shared, so
