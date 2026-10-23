@@ -34,8 +34,20 @@ class TestOptionalQdrant(unittest.TestCase):
             from pathlib import Path
             from tempfile import TemporaryDirectory
             import osintgpt
+            import osintgpt.llms
+            import osintgpt.semantic_operations
+            from osintgpt.llms.search import SearchMixin
             from osintgpt.vector_store import BACKENDS, StoredChunk, store_for
 
+            assert osintgpt.llms.OpenAIGPT is not None
+            assert osintgpt.semantic_operations.SemanticOperations is not None
+            try:
+                SearchMixin().search_results_from_vector(object(), embeddings=[1.0, 0.0])
+            except ValueError as error:
+                assert 'Invalid vector engine' in str(error)
+                assert 'Qdrant' in str(error)
+            else:
+                raise AssertionError('invalid engine was accepted')
             assert 'qdrant' in BACKENDS
             assert 'osintgpt.vector_store.qdrant_store' not in sys.modules
             assert 'osintgpt.vector_store.qdrant' not in sys.modules
