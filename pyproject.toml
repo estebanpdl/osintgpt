@@ -102,7 +102,7 @@ include = ["osintgpt*"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-addopts = "-q --strict-markers"
+addopts = "--strict-markers"
 markers = [
-    "integration: needs a live service; deselected by default"
+    "integration: requires an external service (reserved; no opt-in runner yet)"
 ]

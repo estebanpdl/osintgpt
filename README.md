@@ -1010,6 +1010,20 @@ attempts may have unreported charges. **Preview what would be indexed** describe
 the full registered corpus, including already completed material; its cost is
 not an estimate of the remaining resume cost.
 
+## Testing
+
+From the active source checkout, use the project's Python environment:
+
+```shell
+python -m pytest
+python -m pytest -ra --durations=20
+```
+
+The first command is serial and shows pytest's normal header, progress and
+summary. The second adds skip/failure reasons and slow-test timings. Coverage
+and parallel workers are explicit options. See [the test guide](tests/README.md)
+for offline isolation, tokenizer preparation, evidence capture and CI profiles.
+
 ## Responsible use
 
 `osintgpt` analyzes material supplied by its operator. Use it only with data
