@@ -5,7 +5,7 @@ from unittest.mock import Mock
 import pytest
 
 from osintgpt.config import Settings
-from osintgpt.vector_store import QdrantVectorStore, SQLiteVectorStore, StoredChunk
+from osintgpt.vector_store import SQLiteVectorStore, StoredChunk
 from osintgpt.vector_store.pgvector_store import PgVectorStore, _to_chunk
 
 
@@ -25,8 +25,10 @@ def test_sqlite_additive_migration_keeps_existing_vectors(tmp_path):
 
 
 def test_qdrant_new_dimension_is_refused_before_old_points_are_deleted():
-    from qdrant_client import QdrantClient
-    client = QdrantClient(':memory:')
+    qdrant_client = pytest.importorskip('qdrant_client')
+    from osintgpt.vector_store import QdrantVectorStore
+
+    client = qdrant_client.QdrantClient(':memory:')
     store = QdrantVectorStore(Settings(), client=client)
     original = StoredChunk(ref='source', sequence=0, text='old', embedding_model='old-model')
     try:

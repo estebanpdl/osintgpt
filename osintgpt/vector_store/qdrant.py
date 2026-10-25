@@ -10,19 +10,13 @@
 #   method for managing the Qdrant API connection.
 # ===============================================================
 
-# import modules <Qdrant>
-import qdrant_client
-
-# import submodules <Qdrant>
-from qdrant_client.http import models as rest
-
 # type hints
 from typing import List, Optional, Union
 
 # import osintgpt config
 from osintgpt.config import Settings, resolve_settings
 
-from .connection import REMOTE, connect
+from .connection import REMOTE, connect, rest
 
 # Not a BaseVectorEngine yet: this class predates the widened interface and
 # still speaks in collections rather than documents. Adapting it is its own

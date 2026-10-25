@@ -21,7 +21,6 @@ from osintgpt.config import Settings
 # import osintgpt vector store
 from osintgpt.vector_store import (
     BaseVectorEngine,
-    QdrantVectorStore,
     SQLiteVectorStore,
     StoredChunk
 )
@@ -83,6 +82,8 @@ def store(request, tmp_path):
     import warnings
 
     qdrant_client = pytest.importorskip('qdrant_client')
+    from osintgpt.vector_store import QdrantVectorStore
+
     collection = f'contract_{uuid.uuid4().hex[:12]}'
     host = os.environ.get(QDRANT_HOST_VAR, '')
 

@@ -13,7 +13,7 @@
 import pytest
 
 # import submodules
-from qdrant_client.http import models as rest
+rest = pytest.importorskip('qdrant_client.http.models')
 
 # import osintgpt config
 from osintgpt.config import Settings

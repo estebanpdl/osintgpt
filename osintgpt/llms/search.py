@@ -21,7 +21,7 @@ from ast import literal_eval
 from typing import Optional, List
 
 # import osintgpt vector stores
-from osintgpt.vector_store import BaseVectorEngine, Qdrant
+from osintgpt.vector_store import BaseVectorEngine
 
 # import osintgpt openai embeddings
 from osintgpt.embeddings import OpenAIEmbeddingGenerator
@@ -126,12 +126,7 @@ class SearchMixin(object):
             raise ValueError('Either query or embeddings must be provided.')
 
         if not isinstance(vector_engine, BaseVectorEngine):
-            supported_vector_engines = [
-                Qdrant
-            ]
-            supported_vector_engine_names = ', '.join(
-                [engine.__name__ for engine in supported_vector_engines]
-            )
+            supported_vector_engine_names = 'Qdrant'
 
             # build message
             msg_a = 'Invalid vector engine provided'
