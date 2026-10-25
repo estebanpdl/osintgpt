@@ -41,18 +41,12 @@ def unit(*values):
     return [v / length for v in values]
 
 
-# Postgres has no in-process mode, so this backend is exercised only when a
-# server is actually reachable. Set it to run the contract against pgvector:
-#
-#   docker run -d --rm --name osintgpt-pg -p 5433:5432 #     -e POSTGRES_PASSWORD=osintgpt pgvector/pgvector:pg17
-#   OSINTGPT_TEST_POSTGRES_DSN=postgresql://postgres:osintgpt@localhost:5433/postgres
+# Postgres has no in-process mode. The ordinary offline harness clears this
+# selector; service execution needs a separately reviewed opt-in harness.
 POSTGRES_DSN_VAR = 'OSINTGPT_TEST_POSTGRES_DSN'
 
-# Qdrant runs in local mode by default. Point this at a server to run the same
-# suite against the real thing:
-#
-#   docker run -d --rm --name osintgpt-qdrant -p 6333:6333 qdrant/qdrant
-#   OSINTGPT_TEST_QDRANT_HOST=localhost
+# Qdrant runs in memory in the offline suite. Its remote selector is also
+# cleared, so an inherited shell setting cannot connect to a real server.
 QDRANT_HOST_VAR = 'OSINTGPT_TEST_QDRANT_HOST'
 
 
@@ -63,7 +57,7 @@ def store(request, tmp_path):
 
     Qdrant runs in its local mode rather than against a container, because a
     suite that needs Docker is a suite that does not run. Postgres has no
-    equivalent, so it is skipped unless a server is configured.
+    equivalent, so it is skipped by the offline harness.
     '''
     if request.param == 'postgres':
         yield from _postgres_store()
@@ -137,7 +131,7 @@ def _postgres_store():
 
     dsn = os.environ.get(POSTGRES_DSN_VAR, '')
     if not dsn:
-        pytest.skip(f'set {POSTGRES_DSN_VAR} to run the pgvector contract')
+        pytest.skip('Postgres service contract is excluded from the offline suite')
 
     pytest.importorskip('psycopg')
     pytest.importorskip('pgvector')

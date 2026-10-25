@@ -14,6 +14,14 @@
 import os
 import pytest
 
+# Install the same outbound guard as CI before importing application modules.
+from ci import sitecustomize  # noqa: F401
+from ci.offline_environment import (
+    SANDBOX_VARIABLE, clear_configuration, home_environment, isolate_environment,
+)
+
+_SESSION_SANDBOX = isolate_environment()
+
 # import submodules
 from types import SimpleNamespace
 
@@ -51,7 +59,7 @@ def cli_help(request, monkeypatch):
 
 
 @pytest.fixture(autouse=True)
-def isolated_environment(monkeypatch):
+def isolated_environment(monkeypatch, tmp_path):
     '''
     Clear every variable osintgpt reads.
 
@@ -61,6 +69,13 @@ def isolated_environment(monkeypatch):
     '''
     for name in ENV_VARS.values():
         monkeypatch.delenv(name, raising=False)
+    clean = dict(os.environ)
+    clear_configuration(clean)
+    for name in os.environ.keys() - clean.keys():
+        monkeypatch.delenv(name, raising=False)
+    for name, value in home_environment(tmp_path / 'home').items():
+        monkeypatch.setenv(name, value)
+    monkeypatch.setenv(SANDBOX_VARIABLE, str(tmp_path))
 
 
 @pytest.fixture

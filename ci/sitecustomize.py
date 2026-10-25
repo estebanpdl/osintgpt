@@ -12,6 +12,7 @@
 # =================================================================================
 
 # import modules
+import os
 import socket
 
 _real_connect = socket.socket.connect
@@ -57,6 +58,14 @@ def _guard_create_connection(address, *args, **kwargs):
     return _real_create_connection(address, *args, **kwargs)
 
 
-socket.socket.connect = _guard(_real_connect)
-socket.socket.connect_ex = _guard(_real_connect_ex)
-socket.create_connection = _guard_create_connection
+if not getattr(socket, '_osintgpt_offline', False):
+    socket.socket.connect = _guard(_real_connect)
+    socket.socket.connect_ex = _guard(_real_connect_ex)
+    socket.create_connection = _guard_create_connection
+    socket._osintgpt_offline = True
+
+# Ordinary pytest bootstraps this environment before collection. Its children
+# activate it here, before importing application code.
+if os.environ.get('OSINTGPT_TEST_SANDBOX'):
+    from ci.offline_environment import isolate_environment
+    isolate_environment()
