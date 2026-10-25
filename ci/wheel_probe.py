@@ -34,7 +34,9 @@ def main():
         assert getattr(osintgpt, name) is not None
     assert all([SQLDatabaseManager, OpenAIEmbeddingGenerator, OpenAIGPT, SemanticOperations])
     for name in available():
-        assert prompt(name, **{variable: 'smoke' for variable in variables_of(name)}), name
+        context = {variable: [{'citation': 'source.md', 'text': 'smoke'}]
+                   for variable in variables_of(name)}
+        assert prompt(name, **context), name
     assert len(available()) == 10
     for name in ['osintgpt.png', 'graph_layout.mjs', 'graph_downloads.mjs',
                  'graph_diagram.mjs', 'graph_diagram.css']:

@@ -32,7 +32,9 @@ def dependency_names(requirements):
     return {re.split(r'[\[<>=!~; ]', item, maxsplit=1)[0].lower() for item in requirements}
 
 
-def test_every_third_party_import_has_an_explicit_owner():
+def test_every_third_party_import_has_an_explicit_owner(monkeypatch):
+    # Exercise the older interpreter's stdlib inventory on newer Python too.
+    monkeypatch.setattr(sys, 'stdlib_module_names', sys.stdlib_module_names - {'tomllib'})
     project = tomllib.loads((ROOT / 'pyproject.toml').read_text(encoding='utf-8'))['project']
     imported = set()
     for path in (ROOT / 'osintgpt').rglob('*.py'):
@@ -41,7 +43,9 @@ def test_every_third_party_import_has_an_explicit_owner():
                 imported.update(alias.name.split('.')[0] for alias in node.names)
             elif isinstance(node, ast.ImportFrom) and not node.level and node.module:
                 imported.add(node.module.split('.')[0])
-    third_party = imported - sys.stdlib_module_names - {'osintgpt'}
+    # tomllib is guarded by a tomli fallback and is not in Python 3.10's
+    # stdlib_module_names, even though it is a standard-library import.
+    third_party = imported - sys.stdlib_module_names - {'osintgpt', 'tomllib'}
     # httpx2 is conditionally inspected only when an SDK installs it. The
     # classifier must also load with older SDKs that use httpx exclusively.
     assert third_party <= CORE.keys() | EXTRAS.keys() | {'httpx2'}
