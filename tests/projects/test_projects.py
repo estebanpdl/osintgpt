@@ -12,7 +12,6 @@
 
 # import modules
 import shutil
-import sqlite3
 import pytest
 
 # import submodules
@@ -21,11 +20,11 @@ from pathlib import Path
 # import osintgpt config
 from osintgpt.config import Settings
 
-# import osintgpt llms
-from osintgpt.llms import OpenAIGPT
-
 # import osintgpt projects
 from osintgpt.projects import Project, ProjectPaths, ProjectSettings, slugify
+from osintgpt.projects.conversations import (
+    append_turn, list_conversations, open_conversation, start_conversation,
+)
 from osintgpt.projects.paths import default_home
 
 try:
@@ -34,10 +33,6 @@ except ModuleNotFoundError:
     import tomli as tomllib
 
 from tests.conftest import FAKE_KEY
-
-USER_MESSAGES = (
-    "SELECT message FROM chat_gpt_conversations WHERE role = 'user'"
-)
 
 
 class TestSlugify:
@@ -188,7 +183,7 @@ class TestLoad:
 
 
 class TestSettingsComposition:
-    def test_redirects_the_conversation_store_into_the_project(self, tmp_path):
+    def test_preserves_the_sql_path_setting_for_compatibility(self, tmp_path):
         project = Project.create('Case A', home=tmp_path)
         resolved = project.settings_for(Settings(openai_api_key=FAKE_KEY))
 
@@ -253,30 +248,31 @@ class TestIsolation:
         assert a.paths.store != b.paths.store
         assert a.paths.root.parent == b.paths.root.parent
 
-    def test_conversation_logs_stay_separate(self, tmp_path, stub_client):
-        '''
-        The property the phase exists for: one code path, two projects, two
-        stores, nothing crossing between them.
-        '''
-        base = Settings(openai_api_key=FAKE_KEY, openai_gpt_model='gpt-4o')
+    def test_conversation_threads_stay_separate(self, tmp_path):
+        '''Persist and reopen both projects without sharing their turns.'''
         asked = {}
+        projects = []
+        threads = []
         for name, question in (('Case A', 'about alpha'),
                                ('Case B', 'about beta')):
             project = Project.create(name, home=tmp_path)
-            gpt = OpenAIGPT(project.settings_for(base))
-            gpt.client = stub_client
-            gpt.get_model_completion(question, verbose=False)
+            thread = start_conversation(project, question)
+            assert append_turn(thread, question, {'answer': name}) is not None
+            projects.append(Project.load(project.paths.root))
+            threads.append(thread)
 
-            connection = sqlite3.connect(project.paths.store)
-            try:
-                asked[name] = {
-                    body for (body,) in connection.execute(USER_MESSAGES)
-                }
-            finally:
-                connection.close()
+        for project, thread in zip(projects, threads):
+            reopened = open_conversation(project, thread.id)
+            assert reopened is not None
+            assert reopened.path.parent == project.paths.root / 'conversations'
+            assert [item.id for item in list_conversations(project)] == [thread.id]
+            assert [turn.answer for turn in reopened.turns] == [{'answer': project.name}]
+            asked[project.name] = {turn.question for turn in reopened.turns}
 
         assert asked['Case A'] == {'about alpha'}
         assert asked['Case B'] == {'about beta'}
+        assert open_conversation(projects[0], threads[1].id) is None
+        assert open_conversation(projects[1], threads[0].id) is None
 
     def test_deleting_a_project_is_deleting_a_directory(self, tmp_path):
         a = Project.create('Case A', home=tmp_path)

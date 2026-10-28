@@ -67,11 +67,14 @@ def main():
     wheels = list((scratch / 'wheels').glob('osintgpt-*.whl'))
     assert len(wheels) == 1, wheels
     wheel = wheels[0]
-    # Check every package source and asset, including the retained legacy files.
+    # Check every surviving package source and asset and reject retired packages.
     expected = [path.relative_to(source).as_posix() for path in (source / 'osintgpt').rglob('*')
                 if path.is_file() and (path.suffix == '.py' or '/assets/' in path.as_posix()
                                        or '/prompts/templates/' in path.as_posix())]
     with ZipFile(wheel) as zipped:
+        retired = ('osintgpt/llms/', 'osintgpt/embeddings/',
+                   'osintgpt/semantic_operations/', 'osintgpt/databases/')
+        assert not any(name.startswith(retired) for name in zipped.namelist())
         for name in expected:
             assert zipped.read(name) == (source / name).read_bytes(), name
     (scratch / 'wheel-contents.json').write_text(json.dumps({

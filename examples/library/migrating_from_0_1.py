@@ -1,4 +1,4 @@
-"""Show the current provider construction beside the pre-1.0 compatibility API.
+"""Construct modern providers after removal of the legacy API.
 
 Usage:
     python examples/library/migrating_from_0_1.py ROLE PROVIDER MODEL
@@ -10,8 +10,9 @@ from osintgpt import Settings
 from osintgpt.llm import build_embedding_provider, build_generation_provider
 
 
-# The compatibility calls on the left disappear in 1.0. They are comments so
-# this example itself starts on the supported API.
+# Legacy calls are shown only as comments. The next minor after 0.7.1 removes
+# them, changing the earlier 1.0 promise. See docs/migration-legacy-api.md for
+# behavior/storage differences, SQL export, and the osintgpt<0.8 fallback.
 #
 # from osintgpt.embeddings import OpenAIEmbeddingGenerator
 # old_embedder = OpenAIEmbeddingGenerator('.env')

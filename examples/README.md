@@ -51,7 +51,7 @@ Follow them in order; each continues the project from the one before.
 
 ## Library programs — `library/`
 
-Each program is standalone, accepts `--help`, and takes a project directory
+Each program is standalone and accepts `--help`. Research programs take a project directory
 (`~/.osintgpt/projects/<slug>` for CLI-created projects). Configuration is
 explicit: credentials come from the process environment, or from a file
 passed with `--env-file` (see [`config/.env.template`](config/.env.template)).
@@ -68,7 +68,8 @@ Credentials stored with `osintgpt auth set` are read by the CLI and app only.
 | Graph | [`build_and_query_graph.py`](library/build_and_query_graph.py) | Build and traverse sourced relationships | generation |
 | Measure | [`evaluate_retrieval.py`](library/evaluate_retrieval.py) | Score every retrieval method against a question set | embedding |
 | Providers | [`custom_provider.py`](library/custom_provider.py) | Registered or any OpenAI-compatible backend, locality audit, retry policy | embedding, generation |
-| Providers | [`migrating_from_0_1.py`](library/migrating_from_0_1.py) | Replace the pre-1.0 compatibility constructors | none until used |
+| Providers | [`migrating_from_0_1.py`](library/migrating_from_0_1.py) | Replace the removed legacy constructors; see the [migration guide](../docs/migration-legacy-api.md) | none until used |
+| Migration | [`export_legacy_logs.py`](library/export_legacy_logs.py) | Read a closed SQLite snapshot and export both old log tables into a new CSV directory | keyless |
 
 Example run against a CLI project:
 

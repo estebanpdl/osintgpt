@@ -74,6 +74,7 @@ local = [
     "sentence-transformers>=5.7.0"
 ]
 dev = [
+    "setuptools>=77",
     "pytest>=9.1.1",
     "pytest-cov>=7.1.0",
     "pytest-mock>=3.15.1",
@@ -106,6 +107,9 @@ include = ["osintgpt*"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "--strict-markers"
+filterwarnings = [
+    '''ignore:^'_UnionGenericAlias' is deprecated and slated for removal in Python 3\.17$:DeprecationWarning:^google\.genai\.types$'''
+]
 markers = [
     "integration: requires an external service (reserved; no opt-in runner yet)"
 ]

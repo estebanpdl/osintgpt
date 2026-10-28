@@ -59,3 +59,22 @@ def test_package_syntax_parses_on_the_supported_python_floor():
     # Grammar checking is not execution on Python 3.10; that remains a CI job.
     for path in (ROOT / 'osintgpt').rglob('*.py'):
         ast.parse(path.read_text(encoding='utf-8-sig'), filename=str(path), feature_version=(3, 10))
+
+
+def test_only_the_provider_layer_imports_a_vendor_sdk():
+    vendors = {'openai', 'anthropic', 'sentence_transformers', 'google'}
+    package = ROOT / 'osintgpt'
+    offenders = []
+    for path in package.rglob('*.py'):
+        if path.is_relative_to(package / 'llm'):
+            continue
+        for node in ast.walk(ast.parse(path.read_text(encoding='utf-8-sig'))):
+            if isinstance(node, ast.Import):
+                names = {alias.name.split('.')[0] for alias in node.names}
+            elif isinstance(node, ast.ImportFrom):
+                names = {(node.module or '').split('.')[0]}
+            else:
+                continue
+            if vendors & names:
+                offenders.append(f'{path.relative_to(package)}:{node.lineno}')
+    assert offenders == []

@@ -1,7 +1,7 @@
 # Package and optional-backend checks
 
 Core includes the provider SDKs, Streamlit, document readers, NumPy, Jinja2 and
-httpx. NumPy performs SQLite vector search and compatibility dataframe search;
+httpx. NumPy performs SQLite vector search;
 Jinja2 renders prompts; httpx supplies the Gemini transport error contract.
 These are direct dependencies even when another package also installs them.
 httpx2 is inspected conditionally for SDK-wrapped protocol errors. SDKs that
@@ -47,7 +47,7 @@ and command receipts outside the checkout for inspection or later cleanup.
 
 The smoke requires the optional distributions to be genuinely absent, asserts
 that package and metadata originate inside the venv, runs the installed CLI
-help, imports modern and retained legacy APIs and the app module, renders all
+help, imports modern APIs and the app module, rejects retired modules/exports, renders all
 packaged prompts, verifies app assets, persists/reopens/searches/deletes a
 synthetic SQLite record, and checks missing-extra guidance. Copied offline
 guards isolate user state and block outbound Python connections; the source
@@ -58,3 +58,15 @@ not a fresh dependency solve or a proof that every supported Python version
 can install the declared lower bounds. A clean-environment core/per-extra CI
 profile is a separate check. No server, provider request or model download is
 part of this recipe.
+
+## Removed APIs and distributions
+
+`test_legacy_removal.py` checks absent legacy imports/exports and surviving
+source/example imports. `test_distribution_contents.py` uses the development
+setuptools dependency to build an sdist and then rebuild a wheel from it,
+entirely offline in pytest scratch. Both archives must exclude retired code;
+the sdist includes migration/changelog documents, and the wheel must retain
+every surviving package source and prompt/app asset byte-for-byte.
+`test_legacy_log_export.py` exercises the read-only export example and modern
+thread creation beside a synthetic old database, verifying the database bytes
+and previously exported CSVs are preserved. No private logs are read.

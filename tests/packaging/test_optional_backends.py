@@ -17,7 +17,7 @@ from osintgpt.vector_store import store_for
 OPTIONAL = {'qdrant_client', 'psycopg', 'pgvector', 'sentence_transformers', 'torch'}
 
 
-def test_core_exports_legacy_imports_and_app_without_any_runtime_extra():
+def test_core_exports_and_app_without_any_runtime_extra():
     source = '''
 import importlib.abc
 import sys
@@ -29,10 +29,7 @@ sys.meta_path.insert(0, NoExtras())
 import osintgpt
 import osintgpt.cli
 import osintgpt.app.main
-from osintgpt.llms import OpenAIGPT
-from osintgpt.embeddings import OpenAIEmbeddingGenerator
-from osintgpt.semantic_operations import SemanticOperations
-from osintgpt.databases import SQLDatabaseManager
+from osintgpt.llm import build_embedding_provider, build_generation_provider
 from osintgpt.llm.local import SentenceTransformerEmbedding
 from osintgpt.vector_store.pgvector_store import PgVectorStore
 for name in osintgpt.__all__:

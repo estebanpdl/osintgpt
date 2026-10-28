@@ -15,7 +15,10 @@ python -m pytest tests/config -ra --durations=20
 The default is serial, with normal pytest output, strict markers and the
 `tests/` discovery root. Warnings remain visible; narrow filters already used
 by individual tests concern the behavior they explicitly exercise. There is
-no global warning suppression. `PYTEST_ADDOPTS` and third-party plugins can
+no blanket warning suppression. The project-level filter ignores only the exact
+`'_UnionGenericAlias' is deprecated and slated for removal in Python 3.17`
+DeprecationWarning from `google.genai.types`; unrelated warnings remain visible.
+`PYTEST_ADDOPTS` and third-party plugins can
 alter pytest behavior; record or clear inherited overrides when collecting
 comparable evidence. Installing xdist or pytest-cov does not enable them.
 

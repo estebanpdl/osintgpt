@@ -21,7 +21,10 @@ EXAMPLES = ROOT / 'examples'
 PYTHON_EXAMPLES = sorted(EXAMPLES.rglob('*.py'))
 LIBRARY_EXAMPLES = sorted((EXAMPLES / 'library').glob('*.py'))
 BASH_BLOCK = re.compile(r'```bash\s*\n(.*?)```', re.DOTALL)
-DEPRECATED = {'OpenAIEmbeddingGenerator', 'OpenAIGPT'}
+REMOVED = {
+    'OpenAIEmbeddingGenerator', 'OpenAIGPT', 'SemanticOperations',
+    'SQLDatabaseManager', 'SearchMixin', 'ConversationLogMixin', 'CompletionsMixin',
+}
 
 
 def imported_symbols(path: Path):
@@ -49,16 +52,14 @@ def test_python_examples_compile_and_import(path):
             assert hasattr(module, symbol), f'{path}: no {module_name}.{symbol}'
 
 
-def test_only_the_migration_example_names_deprecated_imports():
+def test_examples_never_import_removed_apis():
     for path in PYTHON_EXAMPLES:
-        if path.name == 'migrating_from_0_1.py':
-            continue
         imported = {
             symbol
             for _, symbol in imported_symbols(path)
             if symbol is not None
         }
-        assert not imported & DEPRECATED, f'{path}: deprecated import'
+        assert not imported & REMOVED, f'{path}: removed import'
 
 
 def test_environment_template_matches_the_settings_source_of_truth():
