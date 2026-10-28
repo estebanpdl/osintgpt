@@ -1,12 +1,11 @@
 # Migrating from the legacy API
 
-The next minor release after 0.7.1 removes `osintgpt.llms`,
+Release 0.8.0 removes `osintgpt.llms`,
 `osintgpt.embeddings`, `osintgpt.semantic_operations`, and `osintgpt.databases`.
 This is a **breaking change in a 0.x minor release**. Earlier warnings and the
 migration example promised removal in 1.0; that promise has changed. There is
 no intervening notice-only release. These imports now raise `ModuleNotFoundError`;
-there are no compatibility aliases. This document describes the unreleased
-removal; the source version remains 0.7.1 until release preparation.
+there are no compatibility aliases.
 
 Scripts that still require these APIs can retain the last compatible series:
 

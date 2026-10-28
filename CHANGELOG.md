@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased — next minor after 0.7.1
+## 0.8.0 — 2026-10-28
 
 ### Breaking changes
 
@@ -9,8 +9,7 @@
   mutable embedding helpers, and SQL conversation logging APIs.
 - This removal changes the previously published **removed in 1.0** promise.
   It ships directly in the next **0.x minor**, with no notice-only release
-  first. It is not a patch-compatible change. Version metadata is unchanged
-  in this unreleased branch.
+  first. It is not a patch-compatible change.
 - Use modern provider factories, project search/answers, and JSONL project
   conversations. Historical SQL databases remain untouched; no automatic
   conversion is performed. Scripts requiring the old API can pin
