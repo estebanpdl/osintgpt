@@ -123,7 +123,18 @@ provides `answer_to_dict`).
 ## Retaining, reading, and exporting old SQL logs
 
 Removing Python code does not delete, upgrade, or overwrite any database.
-Keep your historical database and a backup. The two tables are:
+Keep your historical database and a backup.
+
+**Where your old logs are.** Legacy callers used `SQL_DB_FILE_PATH`
+(`Settings.sql_db_file_path`). If they used
+`OpenAIGPT(project.settings_for(...))`, the logs are in
+`<project>/store.sqlite`, alongside the project's live vector data. Modern
+indexing still writes to that file, and deleting the project deletes its old
+log tables too. Stop osintgpt and use `sqlite3`'s backup facility to create a
+separate snapshot before exporting. Run the export on that snapshot, never
+on `<project>/store.sqlite` itself.
+
+The two tables are:
 
 | Table | Columns |
 |---|---|

@@ -218,8 +218,9 @@ class Project:
         Resolution runs explicit argument, then project, then user defaults,
         then library default: a value set on `base` wins, the project fills
         what `base` left unset, and `defaults` fills what neither chose. The
-        conversation store is always redirected into the project, so two
-        projects cannot write to one log.
+        retained `sql_db_file_path` compatibility setting points to the
+        project's store.sqlite. No current logger writes through this setting;
+        project conversations use separate JSONL files.
 
         Args:
             base (Settings): Configuration carrying credentials. Secrets are \
