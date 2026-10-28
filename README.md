@@ -41,6 +41,15 @@ pip install osintgpt[local]
 See [osintgpt on PyPI](https://pypi.org/project/osintgpt/) for package metadata
 and release history.
 
+### Legacy API removal
+
+The next minor after 0.7.1 removes `llms`, `embeddings`, `semantic_operations`,
+and `databases`. This is a breaking 0.x minor change and replaces the earlier
+promise of removal in 1.0. Use the modern `llm` factories, project search and
+answers, and project conversation APIs. Existing SQL logs remain untouched.
+See the [migration guide](docs/migration-legacy-api.md) and
+[changelog](CHANGELOG.md), or pin `osintgpt<0.8` while migrating old scripts.
+
 ## Quickstart
 
 By default, embeddings and answers use OpenAI. Set `OPENAI_API_KEY` and

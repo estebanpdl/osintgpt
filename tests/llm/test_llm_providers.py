@@ -218,6 +218,16 @@ class TestBuildEmbedding:
 
 
 class TestBuildGeneration:
+    def test_two_instances_hold_independent_configuration(self):
+        first = build_generation_provider(
+            'openai', Settings(openai_api_key='sk-one'), model='gpt-4o',
+        )
+        second = build_generation_provider(
+            'openai', Settings(openai_api_key='sk-two'), model='gpt-4o-mini',
+        )
+        assert first.model != second.model
+        assert first.client.api_key != second.client.api_key
+
     def test_returns_the_interface(self, keyed):
         provider = build_generation_provider('openai', keyed)
 
@@ -279,6 +289,24 @@ class TestEmbeddingCalls:
     def test_no_texts_makes_no_request(self, provider):
         assert provider.embed([]) == []
         assert provider.client.embeddings.models == []
+
+    def test_input_order_survives_multiple_shuffled_batches(self, provider):
+        from types import SimpleNamespace
+
+        batches = []
+
+        def shuffled(*, model, input):
+            batches.append(len(input))
+            return SimpleNamespace(data=list(reversed([
+                SimpleNamespace(index=i, embedding=[float(text)])
+                for i, text in enumerate(input)
+            ])), model=model)
+
+        provider.client.embeddings.create = shuffled
+        texts = [str(i) for i in range(MAX_BATCH * 2 + 1)]
+        assert provider.embed(texts) == [[float(text)] for text in texts]
+        assert len(batches) > 1
+        assert all(0 < size <= MAX_BATCH for size in batches)
 
 
 class TestGenerationCalls:

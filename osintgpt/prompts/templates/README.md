@@ -21,9 +21,9 @@ contains literal `{` and `}` and `.format` would require doubling every one.
 
 | Template | Sent by | Variables |
 |---|---|---|
-| `summarize` | `prompts.basic_summarization` → `SemanticOperations.summarize_content` | — |
+| `summarize` | `prompts.basic_summarization`; explicit provider generation | — |
 | `topic_modeling` | `prompts.topic_modeling_summarization` | — |
-| `sentence_details` | `OpenAIGPT.analyze_sentence_details` (deprecated) | — |
+| `sentence_details` | Public template for explicit generation; no automatic caller | — |
 | `answer` | `answering.build_prompt` → `answer_question` | `question`, `passages` |
 | `search_terms` | `lexical.derive_search_terms` | `max_terms` |
 | `graph_extraction` | `graph.extract_document` | —; source and bounded entity context are user-message JSON |
@@ -37,10 +37,10 @@ contains literal `{` and `}` and `.format` would require doubling every one.
 The distinction is not enforced anywhere, so it has to be understood.
 
 **Contract prompts** specify an output shape something downstream depends on.
-`sentence_details` must return that JSON object, because its caller reads
-`Subject or topics` out of the reply to decide what to embed. Rewording the
-instructions is fine; changing the shape breaks the caller **silently** — the
-failure looks like "search results got worse", not like an exception.
+`sentence_details` retains its historical JSON shape for direct template users.
+Its old facade caller has been removed. Applications that parse its
+`Subject or topics` field must keep their parser aligned with the template;
+changing the shape can silently change which text they embed.
 
 **Voice prompts** shape tone and behaviour with nothing parsing them.
 `summarize` and `topic_modeling` are read by a person, so they are safe to
@@ -93,21 +93,19 @@ lexical leg sits out and the semantic leg still answers — but a reworded
 prompt that stops returning an array turns the exact-match leg off silently,
 which looks like retrieval getting slightly worse.
 
-## What is on its way out
+## Standalone templates after legacy removal
 
 `sentence_details` asks the model to reduce a question to its subject before
-that subject is embedded — reformulation, and the right instinct: request words
-like "summarize" pollute a similarity search. It survives because its caller is
-part of the deprecated `OpenAIGPT` surface and someone's script depends on it.
+that subject is embedded. The legacy `OpenAIGPT` caller has been removed, but
+the public template remains available through `static_prompt('sentence_details')`.
+It performs no work by itself. Agentic retrieval composes its own tool queries;
+`search_project` embeds the query it is given without this preprocessing step.
 
-Agentic retrieval absorbs it. A model that calls `semantic_search(query=...)`
-composes that phrase itself, inside a call it was already making, so the
-separate pre-flight stops being cheaper-and-better and simply stops having a
-caller. The instinct survives as a standing instruction in the retrieval
-prompt; the round trip does not. Explicit reformulation remains only in the
-static fallback, where no model is choosing the query.
-
-Read this template as a record of the current API, not a pattern to extend.
+The `summarize` and `topic_modeling` templates also remain accessible through
+their public prompt helpers. Use the resulting text as the system argument to
+`generator.generate(system, user)`. This does not recreate the removed
+`SemanticOperations` recursion, chunk handling, or result shape. See the
+[migration guide](../../../docs/migration-legacy-api.md).
 
 ## What is deliberately not here
 

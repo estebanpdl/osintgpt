@@ -17,10 +17,7 @@ def main():
 
     import osintgpt
     import osintgpt.app.main
-    from osintgpt.databases import SQLDatabaseManager
-    from osintgpt.embeddings import OpenAIEmbeddingGenerator
-    from osintgpt.llms import OpenAIGPT
-    from osintgpt.semantic_operations import SemanticOperations
+    from osintgpt.llm import build_embedding_provider, build_generation_provider
     from osintgpt.prompts.templates import available, prompt, variables_of
     from osintgpt.vector_store import StoredChunk, store_for
 
@@ -32,7 +29,15 @@ def main():
     assert osintgpt.__version__ == dist.version
     for name in osintgpt.__all__:
         assert getattr(osintgpt, name) is not None
-    assert all([SQLDatabaseManager, OpenAIEmbeddingGenerator, OpenAIGPT, SemanticOperations])
+    assert callable(build_embedding_provider) and callable(build_generation_provider)
+    removed_modules = ['llms', 'embeddings', 'semantic_operations', 'databases']
+    for name in removed_modules:
+        assert importlib.util.find_spec(f'osintgpt.{name}') is None, name
+    removed_exports = ['OpenAIGPT', 'OpenAIEmbeddingGenerator', 'SemanticOperations',
+                       'SQLDatabaseManager', 'SearchMixin', 'ConversationLogMixin', 'CompletionsMixin']
+    for name in removed_exports:
+        assert not hasattr(osintgpt, name), name
+        assert name not in osintgpt.__all__, name
     for name in available():
         context = {variable: [{'citation': 'source.md', 'text': 'smoke'}]
                    for variable in variables_of(name)}
@@ -69,7 +74,7 @@ def main():
     assert not set(optional).intersection(sys.modules)
     print(json.dumps({'python': sys.executable, 'origin': str(origin), 'version': dist.version,
                       'absent_extras': optional, 'prompts': available(), 'app_assets': 5,
-                      'legacy_imports': 'passed', 'sqlite_persistence': 'passed',
+                      'removed_apis_absent': 'passed', 'sqlite_persistence': 'passed',
                       'missing_extra_guidance': 'passed'}))
 
 
