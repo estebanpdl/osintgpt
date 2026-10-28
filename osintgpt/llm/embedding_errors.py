@@ -7,12 +7,22 @@ from dataclasses import dataclass
 from email.utils import parsedate_to_datetime
 
 import httpx
-import httpx2
 from anthropic import APIConnectionError as AnthropicConnectionError, APIStatusError as AnthropicStatusError
 from google.genai.errors import APIError as GeminiAPIError
 from openai import APIConnectionError, APIStatusError
 
 from .rate_headers import duration
+
+# Newer SDKs use httpx2; older supported SDKs only require httpx. Let each
+# SDK own its transport dependency without forcing httpx2 onto core installs.
+try:
+    import httpx2
+except ModuleNotFoundError as error:
+    if error.name != 'httpx2':
+        raise
+    SDK_PROTOCOL_ERRORS = ()
+else:
+    SDK_PROTOCOL_ERRORS = (httpx2.UnsupportedProtocol, httpx2.LocalProtocolError)
 
 TRANSIENT_STATUS = {408, 409, 429, 500, 502, 503, 504}
 ACTION_REQUIRED = {
@@ -125,7 +135,7 @@ def connection_requires_action(error):
     while error is not None and id(error) not in seen:
         seen.add(id(error))
         if isinstance(error, (httpx.UnsupportedProtocol, httpx.LocalProtocolError,
-                              httpx2.UnsupportedProtocol, httpx2.LocalProtocolError, ssl.SSLCertVerificationError)):
+                              *SDK_PROTOCOL_ERRORS, ssl.SSLCertVerificationError)):
             return True
         error = error.__cause__
     return False

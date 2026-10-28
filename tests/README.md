@@ -94,3 +94,7 @@ deselect totals, warning/skip reasons, exit code and runner duration. Also
 record concurrent heavy work; timing on a shared workstation is not an
 isolated performance benchmark. Optional-dependency skips do not qualify those
 backends, and offline stubs do not establish live-provider compatibility.
+
+See [package checks](packaging/README.md) for the direct-import inventory,
+optional-backend simulations and an installed-wheel smoke that keeps all
+build and venv scratch outside the checkout.

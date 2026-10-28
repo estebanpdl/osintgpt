@@ -2,6 +2,7 @@
 
 from dataclasses import replace
 from threading import Event
+from time import monotonic
 
 import pytest
 
@@ -10,6 +11,8 @@ from osintgpt.graph import graph_for, saved_graph_status
 from osintgpt.graph.jobs import GraphJobs
 from osintgpt.graph.run_settings import GraphRunSettings
 from osintgpt.ingestion import Corpus
+
+WAIT_SECONDS = 120
 
 
 def project_with_source(tmp_path):
@@ -27,13 +30,20 @@ class Generator:
         self.calls += 1
         if self.entered:
             self.entered.set()
-            assert self.release.wait(10)
+            assert self.release.wait(WAIT_SECONDS), 'Generator was never released'
         return '{"entities":[],"edges":[]}'
 
 
 def join(jobs, project):
-    jobs.jobs[jobs.key(project)].thread.join(10)
-    assert not jobs.get(project)['active']
+    deadline = monotonic() + WAIT_SECONDS
+    thread = jobs.jobs[jobs.key(project)].thread
+    # Completion is a state transition, not a ten-second performance budget.
+    # Short joins yield to the worker and return immediately when it exits.
+    while jobs.get(project)['active'] and monotonic() < deadline:
+        thread.join(min(0.05, max(0, deadline - monotonic())))
+    assert not jobs.get(project)['active'], jobs.get(project)
+    thread.join(max(0, deadline - monotonic()))
+    assert not thread.is_alive(), 'Completed job left its worker running'
 
 
 def test_reruns_and_sessions_attach_to_one_build_and_cancel_saved_work(tmp_path):
@@ -43,7 +53,7 @@ def test_reruns_and_sessions_attach_to_one_build_and_cancel_saved_work(tmp_path)
     jobs, settings = GraphJobs(), GraphRunSettings()
     first, started = jobs.start(project, lambda: generator, settings, action='initial')
     try:
-        assert started and entered.wait(10)
+        assert started and entered.wait(WAIT_SECONDS)
         second, started = jobs.start(project, lambda: pytest.fail('Duplicate build'), settings, action='initial')
         assert not started and second['id'] == first['id']
         assert jobs.get(Project.load(project.paths.root))['id'] == first['id']
@@ -70,7 +80,7 @@ def test_two_managers_cannot_duplicate_provider_requests(tmp_path):
     other = Generator()
     first.start(project, lambda: generator, GraphRunSettings(), action='initial')
     try:
-        assert entered.wait(10)
+        assert entered.wait(WAIT_SECONDS)
         second.start(project, lambda: other, GraphRunSettings(), action='initial')
         join(second, project)
         assert 'already running' in second.get(project)['problem']
@@ -118,13 +128,13 @@ def test_initialization_is_inside_the_shared_build_lock(tmp_path, monkeypatch):
     original = module.graph_for
     def initialize(project):
         entered.set()
-        assert release.wait(10)
+        assert release.wait(WAIT_SECONDS)
         return original(project)
     monkeypatch.setattr(module, 'graph_for', initialize)
     first, second = GraphJobs(), GraphJobs()
     first.start(project, Generator, GraphRunSettings(), action='initial')
     try:
-        assert entered.wait(10)
+        assert entered.wait(WAIT_SECONDS)
         assert not (project.paths.root / 'graph.sqlite').exists()
         second.start(project, Generator, GraphRunSettings(), action='initial')
         join(second, project)
