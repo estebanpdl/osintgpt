@@ -1,25 +1,23 @@
 # Changelog
 
-## 0.8.0 — 2026-10-28
+## 0.9.0 — 2026-10-29
 
-### Breaking changes
+### Added
 
-- Remove `osintgpt.llms`, `osintgpt.embeddings`, `osintgpt.semantic_operations`,
-  and `osintgpt.databases`, including their classes, mixins, dataframe search,
-  mutable embedding helpers, and SQL conversation logging APIs.
-- This removal changes the previously published **removed in 1.0** promise.
-  It ships directly in the next **0.x minor**, with no notice-only release
-  first. It is not a patch-compatible change.
-- Use modern provider factories, project search/answers, and JSONL project
-  conversations. Historical SQL databases remain untouched; no automatic
-  conversion is performed. Scripts requiring the old API can pin
-  `osintgpt<0.8`. See the [migration guide](docs/migration-legacy-api.md) for
-  every removed surface, behavioral differences, unsupported equivalents,
-  and read/export examples.
+- Snowball semantic chains: start from a query, take the closest passage as
+  the next query, and repeat. Available as an app page (between Graph and
+  Settings), `osintgpt snowball` and `from osintgpt import snowball`; the
+  agentic chat tool uses the same operation.
+- Defaults: depth 25 and an inclusive 0.5 similarity threshold (agentic tool:
+  5 hits). Text deduplication after NFKC, case and whitespace normalization;
+  `--dedupe chunk` keeps file/chunk identities.
+- Each hop reports the seed, full hit text, score, source, date and similarity
+  to the initial query. Optional date grouping by day, week, month or year.
+- CSV/XLSX export with one row schema; formula-like text is escaped and
+  existing files are not overwritten.
+- Embedding usage and cost are reported per run.
 
-### Testing
+### Notes
 
-- Replace legacy-only tests with removed-import/export and built wheel/sdist
-  checks, retaining modern project isolation and provider-boundary coverage.
-- Filter only the Google GenAI `'_UnionGenericAlias'` deprecation message from
-  `google.genai.types`; other warnings remain visible.
+- A chain is a similarity path, not evidence of causation or propagation.
+- No breaking changes, new dependencies or stored-data changes.
