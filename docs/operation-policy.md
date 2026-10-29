@@ -6,8 +6,9 @@ existing adapters. The context currently resolves embedding and store
 dependencies; generation roles are not yet part of this interface.
 
 Create a fresh context per invocation. Project settings inherit unset values
-from user defaults, then explicit `Settings` model choices and invocation
-`overrides` apply. Connection settings carry credentials separately from project
+from user defaults, and nonempty invocation `overrides` take precedence. Model
+values from explicit `Settings` or the environment fill only choices left empty
+by those sources. Connection settings carry credentials separately from project
 choices. The resolved settings and configuration are snapshots: later changes
 to saved defaults do not alter an active operation. A resolved project copy
 carries inherited storage choices to the store factory without saving them.
@@ -44,7 +45,8 @@ choices before work. This does not inspect or validate every model in an index.
 Ceilings are optional. The lower nonempty project/user or invocation ceiling
 applies, and zero is an explicit ceiling. A run override cannot raise a saved
 ceiling. Existing usage rules check after a response: the final call can exceed
-the ceiling, and unknown usage or prices prevent enforcing a configured ceiling.
+the ceiling. Unknown usage or prices stop the run when a ceiling is configured,
+because the limit cannot be enforced with incomplete accounting.
 No ceiling means no accounting stop. Calls billed by an enclosing provider's
 recorder retain that caller's policy as well.
 

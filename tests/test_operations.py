@@ -49,13 +49,54 @@ def test_settings_are_resolved_once_with_inheritance_and_invocation_choices(tmp_
     assert project.settings.storage_backend == '' and project.settings.embedding_model == ''
 
 
-def test_explicit_connection_model_precedence_can_be_overridden(tmp_path):
-    project = Project.create('Model', home=tmp_path).with_settings(embedding_model='project')
-    config = Settings(openai_embedding_model='explicit')
+@pytest.mark.parametrize('field,target', [
+    ('embedding_model', 'openai_embedding_model'), ('generation_model', 'openai_gpt_model'),
+])
+def test_project_model_wins_over_connection_config_unless_overridden(tmp_path, field, target):
+    project = Project.create('Model', home=tmp_path).with_settings(**{field: 'project'})
+    config = Settings(**{target: 'explicit'})
     first = OperationContext(project, home=tmp_path, config=config)
-    second = OperationContext(project, home=tmp_path, config=config, overrides={'embedding_model': 'invocation'})
-    assert first.settings.embedding_model == first.config.openai_embedding_model == 'explicit'
-    assert second.settings.embedding_model == second.config.openai_embedding_model == 'invocation'
+    second = OperationContext(project, home=tmp_path, config=config, overrides={field: 'invocation'})
+    assert getattr(first.settings, field) == getattr(first.config, target) == 'project'
+    assert getattr(second.settings, field) == getattr(second.config, target) == 'invocation'
+    assert getattr(config, target) == 'explicit'
+
+
+@pytest.mark.parametrize('field,target', [
+    ('embedding_model', 'openai_embedding_model'), ('generation_model', 'openai_gpt_model'),
+])
+@pytest.mark.parametrize('default,expected', [('user-model', 'user-model'), ('', 'config-model')])
+def test_config_models_fill_only_choices_left_empty_by_project_and_user(tmp_path, field, target, default, expected):
+    project = Project.create('Fallback', home=tmp_path)
+    context = OperationContext(project, config=Settings(**{target: 'config-model'}),
+                               defaults=ProjectSettings(**{field: default}), overrides={field: ''})
+    assert getattr(context.settings, field) == getattr(context.config, target) == expected
+
+
+@pytest.mark.parametrize('source', ['project', 'user'])
+def test_snowball_uses_selected_model_for_provider_and_store_despite_environment(tmp_path, monkeypatch, source):
+    expected = GraphEmbedder.model
+    project = Project.create('Environment precedence', home=tmp_path)
+    if source == 'project':
+        project = project.with_settings(embedding_model=expected)
+    else:
+        save_user_defaults(tmp_path, ProjectSettings(embedding_model=expected))
+    monkeypatch.setenv('OPENAI_EMBEDDING_MODEL', 'env-model')
+    store = GraphStore()
+    built = []
+
+    def build(provider, config, model=None):
+        built.append(model)
+        assert config.openai_embedding_model == model == expected
+        return GraphEmbedder()
+
+    monkeypatch.setattr('osintgpt.operations.build_embedding_provider', build)
+    monkeypatch.setattr('osintgpt.operations.store_for', lambda *a: store)
+    result = snowball(project, 'start', home=tmp_path, depth=1)
+    assert built == [expected] and len(result) == 1
+    assert result.model == expected
+    assert store.requests and all(request[1] == expected for request in store.requests)
+    assert store.closed
 
 
 @pytest.mark.parametrize('overrides,expected', [

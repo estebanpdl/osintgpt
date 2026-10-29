@@ -59,8 +59,9 @@ class OperationOutcome:
 class OperationContext:
     '''A single-use policy snapshot with lazy embedding and store dependencies.
 
-    ``overrides`` contains invocation-level ProjectSettings fields. Explicit
-    connection-config models win over project/default models unless overridden.
+    ``overrides`` contains invocation-level ProjectSettings fields. Model choices
+    resolve invocation, project, user defaults, then connection configuration.
+    Empty choices defer to the next source, including environment model values.
     A ceiling override can only tighten the resolved project/user ceiling.
     ``project=None`` supports fully injected standalone calls without home I/O.
 
@@ -94,10 +95,9 @@ class OperationContext:
             changes.update(graph_model_settings(ProjectSettings.from_dict(graph_changes), effective))
         for field, target in (('embedding_model', 'openai_embedding_model'),
                               ('generation_model', 'openai_gpt_model')):
-            if field in changes:
-                base = base.with_overrides(**{target: changes[field]})
-            elif getattr(base, target):
-                changes[field] = getattr(base, target)
+            model = changes.get(field) or getattr(effective, field) or getattr(base, target)
+            changes[field] = model
+            base = base.with_overrides(**{target: model})
         self.settings = replace(effective, **changes, cost_ceiling_usd=ceiling)
         self.project = replace(project, settings=self.settings) if project is not None else None
         self.config = (configuration_for(self.settings, base, project.paths.store)
