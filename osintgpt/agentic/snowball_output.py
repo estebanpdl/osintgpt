@@ -3,6 +3,7 @@
 import csv
 import io
 import json
+import sys
 from datetime import datetime
 from pathlib import Path
 
@@ -130,7 +131,14 @@ def _spreadsheet_rows(walk, group_by):
 
 def snowball_csv(walk, group_by='none'):
     output = io.StringIO(newline='')
-    writer = csv.DictWriter(output, fieldnames=EXPORT_FIELDS, lineterminator='\n')
+    # Python 3.10 uses NUL for an unset escapechar. Its writer can reuse the
+    # quote character, preserving literal NULs and standard doubled quotes.
+    # Newer Python fixes the sentinel and may reject equal escape/quote chars.
+    writer = csv.DictWriter(
+        output, fieldnames=EXPORT_FIELDS, lineterminator='\n',
+        quoting=csv.QUOTE_MINIMAL, doublequote=True,
+        escapechar='"' if sys.version_info < (3, 11) else None,
+    )
     writer.writeheader()
     writer.writerows(_spreadsheet_rows(walk, group_by))
     return '\ufeff' + output.getvalue()

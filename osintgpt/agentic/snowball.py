@@ -1,4 +1,4 @@
-﻿'''Follow an unseen passage at each step of a semantic similarity path.'''
+'''Follow an unseen passage at each step of a semantic similarity path.'''
 
 import math
 import unicodedata

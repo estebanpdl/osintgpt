@@ -66,6 +66,24 @@ def test_xlsx_rejects_silent_loss_and_csv_keeps_the_text(text):
     assert text in snowball_csv(result)
 
 
+@pytest.mark.parametrize(('text', 'serialized'), [
+    ('plain\\path', 'plain\\path'),
+    ('a,b', '"a,b"'),
+    ('say "hi"', '"say ""hi"""'),
+    ('line\nbreak', '"line\nbreak"'),
+    ('line\r\nbreak', '"line\r\nbreak"'),
+], ids=['backslash', 'comma', 'quote', 'newline', 'crlf'])
+def test_csv_keeps_standard_quoting_and_roundtrips_text(text, serialized):
+    result = snowball(None, 'start', GraphEmbedder(), store=GraphStore(), depth=1)
+    hop = result.hops[0]
+    hit = replace(hop.result, chunk=replace(hop.result.chunk, text=text))
+    result = replace(result, hops=[replace(hop, result=hit)])
+    exported = snowball_csv(result)
+    assert f',{serialized},' in exported
+    row = next(csv.DictReader(io.StringIO(exported.lstrip('\ufeff'), newline='')))
+    assert row['text'] == text
+
+
 def test_empty_exports_still_have_columns_and_json_is_serializable():
     result = snowball(None, 'start', GraphEmbedder(), store=GraphStore(0))
     assert snowball_csv(result).lstrip('\ufeff').strip() == ','.join(EXPORT_FIELDS)
