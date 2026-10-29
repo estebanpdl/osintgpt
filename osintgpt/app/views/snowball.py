@@ -6,6 +6,7 @@ from osintgpt.agentic.snowball_output import (
     snowball_rows, snowball_xlsx, usage_text,
 )
 from osintgpt.app.session import list_projects, select_project
+from osintgpt.llm.usage import CostLimitReached
 
 
 def render(st, runtime, home, state):
@@ -47,6 +48,10 @@ def render(st, runtime, home, state):
             help='ISO dates by default. For example, %d/%m/%Y explicitly means day/month/year.',
         )
         drift = st.checkbox('Show similarity to query', value=True, key=prefix + 'drift')
+        ceiling = st.number_input(
+            'Cost ceiling (USD, optional)', min_value=0.0, value=None,
+            key=prefix + 'ceiling', help='Leave empty for no run ceiling. A saved ceiling still applies.',
+        )
         refs_text = st.text_area(
             'Source refs (optional)', key=prefix + 'refs',
             help='One indexed file ref per line. Leave blank to search the project.',
@@ -63,8 +68,13 @@ def render(st, runtime, home, state):
                     depth=int(depth), threshold=float(threshold), dedupe=dedupe,
                     score_against_initial=drift, date_field=date_field,
                     date_format=date_format.strip() or None,
+                    cost_ceiling_usd=ceiling,
                     refs=[ref.strip() for ref in refs_text.splitlines() if ref.strip()] or None,
                 )
+        except CostLimitReached as error:
+            st.error(str(error))
+            if error.operation_outcome is not None:
+                st.caption(f'Recorded responses: {error.operation_outcome.usage["calls"]}. The last call may exceed the ceiling.')
         except Exception as error:
             st.error(str(error))
     walk = state.get(prefix + 'result')

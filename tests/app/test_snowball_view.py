@@ -10,7 +10,7 @@ from osintgpt.config import Settings
 from tests.snowball_fakes import GraphEmbedder, GraphStore
 from test_app_renders import home, project, run
 
-operation = importlib.import_module('osintgpt.agentic.snowball')
+operation = importlib.import_module('osintgpt.operations')
 
 
 def widget(elements, label):
@@ -84,3 +84,34 @@ def test_switching_project_does_not_show_another_projects_result(project, home):
     assert app.session_state[SELECTED] == other.slug
     assert widget(app.selectbox, 'Project').value == other.slug
     assert not app.download_button
+
+
+def test_project_ceiling_cannot_be_raised_by_app_run_and_next_run_is_fresh(project, monkeypatch):
+    project = project.with_settings(cost_ceiling_usd=0)
+    project.save()
+    providers, stores = [], []
+
+    def build(*args, **kwargs):
+        provider = GraphEmbedder()
+        providers.append(provider)
+        return provider
+
+    def open_store(*args):
+        store = GraphStore()
+        stores.append(store)
+        return store
+
+    monkeypatch.setattr(operation, 'build_embedding_provider', build)
+    monkeypatch.setattr(operation, 'store_for', open_store)
+    app = run(project, **{VIEW: 'Snowball'})
+    assert widget(app.number_input, 'Cost ceiling (USD, optional)').value is None
+    widget(app.text_area, 'Initial query').set_value('start')
+    widget(app.number_input, 'Cost ceiling (USD, optional)').set_value(5.0)
+    for _ in range(2):
+        widget(app.button, 'Run Snowball').click().run()
+        assert not app.exception
+        assert any('exceeded after' in error.value for error in app.error)
+        assert any('Recorded responses: 1' in caption.value for caption in app.caption)
+    assert len(providers) == len(stores) == 2
+    assert all(len(provider.calls) == 1 for provider in providers)
+    assert all(store.closed for store in stores)

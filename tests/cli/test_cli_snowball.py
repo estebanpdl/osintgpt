@@ -13,7 +13,7 @@ from osintgpt.cli import app
 from osintgpt.projects import Registry
 from tests.snowball_fakes import GraphEmbedder, GraphStore
 
-operation = importlib.import_module('osintgpt.agentic.snowball')
+operation = importlib.import_module('osintgpt.operations')
 
 
 def test_cli_library_and_agentic_share_chain_dedupe_dates_and_usage(tmp_path, monkeypatch):
@@ -88,3 +88,21 @@ def test_snowball_help_describes_limits_and_parameters(cli_help):
     text = cli_help('snowball')
     for phrase in ['similarity path', 'causation', '--depth', '--threshold', '--export', '--dedupe', '--date-field']:
         assert phrase in text
+
+
+@pytest.mark.parametrize('saved,arguments', [(0, ['--cost-ceiling', '5']), (None, ['--cost-ceiling', '0'])])
+def test_explicit_project_or_run_ceiling_stops_with_usage(tmp_path, monkeypatch, saved, arguments):
+    project = Project.create('Ceiling', home=tmp_path).with_settings(cost_ceiling_usd=saved)
+    project.save()
+    Registry.rebuild(tmp_path)
+    embedder, store = GraphEmbedder(), GraphStore()
+    monkeypatch.setattr(operation, 'build_embedding_provider', lambda *a, **k: embedder)
+    monkeypatch.setattr(operation, 'store_for', lambda *a: store)
+    result = CliRunner().invoke(app, ['--home', str(tmp_path), 'snowball', 'start',
+                                    '-p', project.slug, *arguments, '--json'])
+    assert result.exit_code == 1
+    data = json.loads(result.output)
+    assert 'exceeded after' in data['error']
+    assert data['usage']['calls'] == 1 and data['usage']['ceiling_usd'] == 0
+    assert data['usage']['estimated_cost_usd'] > 0
+    assert len(embedder.calls) == 1 and store.closed

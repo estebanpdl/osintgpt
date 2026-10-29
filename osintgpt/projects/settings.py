@@ -20,6 +20,23 @@ from osintgpt.rate_settings import EmbeddingRateSettings
 GRAPH_MODEL_FIELDS = ('graph_model_mode', 'graph_generation_provider', 'graph_generation_model')
 
 
+def configuration_for(settings, base, store_path):
+    '''Apply already-resolved project choices to explicit connection settings.'''
+    from osintgpt.rate_settings import RATE_FIELDS
+
+    overrides = {'sql_db_file_path': str(store_path)}
+    for name in RATE_FIELDS:
+        if getattr(base, name) in (None, '') and getattr(settings, name) not in (None, ''):
+            overrides[name] = getattr(settings, name)
+    for field, target in (
+        ('generation_model', 'openai_gpt_model'),
+        ('embedding_model', 'openai_embedding_model'),
+    ):
+        if not getattr(base, target) and getattr(settings, field):
+            overrides[target] = getattr(settings, field)
+    return base.with_overrides(**overrides)
+
+
 def graph_model_settings(settings, defaults=None):
     '''Resolve graph choices without combining models from different provider defaults.'''
     def selection(value):

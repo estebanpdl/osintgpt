@@ -15,7 +15,7 @@ from osintgpt.llm.usage import Usage, UsageRecorder
 from osintgpt.projects import save_user_defaults
 from tests.snowball_fakes import GraphEmbedder, GraphStore
 
-operation = importlib.import_module('osintgpt.agentic.snowball')
+operation = importlib.import_module('osintgpt.operations')
 
 
 def walk(**options):
@@ -91,7 +91,7 @@ def test_invalid_parameters_fail_before_embedding(options):
 
 
 def test_empty_query_fails_before_configuration(monkeypatch):
-    monkeypatch.setattr(operation, '_configuration', lambda *a: pytest.fail('configuration read'))
+    monkeypatch.setattr('osintgpt.operations.load_user_defaults', lambda *a: pytest.fail('configuration read'))
     with pytest.raises(ValueError, match='nonempty'):
         snowball(None, '  ')
 
@@ -169,7 +169,7 @@ def test_dimension_changes_are_rejected_even_without_drift():
 def test_owned_runtime_uses_project_model_defaults_and_remote_configuration(tmp_path, monkeypatch):
     project = Project.create('Configured', home=tmp_path).with_settings(
         embedding_provider='openai', embedding_model=GraphEmbedder.model,
-        storage_backend='postgres', cost_ceiling_usd=0,
+        storage_backend='postgres', cost_ceiling_usd=.01,
     )
     save_user_defaults(tmp_path, ProjectSettings(embedding_model='other-model'))
     config = Settings(postgres_dsn='postgresql://synthetic-only')
@@ -191,7 +191,7 @@ def test_owned_runtime_uses_project_model_defaults_and_remote_configuration(tmp_
     result = snowball(project, 'start', home=tmp_path, config=config, depth=2)
     assert seen['model'] == GraphEmbedder.model and seen['provider'] == 'openai'
     assert len(result) == 2 and store.closed
-    assert result.usage.cost_ceiling_usd is None
+    assert result.usage.cost_ceiling_usd == .01
 
 
 def test_owned_store_is_closed_when_embedding_fails(tmp_path, monkeypatch):

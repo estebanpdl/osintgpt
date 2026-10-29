@@ -26,7 +26,7 @@ from typing import Optional, Union
 from osintgpt.config import Settings
 
 from .paths import ProjectPaths, default_home
-from .settings import GRAPH_MODEL_FIELDS, ProjectSettings, graph_model_settings
+from .settings import GRAPH_MODEL_FIELDS, ProjectSettings, configuration_for, graph_model_settings
 from .toml_io import read_toml, write_toml
 
 # Written at the top of every project.toml. A project directory is the thing
@@ -231,19 +231,4 @@ class Project:
         Returns:
             Settings: A copy with the project's choices applied.
         '''
-        settings = self.effective_settings(defaults)
-        overrides = {'sql_db_file_path': str(self.paths.store)}
-
-        from osintgpt.rate_settings import RATE_FIELDS
-        for name in RATE_FIELDS:
-            if getattr(base, name) in (None, '') and getattr(settings, name) not in (None, ''):
-                overrides[name] = getattr(settings, name)
-
-        for field, target in (
-            ('generation_model', 'openai_gpt_model'),
-            ('embedding_model', 'openai_embedding_model')
-        ):
-            if not getattr(base, target) and getattr(settings, field):
-                overrides[target] = getattr(settings, field)
-
-        return base.with_overrides(**overrides)
+        return configuration_for(self.effective_settings(defaults), base, self.paths.store)

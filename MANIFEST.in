@@ -1,5 +1,6 @@
 include CHANGELOG.md
 include docs/migration-legacy-api.md
+include docs/operation-policy.md
 include examples/README.md
 include examples/library/export_legacy_logs.py
 include examples/library/migrating_from_0_1.py

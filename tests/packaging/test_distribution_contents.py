@@ -59,7 +59,7 @@ def test_sdist_contains_migration_docs_and_no_retired_code(distributions):
     with tarfile.open(archive) as bundle:
         names = [name.partition('/')[2] for name in bundle.getnames()]
     assert_no_retired_paths(names)
-    assert {'CHANGELOG.md', 'docs/migration-legacy-api.md'} <= set(names)
+    assert {'CHANGELOG.md', 'docs/migration-legacy-api.md', 'docs/operation-policy.md'} <= set(names)
     assert {'examples/library/export_legacy_logs.py',
             'examples/library/migrating_from_0_1.py'} <= set(names)
     for path in (ROOT / 'osintgpt').rglob('*.py'):
