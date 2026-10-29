@@ -28,6 +28,7 @@ from osintgpt.projects import default_home
 from osintgpt.app.session import (
     MATERIAL,
     GRAPH,
+    SNOWBALL,
     PROJECTS,
     SETTINGS,
     VIEW,
@@ -39,7 +40,7 @@ from osintgpt.app.session import (
     selected_project
 )
 from osintgpt.app.styles import load_css
-from osintgpt.app.views import chat, conversations, graph, ingest, projects, settings
+from osintgpt.app.views import chat, conversations, graph, ingest, projects, settings, snowball
 
 LOGO = Path(__file__).parent / 'assets' / 'osintgpt.png'
 
@@ -102,6 +103,8 @@ def main() -> None:
             settings.render(st, runtime, home, st.session_state)
         elif view == GRAPH:
             graph.render(st, runtime, home, st.session_state)
+        elif view == SNOWBALL:
+            snowball.render(st, runtime, home, st.session_state)
         else:
             chat.render(st, runtime, st.session_state)
     except MissingEnvironmentVariableError as error:

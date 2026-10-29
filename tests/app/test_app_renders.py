@@ -113,7 +113,7 @@ class TestTheScriptRuns:
         app = run()
 
         assert app.sidebar.radio[0].options == [
-            'Projects', 'Material', 'Ask', 'Graph', 'Settings'
+            'Projects', 'Material', 'Ask', 'Graph', 'Snowball', 'Settings'
         ]
 
 
