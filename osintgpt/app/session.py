@@ -40,10 +40,10 @@ PENDING = 'pending_question'
 # The view radio's own key, so opening a conversation can move the operator to
 # the one view that shows it.
 VIEW = 'view'
-PROJECTS, MATERIAL, ASK, GRAPH, SETTINGS = (
-    'Projects', 'Material', 'Ask', 'Graph', 'Settings'
+PROJECTS, MATERIAL, ASK, GRAPH, SNOWBALL, SETTINGS = (
+    'Projects', 'Material', 'Ask', 'Graph', 'Snowball', 'Settings'
 )
-VIEWS = [PROJECTS, MATERIAL, ASK, GRAPH, SETTINGS]
+VIEWS = [PROJECTS, MATERIAL, ASK, GRAPH, SNOWBALL, SETTINGS]
 # The conversation on screen, by id. Its turns are read from disk rather than
 # held here: session state does not survive the browser tab.
 CONVERSATION = 'conversation_id'

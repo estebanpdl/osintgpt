@@ -28,7 +28,7 @@ from osintgpt.evaluation import (
 )
 
 # import osintgpt answering
-from osintgpt.agentic import AgenticAnswer, agentic_answer
+from osintgpt.agentic import AgenticAnswer, Hop, Snowball, agentic_answer, snowball
 from osintgpt.answering import Answer, answer_question
 from osintgpt.followups import suggest_followups
 
@@ -62,6 +62,8 @@ __all__ = [
     'GraphReport',
     'EvaluationReport',
     'IndexReport',
+    'Hop',
+    'Snowball',
     'Question',
     'Project',
     'ProjectSettings',
@@ -80,6 +82,7 @@ __all__ = [
     'save_questions',
     'search_across_projects',
     'search_project',
+    'snowball',
     'suggest_followups'
 ]
 

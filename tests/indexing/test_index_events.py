@@ -14,6 +14,42 @@ from osintgpt.ingestion.checkpoints import IndexJournal
 from osintgpt.ingestion.preview import preview_file
 
 
+def test_nested_observation_forwards_only_when_requested():
+    outer, inner = [], []
+    with observe_index(outer.append):
+        with observe_index(inner.append):
+            emit_index('isolated')
+        with observe_index(inner.append, forward=True):
+            emit_index('shared')
+        emit_index('restored')
+    assert [event.kind for event in inner] == ['isolated', 'shared']
+    assert [event.kind for event in outer] == ['shared', 'restored']
+
+
+def test_forwarded_sink_receives_events_even_if_inner_display_fails():
+    outer = []
+
+    def broken(event):
+        raise RuntimeError('display unavailable')
+
+    with observe_index(outer.append):
+        with observe_index(broken, forward=True):
+            emit_index('usage')
+    assert [event.kind for event in outer] == ['usage']
+
+
+def test_forwarding_does_not_swallow_an_explicit_caller_stop():
+    from osintgpt.llm.usage import CostLimitReached
+
+    def stop(event):
+        raise CostLimitReached('caller policy', 1)
+
+    with observe_index(stop):
+        with observe_index(lambda event: None, forward=True):
+            with pytest.raises(CostLimitReached):
+                emit_index('usage')
+
+
 def test_checkpoint_notifications_follow_commit_and_precede_usage(project):
     events = []
     def observe(event):

@@ -19,6 +19,7 @@ from .graph import graph_app
 from .projects import project_app
 from .retrieval import register_retrieval_commands
 from .selection import CliState
+from .snowball import register_snowball_command
 
 app = typer.Typer(
     help='Create, configure, inspect, and query osintgpt projects.',
@@ -56,6 +57,7 @@ register_corpus_commands(app)
 register_convert_command(app)
 register_retrieval_commands(app)
 register_evaluate_command(app)
+register_snowball_command(app)
 app.command(
     'doctor', help='Report how this project is configured and what is wrong.'
 )(doctor_command)

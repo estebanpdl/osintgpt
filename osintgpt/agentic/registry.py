@@ -90,11 +90,16 @@ TOOL_SPECS: List[ToolSpec] = [
         'original question — read that before trusting a late hop.',
         properties={
             'query': dict(_STRING, description='Where to start.'),
-            'depth': dict(_INTEGER, description='Hops to take, up to 10.'),
+            'depth': dict(_INTEGER, description='Maximum accepted hits, including the first. Default 5.'),
             'threshold': {
                 'type': 'number',
                 'description': 'Stop when similarity falls below this.'
-            }
+            },
+            'refs': {'type': 'array', 'items': _STRING, 'description': 'Optional file refs to search.'},
+            'dedupe': dict(_STRING, enum=['text', 'chunk'], description='Default text: skip normalized copies.'),
+            'date_field': dict(_STRING, description='Indexed metadata key, or timestamp (default).'),
+            'date_format': dict(_STRING, description='Optional strptime date format; otherwise ISO.'),
+            'score_against_initial': {'type': 'boolean', 'description': 'Report initial similarity; default true.'}
         },
         required=['query']
     ),

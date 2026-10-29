@@ -29,6 +29,7 @@ from osintgpt.lexical import lexical_search
 
 # import osintgpt search
 from osintgpt.search import search_project
+from .snowball import DEFAULT_TOOL_DEPTH, DEFAULT_THRESHOLD, DEFAULT_DEDUPE
 
 from .support import (
     SNIPPET_CHARS,
@@ -233,8 +234,13 @@ def exact_search(
 def snowball_search(
     context: ToolContext,
     query: str,
-    depth: int = 5,
-    threshold: float = 0.5
+    depth: int = DEFAULT_TOOL_DEPTH,
+    threshold: float = DEFAULT_THRESHOLD,
+    refs: Optional[Sequence[str]] = None,
+    date_field: Optional[str] = None,
+    date_format: Optional[str] = None,
+    score_against_initial: bool = True,
+    dedupe: str = DEFAULT_DEDUPE
 ) -> ToolResult:
     '''
     Walk from a passage to what is adjacent to it, and so on.
@@ -257,20 +263,32 @@ def snowball_search(
 
     walk = snowball(
         context.project, query, context.embedder,
-        depth=_clamp(depth, 1, 10), threshold=threshold, store=context.store
+        depth=depth, threshold=threshold, store=context.store, refs=refs,
+        date_field=date_field, date_format=date_format,
+        score_against_initial=score_against_initial, dedupe=dedupe
     )
+    from .snowball_output import snowball_data
+
+    data = snowball_data(walk)
 
     return ToolResult(
         tool='snowball',
         payload={
+            **{key: value for key, value in data.items() if key != 'hops'},
             'stopped': walk.stopped,
             'hops': [
                 {
                     'depth': hop.depth,
+                    'query': hop.query,
                     'ref': hop.result.ref,
+                    'document_ref': hop.result.chunk.document_ref,
+                    'sequence': hop.result.chunk.sequence,
                     'citation': hop.result.chunk.citation,
                     'text': hop.text[:SNIPPET_CHARS],
                     'score': round(hop.result.score, 4),
+                    'date': hop.date,
+                    'identical_text_refs': list(hop.identical_text_refs),
+                    'similarity_to_query': hop.drift,
                     **(
                         {'timestamp': hop.result.chunk.timestamp}
                         if hop.result.chunk.timestamp else {}

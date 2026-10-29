@@ -21,8 +21,18 @@ class EventChannel:
         self.observer = ContextVar(name, default=None)
 
     @contextmanager
-    def observe(self, callback):
-        token = self.observer.set(callback)
+    def observe(self, callback, *, forward=False):
+        '''Optionally tap events without hiding an enclosing operation's sink.'''
+        parent = self.observer.get() if forward else None
+
+        def dispatch(event):
+            try:
+                callback(event)
+            finally:
+                if parent is not None:
+                    parent(event)
+
+        token = self.observer.set(dispatch if parent is not None else callback)
         try:
             yield
         finally:

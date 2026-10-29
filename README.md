@@ -130,6 +130,79 @@ lists, rewarding passages found by both. `--json` reports each result's contribu
 claims are retrieved through the graph commands or the answering model's graph tools.
 Multilingual semantic matching and term selection depend on the selected models.
 
+### Follow a narrative with Snowball
+
+Open **Snowball** in the app, between Graph and Settings. Select a project,
+enter a query, set depth and minimum similarity, and choose **Run Snowball**.
+The same operation is available directly in the CLI and Python library:
+
+```shell
+osintgpt snowball "claims about emergency funding" --project my-case --depth 25 --threshold 0.5
+osintgpt snowball "claims about emergency funding" --project my-case --date-field published_at --date-format "%Y-%m-%d" --group-by month --export chain.xlsx
+osintgpt snowball "claims about emergency funding" --project my-case --export chain.csv --json
+```
+
+```python
+from osintgpt import Project, snowball
+from osintgpt.agentic.snowball_output import export_snowball, snowball_data
+
+project = Project.load("/path/to/project")
+chain = snowball(project, "claims about emergency funding", depth=25, threshold=0.5)
+print(snowball_data(chain))
+export_snowball(chain, "chain.csv", group_by="month")
+```
+
+Snowball searches for the closest hit, re-embeds its text as the next query,
+then repeats. App, CLI and library default to **25 total accepted hits** and
+an inclusive **0.5 local cosine threshold**. The agentic chat tool defaults to
+5 hits; an explicit depth uses the same operation without an additional hop
+cap. A walk ends at the chosen depth, below threshold, or when no unseen hit
+remains. Scores depend on the embedding model; thresholds do not carry across
+projects. A chain is a **similarity path, not evidence of causation or actual
+propagation**. Ties can follow the store's ranking order.
+
+By default, text deduplication skips copied passages after Unicode NFKC
+normalization, case folding and whitespace collapsing. Use `--dedupe chunk`
+(Python: `dedupe="chunk"`) to keep separate file/chunk identities instead.
+The candidate window grows past skipped copies. Each hop lists identical-text
+source references encountered in retrieved candidates, including the selected
+source; this is not an exhaustive inventory of copies. Source refs, original
+record refs and chunk sequences remain in the result and exports.
+
+Each hop shows the seed, full hit text, local score, source, date and
+**similarity to query**. This last measure is the existing Python `Hop.drift`
+attribute: higher means closer to the initial query, lower means more drift.
+It compares DOCUMENT-purpose embeddings to the initial QUERY-purpose vector.
+Pivot searches use QUERY-purpose embeddings, so asymmetric models can produce
+a different path from a stored-vector walk. No stored vectors are reused.
+
+The operation uses the project's embedding model and configured store.
+Python callers can name `home=...` for user defaults/credentials, supply a
+`Settings` object as `config=...`, or inject an embedder and store. Injected
+providers must match the indexed model. Built-in providers report usage for
+each embedding response. A depth-limited run of N hits normally makes 2N
+embedding calls with initial similarity enabled, or N with `--no-drift`
+(Python: `score_against_initial=False`). An unsuccessful next search can add
+a call. Results report hop count, calls, tokens and estimated cost; unavailable
+usage/prices are marked incomplete. Snowball adds no cost ceiling; an injected
+provider can retain its caller's own policy. Provider failures propagate.
+
+Dates default to the record's indexed timestamp. A named date field must have
+been retained as metadata during indexing; it is not read from the original
+source at search time. ISO dates parse directly; ambiguous formats require an
+explicit `--date-format`. Missing or invalid dates remain visible under
+**Unknown date**. Day, ISO week (Monday start), month and year grouping use
+the date's stated timezone and change only presentation, never traversal.
+CSV/XLSX rows retain hop order and include raw/parsed dates, date status,
+period and `similarity_to_query`. Use `--ref` repeatedly (Python: `refs=[...]`)
+to restrict the source files searched.
+
+In the app, **Prepare downloads** creates CSV and XLSX from the completed
+chain without further provider calls. CLI/library exports refuse to overwrite
+an existing file. Formula-like text is escaped reversibly with the affected
+columns recorded in `spreadsheet_escaped_fields`. XLSX rejects text or row
+counts it cannot preserve; use CSV in that case.
+
 ### How the answering model uses the three methods
 
 ```bash

@@ -1,55 +1,36 @@
-# -*- coding: utf-8 -*-
+'''Follow an unseen passage at each step of a semantic similarity path.'''
 
-# =================================================================================
-# osintgpt
-#
-# Author: @estebanpdl
-#
-# File: snowball.py
-# Description: Retrieve, make the best hit the next query, repeat. Narrative
-#   and network expansion — what else is adjacent to this claim.
-# =================================================================================
-
-# import submodules
+import math
+import unicodedata
 from dataclasses import dataclass, field
-
-# type hints
+from pathlib import Path
 from typing import List, Optional, Sequence
 
-# import osintgpt llm
+from osintgpt.config import Settings
+from osintgpt.credentials import resolve_credentials
+from osintgpt.index_events import observe_index
+from osintgpt.llm import build_embedding_provider
 from osintgpt.llm.base import EmbeddingProvider, EmbeddingPurpose
+from osintgpt.llm.usage import Usage, UsageRecorder
+from osintgpt.projects import Project, default_home, load_user_defaults
+from osintgpt.vector_store import BaseVectorEngine, SearchResult, store_for
 
-# import osintgpt projects
-from osintgpt.projects import Project
-
-# import osintgpt search
-from osintgpt.search import search_project
-
-# import osintgpt vector store
-from osintgpt.vector_store import BaseVectorEngine, SearchResult
-
-# Each hop costs an embedding call and a search. Enough to walk somewhere the
-# first query would not have reached, few enough that a walk cannot run away.
-DEFAULT_DEPTH = 5
-
-# Below this the next hop is no longer about the same thing, and continuing
-# would follow a thread that has already broken.
+DEFAULT_DEPTH = 25
 DEFAULT_THRESHOLD = 0.5
+DEFAULT_DEDUPE = 'text'
+DEFAULT_TOOL_DEPTH = 5
 
 
-# Hop class
 @dataclass(frozen=True)
 class Hop:
-    '''
-    One step of the walk: what was asked, and what came back.
-    '''
+    '''An accepted hit; drift is initial-query similarity (higher = less drift).'''
+
     depth: int
     query: str
     result: SearchResult
-    # Similarity to the *initial* question rather than to the previous hop.
-    # A walk can stay locally coherent while ending somewhere unrelated, and
-    # this is the number that makes the drift visible.
     drift: Optional[float] = None
+    date: str = ''
+    identical_text_refs: List[str] = field(default_factory=list)
 
     @property
     def ref(self) -> str:
@@ -60,25 +41,26 @@ class Hop:
         return self.result.text
 
 
-# Snowball class
 @dataclass(frozen=True)
 class Snowball:
-    '''
-    A walk outward from one question, and where it went.
-    '''
+    '''A similarity path, its termination reason, and run-local usage.'''
+
     query: str
     hops: List[Hop] = field(default_factory=list)
-    # Why the walk stopped, in words an operator can read.
     stopped: str = ''
+    usage: UsageRecorder = field(default_factory=UsageRecorder)
+    embedding_calls: int = 0
+    date_field: str = 'timestamp'
+    date_format: Optional[str] = None
+    depth: int = DEFAULT_DEPTH
+    threshold: float = DEFAULT_THRESHOLD
+    model: str = ''
+    dedupe: str = DEFAULT_DEDUPE
+    unrecorded_calls: int = 0
 
     @property
     def refs(self) -> List[str]:
-        seen = []
-        for hop in self.hops:
-            if hop.ref not in seen:
-                seen.append(hop.ref)
-
-        return seen
+        return list(dict.fromkeys(hop.ref for hop in self.hops))
 
     @property
     def results(self) -> List[SearchResult]:
@@ -88,120 +70,184 @@ class Snowball:
         return len(self.hops)
 
 
-# walk outward from a question
 def snowball(
     project: Project,
     query: str,
-    embedder: EmbeddingProvider,
+    embedder: Optional[EmbeddingProvider] = None,
     depth: int = DEFAULT_DEPTH,
     threshold: float = DEFAULT_THRESHOLD,
     score_against_initial: bool = True,
     refs: Optional[Sequence[str]] = None,
-    store: Optional[BaseVectorEngine] = None
+    store: Optional[BaseVectorEngine] = None,
+    *,
+    home: Optional[Path] = None,
+    config: Optional[Settings] = None,
+    date_field: Optional[str] = None,
+    date_format: Optional[str] = None,
+    dedupe: str = DEFAULT_DEDUPE,
 ) -> Snowball:
+    '''Retrieve, re-embed the best unseen hit as a query, and repeat.
+
+    Depth counts accepted hits, including the first. A score equal to the
+    threshold is accepted. Exhaustion stops the walk; there is no additional
+    hop or cost cap. Text dedupe uses Unicode NFKC, case folding and collapsed
+    whitespace. ``dedupe='chunk'`` keeps separate file/sequence identities.
+    This is a similarity path, not evidence of
+    causation or propagation.
+
+    Omit embedder/store to use project settings, user defaults and connection
+    configuration from ``home`` (the normal application home by default).
+    Injected providers must match the index model. Caller-owned stores and
+    provider recorders are left intact, including any caller-imposed policy.
+    Built-in providers emit usage events; custom providers without events
+    produce an explicitly incomplete cost estimate.
+
+    Each pivot uses QUERY-purpose embedding; optional initial similarity uses
+    DOCUMENT-purpose embedding of each accepted hit. No stored vectors are
+    reused. Date fields name ``timestamp`` or an indexed metadata key. Dates
+    never filter or reorder traversal; ``date_format`` is used only by output.
     '''
-    Retrieve, take the best passage, search for *it*, and repeat.
-
-    A single query finds what resembles the question. Making each hit the next
-    query follows a thread instead: the claim adjacent to this claim, and the
-    one adjacent to that. It answers a different question from ordinary
-    search — "what else is near this" rather than "what matches this" — which
-    is why it is a tool of its own rather than a parameter.
-
-    Every hop is scored against the *initial* question as well as followed, so
-    a walk that stays locally coherent while ending somewhere unrelated says
-    so in `drift` rather than looking like a result.
-
-    Args:
-        project (Project): The project to walk.
-        query (str): Where to start.
-        embedder (EmbeddingProvider): Must be the model the project was \
-            indexed with.
-        depth (int): Most hops to take.
-        threshold (float): Stop when a hop scores below this.
-        score_against_initial (bool): Also score each hop against the opening \
-            question, which is what makes drift visible.
-        refs (Sequence[str], optional): Restrict to these documents.
-        store (BaseVectorEngine, optional): Defaults to the project's own.
-
-    Returns:
-        Snowball: The hops taken, and why it stopped.
-    '''
-    from osintgpt.vector_store import store_for
+    _validate(query, depth, threshold)
+    if dedupe not in ('text', 'chunk'):
+        raise ValueError('Dedupe must be text or chunk.')
+    query = query.strip()
+    selected_date = (date_field or '').strip() or 'timestamp'
+    if embedder is None or store is None:
+        effective, config = _configuration(project, home, config)
+        if embedder is None:
+            embedder = build_embedding_provider(
+                effective.embedding_provider, config,
+                model=effective.embedding_model or None,
+            )
 
     owned = store is None
-    engine = store or store_for(project)
+    engine = store if store is not None else store_for(project, config)
+    usage = UsageRecorder()
+
+    def record(event):
+        if event.kind == 'usage':
+            usage.record(Usage(**event.data))
 
     try:
-        return _walk(
-            project, query, embedder, engine, depth, threshold,
-            score_against_initial, refs
-        )
+        # Observe emitted usage rather than attaching a recorder to a shared
+        # provider. Its existing recorder still receives each response once.
+        with observe_index(record, forward=True):
+            return _walk(
+                query, embedder, engine, depth, threshold,
+                score_against_initial, refs, selected_date, date_format, usage, dedupe,
+            )
     finally:
         if owned and hasattr(engine, 'close'):
             engine.close()
 
 
-def _walk(project, query, embedder, engine, depth, threshold,
-          score_against_initial, refs):
-    initial = (
-        embedder.embed([query], purpose=EmbeddingPurpose.QUERY)[0]
-        if score_against_initial else None
-    )
+def _configuration(project, home, config):
+    home = Path(home) if home is not None else default_home()
+    defaults = load_user_defaults(home)
+    effective = project.effective_settings(defaults)
+    base = config if config is not None else resolve_credentials(home)
+    return effective, project.settings_for(base, defaults)
 
-    hops: List[Hop] = []
-    seen = set()
+
+def _validate(query, depth, threshold):
+    if not isinstance(query, str) or not query.strip():
+        raise ValueError('Enter a nonempty Snowball query.')
+    if isinstance(depth, bool) or not isinstance(depth, int) or depth < 1:
+        raise ValueError('Depth must be a positive integer.')
+    if not math.isfinite(threshold) or not -1.0 <= threshold <= 1.0:
+        raise ValueError('Threshold must be a finite cosine score from -1 to 1.')
+
+
+def _walk(query, embedder, engine, depth, threshold, score_against_initial,
+          refs, date_field, date_format, usage, dedupe):
+    calls = 0
+    unrecorded = 0
+    dimensions = None
+
+    def embed(text, purpose):
+        nonlocal calls, unrecorded, dimensions
+        calls += 1
+        before = usage.calls
+        vectors = embedder.embed([text], purpose=purpose)
+        if usage.calls == before:
+            unrecorded += 1
+        if len(vectors) != 1 or not len(vectors[0]):
+            raise ValueError('Embedding provider returned no usable vector.')
+        vector = list(vectors[0])
+        if not all(math.isfinite(value) for value in vector):
+            raise ValueError('Embedding provider returned a nonfinite vector.')
+        if dimensions is not None and len(vector) != dimensions:
+            raise ValueError('Embedding dimensions changed during the Snowball run.')
+        dimensions = len(vector)
+        return vector
+
+    initial = embed(query, EmbeddingPurpose.QUERY)
+    current_vector = initial
     current = query
+    hops = []
+    seen = set()
+    copies = {}
     stopped = f'reached depth {depth}'
-
     for step in range(1, depth + 1):
-        # Ask for several, because the best hit is usually the passage the
-        # query came from. Walking to it would be a cycle, not a step.
-        found = search_project(
-            project, current, embedder, top_k=5, refs=refs, store=engine
-        )
-
-        nxt = next(
-            (r for r in found if (r.chunk.ref, r.chunk.sequence) not in seen),
-            None
-        )
+        nxt = _next_hit(engine, current_vector, embedder.model, refs, seen, copies, dedupe)
         if nxt is None:
             stopped = 'nothing new to walk to'
             break
-
+        if not math.isfinite(nxt.score):
+            raise ValueError('Store returned a nonfinite similarity score.')
         if nxt.score < threshold:
-            stopped = (
-                f'similarity {nxt.score:.2f} fell below {threshold:.2f}'
-            )
+            stopped = f'similarity {nxt.score:.2f} fell below {threshold:.2f}'
             break
 
-        seen.add((nxt.chunk.ref, nxt.chunk.sequence))
-        hops.append(Hop(
-            depth=step,
-            query=current,
-            result=nxt,
-            drift=_drift(initial, nxt, embedder) if initial else None
-        ))
-        # The passage becomes the question. This is the whole idea.
-        current = nxt.text
+        drift = None
+        if score_against_initial:
+            vector = embed(nxt.text, EmbeddingPurpose.DOCUMENT)
+            drift = _cosine(initial, vector)
+        value = (nxt.chunk.timestamp if date_field == 'timestamp'
+                 else nxt.chunk.metadata.get(date_field))
+        hops.append(Hop(step, current, nxt, drift, '' if value is None else str(value),
+                        copies[_text_key(nxt.text)]))
+        seen.add(_identity(nxt, dedupe))
+        if step < depth:
+            current = nxt.text
+            current_vector = embed(current, EmbeddingPurpose.QUERY)
 
-    return Snowball(query=query, hops=hops, stopped=stopped)
-
-
-def _drift(initial: Sequence[float], result: SearchResult,
-           embedder: EmbeddingProvider) -> float:
-    '''
-    Cosine of this passage against the opening question.
-    '''
-    import math
-
-    vector = embedder.embed(
-        [result.text], purpose=EmbeddingPurpose.DOCUMENT
-    )[0]
-    dot = sum(a * b for a, b in zip(initial, vector))
-    norms = (
-        math.sqrt(sum(a * a for a in initial))
-        * math.sqrt(sum(b * b for b in vector))
+    return Snowball(
+        query=query, hops=hops, stopped=stopped, usage=usage, embedding_calls=calls,
+        date_field=date_field, date_format=date_format, depth=depth,
+        threshold=threshold, model=embedder.model, dedupe=dedupe, unrecorded_calls=unrecorded,
     )
 
-    return dot / norms if norms else 0.0
+
+def _text_key(text):
+    return ' '.join(unicodedata.normalize('NFKC', text).casefold().split())
+
+
+def _identity(result, dedupe):
+    return _text_key(result.text) if dedupe == 'text' else (result.ref, result.chunk.sequence)
+
+
+def _next_hit(engine, vector, model, refs, seen, copies, dedupe):
+    limit = max(5, len(seen) + 1)
+    while True:
+        found = engine.search(vector, embedding_model=model, top_k=limit, refs=refs)
+        for result in found:
+            sources = copies.setdefault(_text_key(result.text), [])
+            citation = result.chunk.citation
+            if citation not in sources:
+                sources.append(citation)
+        nxt = next((r for r in found if _identity(r, dedupe) not in seen), None)
+        if nxt is not None or len(found) < limit:
+            return nxt
+        # Duplicate text can occupy any number of chunks. Grow past every
+        # skipped copy rather than treating a full duplicate window as exhaustion.
+        limit = max(limit * 2, len(found) + 1)
+
+
+def _cosine(initial, vector):
+    if len(initial) != len(vector):
+        raise ValueError('Embedding dimensions changed during the Snowball run.')
+    norms = math.sqrt(sum(a * a for a in initial)) * math.sqrt(sum(b * b for b in vector))
+    if not norms:
+        return 0.0
+    return max(-1.0, min(1.0, sum(a * b for a, b in zip(initial, vector)) / norms))
