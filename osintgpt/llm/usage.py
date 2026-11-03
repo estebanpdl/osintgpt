@@ -82,6 +82,7 @@ class CostLimitReached(BaseException):
         self.ceiling_usd = ceiling_usd
         self.completed = None
         self.remaining = None
+        self.operation_outcome = None
 
     def with_index_progress(self, completed: int, remaining: int):
         self.completed = completed

@@ -184,8 +184,14 @@ each embedding response. A depth-limited run of N hits normally makes 2N
 embedding calls with initial similarity enabled, or N with `--no-drift`
 (Python: `score_against_initial=False`). An unsuccessful next search can add
 a call. Results report hop count, calls, tokens and estimated cost; unavailable
-usage/prices are marked incomplete. Snowball adds no cost ceiling; an injected
-provider can retain its caller's own policy. Provider failures propagate.
+usage/prices are marked incomplete. Each run uses a fresh recorder and the lower
+of any saved project/user ceiling and optional run ceiling (`--cost-ceiling`,
+Python `cost_ceiling_usd=`, or the app's empty-by-default field). No ceiling is
+added when none is configured. Checks happen after responses, so the last call
+can overshoot; missing usage or prices stop only when a ceiling is set. An
+injected provider retains its caller's recorder and policy. Provider failures
+and cancellation propagate. See [operation policy](docs/operation-policy.md)
+for settings precedence and resource ownership.
 
 Dates default to the record's indexed timestamp. A named date field must have
 been retained as metadata during indexing; it is not read from the original

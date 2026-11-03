@@ -7,6 +7,8 @@ import sys
 from datetime import datetime
 from pathlib import Path
 
+from osintgpt.operations import usage_data
+
 PERIODS = ('none', 'day', 'week', 'month', 'year')
 FIELDS = (
     'hop', 'query', 'text', 'ref', 'document_ref', 'sequence', 'citation',
@@ -94,6 +96,7 @@ def snowball_data(walk, group_by='none'):
         'dedupe': walk.dedupe,
         'identical_text_refs_scope': COPY_SCOPE,
         'usage': {
+            **usage_data(recorder),
             'embedding_calls': walk.embedding_calls, 'calls': recorder.calls,
             'input_tokens': recorder.input_tokens, 'output_tokens': recorder.output_tokens,
             'total_tokens': recorder.total_tokens, 'complete': complete,

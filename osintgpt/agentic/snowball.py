@@ -2,18 +2,16 @@
 
 import math
 import unicodedata
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import List, Optional, Sequence
 
 from osintgpt.config import Settings
-from osintgpt.credentials import resolve_credentials
-from osintgpt.index_events import observe_index
-from osintgpt.llm import build_embedding_provider
 from osintgpt.llm.base import EmbeddingProvider, EmbeddingPurpose
-from osintgpt.llm.usage import Usage, UsageRecorder
-from osintgpt.projects import Project, default_home, load_user_defaults
-from osintgpt.vector_store import BaseVectorEngine, SearchResult, store_for
+from osintgpt.llm.usage import UsageRecorder
+from osintgpt.operations import OperationContext, OperationOutcome
+from osintgpt.projects import Project
+from osintgpt.vector_store import BaseVectorEngine, SearchResult
 
 DEFAULT_DEPTH = 25
 DEFAULT_THRESHOLD = 0.5
@@ -57,6 +55,7 @@ class Snowball:
     model: str = ''
     dedupe: str = DEFAULT_DEDUPE
     unrecorded_calls: int = 0
+    outcome: Optional[OperationOutcome] = None
 
     @property
     def refs(self) -> List[str]:
@@ -85,12 +84,16 @@ def snowball(
     date_field: Optional[str] = None,
     date_format: Optional[str] = None,
     dedupe: str = DEFAULT_DEDUPE,
+    overrides: Optional[dict] = None,
+    cost_ceiling_usd: Optional[float] = None,
+    on_event=None,
 ) -> Snowball:
     '''Retrieve, re-embed the best unseen hit as a query, and repeat.
 
     Depth counts accepted hits, including the first. A score equal to the
     threshold is accepted. Exhaustion stops the walk; there is no additional
-    hop or cost cap. Text dedupe uses Unicode NFKC, case folding and collapsed
+    hop cap. Spending is limited only by explicitly set project/user/run
+    ceilings (the lower applies). Text dedupe uses Unicode NFKC, case folding and collapsed
     whitespace. ``dedupe='chunk'`` keeps separate file/sequence identities.
     This is a similarity path, not evidence of
     causation or propagation.
@@ -112,41 +115,18 @@ def snowball(
         raise ValueError('Dedupe must be text or chunk.')
     query = query.strip()
     selected_date = (date_field or '').strip() or 'timestamp'
-    if embedder is None or store is None:
-        effective, config = _configuration(project, home, config)
-        if embedder is None:
-            embedder = build_embedding_provider(
-                effective.embedding_provider, config,
-                model=effective.embedding_model or None,
-            )
-
-    owned = store is None
-    engine = store if store is not None else store_for(project, config)
-    usage = UsageRecorder()
-
-    def record(event):
-        if event.kind == 'usage':
-            usage.record(Usage(**event.data))
-
-    try:
-        # Observe emitted usage rather than attaching a recorder to a shared
-        # provider. Its existing recorder still receives each response once.
-        with observe_index(record, forward=True):
-            return _walk(
-                query, embedder, engine, depth, threshold,
-                score_against_initial, refs, selected_date, date_format, usage, dedupe,
-            )
-    finally:
-        if owned and hasattr(engine, 'close'):
-            engine.close()
-
-
-def _configuration(project, home, config):
-    home = Path(home) if home is not None else default_home()
-    defaults = load_user_defaults(home)
-    effective = project.effective_settings(defaults)
-    base = config if config is not None else resolve_credentials(home)
-    return effective, project.settings_for(base, defaults)
+    operation = OperationContext(
+        project, home=home, config=config, embedder=embedder, store=store,
+        overrides=overrides, cost_ceiling_usd=cost_ceiling_usd, on_event=on_event,
+    )
+    with operation:
+        # Validate the selected model before opening a store or making a call.
+        embedder = operation.embedder
+        result = _walk(
+            query, embedder, operation.store, depth, threshold,
+            score_against_initial, refs, selected_date, date_format, operation, dedupe,
+        )
+    return replace(result, outcome=operation.outcome)
 
 
 def _validate(query, depth, threshold):
@@ -159,18 +139,14 @@ def _validate(query, depth, threshold):
 
 
 def _walk(query, embedder, engine, depth, threshold, score_against_initial,
-          refs, date_field, date_format, usage, dedupe):
+          refs, date_field, date_format, operation, dedupe):
     calls = 0
-    unrecorded = 0
     dimensions = None
 
     def embed(text, purpose):
-        nonlocal calls, unrecorded, dimensions
+        nonlocal calls, dimensions
         calls += 1
-        before = usage.calls
-        vectors = embedder.embed([text], purpose=purpose)
-        if usage.calls == before:
-            unrecorded += 1
+        vectors = operation.embed([text], purpose=purpose)
         if len(vectors) != 1 or not len(vectors[0]):
             raise ValueError('Embedding provider returned no usable vector.')
         vector = list(vectors[0])
@@ -213,9 +189,10 @@ def _walk(query, embedder, engine, depth, threshold, score_against_initial,
             current_vector = embed(current, EmbeddingPurpose.QUERY)
 
     return Snowball(
-        query=query, hops=hops, stopped=stopped, usage=usage, embedding_calls=calls,
+        query=query, hops=hops, stopped=stopped, usage=operation.usage, embedding_calls=calls,
         date_field=date_field, date_format=date_format, depth=depth,
-        threshold=threshold, model=embedder.model, dedupe=dedupe, unrecorded_calls=unrecorded,
+        threshold=threshold, model=embedder.model, dedupe=dedupe,
+        unrecorded_calls=operation.unrecorded_calls,
     )
 
 

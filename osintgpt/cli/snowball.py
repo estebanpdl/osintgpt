@@ -11,6 +11,7 @@ from osintgpt.agentic.snowball_output import (
     usage_text, validate_grouping,
 )
 from .output import emit, fail
+from osintgpt.llm.usage import CostLimitReached
 from .selection import resolve_project, state_from
 
 
@@ -28,6 +29,7 @@ def register_snowball_command(app):
         group_by: str = typer.Option('none', help='Display grouping: none, day, week, month, year. Exports retain hop order.'),
         ref: Optional[List[str]] = typer.Option(None, '--ref', help='Restrict to a file ref; repeat for multiple files.'),
         drift: bool = typer.Option(True, '--drift/--no-drift', help='Compare hits with the initial query; adds DOCUMENT embeddings.'),
+        cost_ceiling: Optional[float] = typer.Option(None, min=0, help='Optional run ceiling in USD; cannot raise a project ceiling.'),
         export: Optional[Path] = typer.Option(None, '--export', help='New .csv or .xlsx file; refuses overwrite.'),
         json_output: bool = typer.Option(False, '--json', help='Output full results and usage as JSON.'),
     ):
@@ -46,10 +48,14 @@ def register_snowball_command(app):
                 selected, query, home=state.home, depth=depth, threshold=threshold,
                 score_against_initial=drift, refs=ref,
                 date_field=date_field, date_format=date_format, dedupe=dedupe,
+                cost_ceiling_usd=cost_ceiling,
             )
             data = snowball_data(walk, group_by)
             if export is not None:
                 data['export'] = str(export_snowball(walk, export, group_by))
+        except CostLimitReached as error:
+            outcome = error.operation_outcome
+            fail(str(error), json_output, {'usage': outcome.usage} if outcome is not None else {})
         except Exception as error:
             fail(str(error), json_output)
 
